@@ -1955,13 +1955,12 @@ async function maybeAutoClose(advisory){
 
 
 // ── Render portfolio ──
-function renderBalance(bal){
-  if(!bal) return;
-  // Kalshi returns {balance: N, portfolio_value: N} where N is in cents
-  // Sometimes wrapped in another {balance: {...}} — unwrap if needed
-  const data = (bal.balance && typeof bal.balance === 'object') ? bal.balance : bal;
-  const b = (data.balance||0)/100;
-  const p = (data.portfolio_value||0)/100;
+function renderBalance(res){
+  if(!res) return;
+  // Kalshi returns {balance: N, portfolio_value: N} in cents (N is always a number)
+  // Never try .balance.balance — just read the top-level fields directly
+  const b = (typeof res.balance === 'number' ? res.balance : 0) / 100;
+  const p = (typeof res.portfolio_value === 'number' ? res.portfolio_value : 0) / 100;
   const el = document.getElementById('pf-bal');
   if(el) el.textContent = '$'+b.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
   const ep = document.getElementById('pf-port');
@@ -2061,20 +2060,18 @@ function hideKeyModal(){ document.getElementById('key-modal').style.display='non
 async function autoConnectKey(){
   try{
     const res = await testConnection();
-    const balObj = res.balance !== undefined ? res : {balance: res};
     authConnected = true;
     document.getElementById('auth-gate').style.display='none';
     document.getElementById('portfolio-content').style.display='block';
     document.getElementById('ptab').textContent='💼 PORT';
-    renderBalance(balObj);
+    renderBalance(res); // pass full response — renderBalance handles all shapes
     refreshPortfolio();
     if(authRefreshTimer) clearInterval(authRefreshTimer);
     authRefreshTimer = setInterval(refreshPortfolio, 30000);
     setKalshiStatus('live','KALSHI AUTH');
     showToast('✅ Kalshi connected','#00e5a0');
   }catch(e){
-    // Silent fail — user can still connect manually via KEY tab
-    console.log('Auto-connect failed (env vars may not be set):', e.message);
+    console.log('Auto-connect failed:', e.message);
   }
 }
 
@@ -2086,14 +2083,12 @@ async function connectKey(){
   btn.textContent='TESTING...'; btn.disabled=true;
   try{
     const res = await testConnection();
-    // testConnection returns {balance:{...}} or flat object — handle both
-    const balObj = res.balance !== undefined ? res : {balance: res};
     authConnected = true;
     hideKeyModal();
     document.getElementById('auth-gate').style.display='none';
     document.getElementById('portfolio-content').style.display='block';
     document.getElementById('ptab').textContent='💼 PORT';
-    renderBalance(balObj);
+    renderBalance(res);
     refreshPortfolio();
     if(authRefreshTimer) clearInterval(authRefreshTimer);
     authRefreshTimer = setInterval(refreshPortfolio, 30000);
