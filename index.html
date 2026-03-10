@@ -362,6 +362,12 @@ input[type=number]{-moz-appearance:textfield}
       </div>
       <div id="sll"><span style="font-size:8px;color:#333;letter-spacing:2px">LIVE SIGNAL</span>
         <span id="ls2" style="font-size:9px;font-weight:700"></span>
+        <span id="sld" style="font-size:9px;font-weight:900">—</span>
+        <span id="sls" style="font-size:8px;margin-left:3px">—</span>
+      </div>
+      <!-- Window progress bar -->
+      <div style="height:3px;background:#0c0c1c;border-radius:2px;margin:6px 0 4px;overflow:hidden">
+        <div id="wbf" class="wbf"></div>
       </div>
       <button id="mc" onclick="closeTrade()">CLOSE TRADE MANUALLY</button>
     </div>
@@ -525,11 +531,11 @@ input[type=number]{-moz-appearance:textfield}
   <div id="key-modal" style="display:none;position:fixed;inset:0;background:#07070fdd;z-index:999;padding:20px;overflow-y:auto">
     <div style="max-width:420px;margin:40px auto;background:#0c0c1c;border:1px solid #1a1a35;border-radius:16px;padding:20px">
       <div style="font-size:13px;font-weight:900;letter-spacing:2px;color:#f7c948;margin-bottom:4px">🔑 KALSHI CONNECTION</div>
-      <div style="font-size:9px;color:#444;margin-bottom:16px">Your API key is stored securely in Netlify — never in the browser.</div>
+      <div style="font-size:9px;color:#444;margin-bottom:16px">Your API key is stored securely in Vercel — never in the browser.</div>
 
       <div style="background:#07070f;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:10px;color:#555;line-height:1.8">
         <div style="color:#f7c948;font-size:8px;letter-spacing:3px;margin-bottom:8px">SETUP (one time)</div>
-        1. Go to <span style="color:#7b9fff">Netlify → Site Settings → Environment Variables</span><br>
+        1. Go to <span style="color:#7b9fff">Vercel → Project Settings → Environment Variables</span><br>
         2. Add <span style="color:#00e5a0">KALSHI_KEY_ID</span> = your Key ID (UUID)<br>
         3. Add <span style="color:#00e5a0">KALSHI_PRIVATE_KEY</span> = full PEM key<br>
         4. Redeploy the site<br>
@@ -1804,16 +1810,16 @@ document.querySelectorAll('.tb').forEach(btn=>{
 window.addEventListener('resize',()=>{priceChartDirty=true;projChartDirty=true;pnlChartDirty=true;drawPriceChart();drawPnLCharts();});
 
 // ═══════════════════════════════════════════════════
-// KALSHI AUTH ENGINE — via Netlify serverless proxy
-// Private key lives in Netlify env vars, never in browser
+// KALSHI AUTH ENGINE — via Vercel serverless proxy
+// Private key lives in Vercel env vars, never in browser
 // ═══════════════════════════════════════════════════
 let authConnected = false;
 let authRefreshTimer = null;
 
-// All authenticated calls go through the Netlify function
-// /.netlify/functions/kalshi?path=<kalshi_path>&method=GET&<extra_params>
+// All authenticated calls go through the Vercel function
+// /api/kalshi?path=<kalshi_path>&method=GET&<extra_params>
 async function kalshiAuthFetch(method, kalshiPath, extraParams){
-  const base = '/.netlify/functions/kalshi';
+  const base = '/api/kalshi';
   const qp = new URLSearchParams({path: kalshiPath, method: method.toUpperCase()});
   if(extraParams) Object.entries(extraParams).forEach(([k,v])=>qp.set(k,v));
   const r = await fetch(`${base}?${qp.toString()}`);
@@ -1882,7 +1888,7 @@ async function kalshiPlaceOrder(bet, amountDollars){
     buy_max_cost: maxCostCents,
   };
 
-  const base = '/.netlify/functions/kalshi';
+  const base = '/api/kalshi';
   const qp = new URLSearchParams({path: '/portfolio/orders', method: 'POST'});
   const r = await fetch(`${base}?${qp.toString()}`, {
     method: 'POST',
@@ -1920,7 +1926,7 @@ async function kalshiClosePosition(){
     time_in_force: 'fill_or_kill',
   };
 
-  const base = '/.netlify/functions/kalshi';
+  const base = '/api/kalshi';
   const qp = new URLSearchParams({path: '/portfolio/orders', method: 'POST'});
   try{
     const r = await fetch(`${base}?${qp.toString()}`, {
