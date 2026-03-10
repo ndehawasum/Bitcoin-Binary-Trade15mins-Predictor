@@ -786,47 +786,56 @@ let kalshiWS = null;       // WebSocket instance
 let kalshiAutoStrike = null; // parsed float strike from current market
 let wsReconnectTimer = null;
 
-// Fetch current open BTC 15-minute market from Kalshi
+// Fetch current open BTC 15-minute market via Vercel proxy (avoids CORS)
+async function kalshiPublicFetch(path, params={}){
+  const qp = new URLSearchParams({path, method:'GET', ...params});
+  try{
+    const r = await fetch(`/api/kalshi?${qp.toString()}`);
+    if(!r.ok) return null;
+    return await r.json();
+  }catch(_){return null;}
+}
+
 async function kalshiFetchMarket(){
-  try{
-    const r = await fetch(`${KALSHI_BASE}/markets?series_ticker=${BTC_SERIES}&status=open&limit=5`);
-    if(!r.ok) return null;
-    const d = await r.json();
-    const markets = d.markets || [];
-    if(!markets.length) return null;
-    // Pick the soonest-closing market
-    markets.sort((a,b)=>new Date(a.close_time)-new Date(b.close_time));
-    return markets[0];
-  }catch(_){return null;}
+  const d = await kalshiPublicFetch('/markets', {series_ticker:BTC_SERIES, status:'open', limit:'5'});
+  if(!d) return null;
+  const markets = d.markets || [];
+  if(!markets.length){
+    // No open markets — could be outside trading hours
+    setKalshiStatus('off', 'MARKET CLOSED');
+    const sh = document.getElementById('sh');
+    if(sh){ sh.textContent = 'No open BTC 15m market on Kalshi right now — check back soon.'; sh.style.display='block'; }
+    return null;
+  }
+  markets.sort((a,b)=>new Date(a.close_time)-new Date(b.close_time));
+  return markets[0];
 }
 
-// Fetch full market details including live YES price
 async function kalshiFetchDetails(ticker){
-  try{
-    const r = await fetch(`${KALSHI_BASE}/markets/${ticker}`);
-    if(!r.ok) return null;
-    return (await r.json()).market;
-  }catch(_){return null;}
+  const d = await kalshiPublicFetch(`/markets/${ticker}`);
+  return d ? (d.market || d) : null;
 }
 
-// Parse the strike price from a Kalshi BTC market
-// Kalshi BTC 15m tickers look like: KXBTC15M-25MAR09-T83500 where 83500 = $83,500
+// Parse the strike price from a Kalshi BTC market.
+// KXBTC15M is an "Up or Down" directional market — no fixed strike price.
+// YES = BTC goes UP during the 15-min window. We use the current BTC price
+// at trade-open time as the "strike" reference for our model.
 function parseKalshiStrike(market){
   if(!market) return null;
-  // Try subtitle/yes_sub_title first (most reliable)
-  // Format: "Above $83,500" or "> $83500" or "Bitcoin above $101,715"
+  // Check if market has an explicit dollar strike in subtitle (some series do)
   const sub = market.yes_sub_title || market.subtitle || market.title || '';
   const m1 = sub.match(/\$\s*([\d,]+(?:\.\d+)?)/);
   if(m1) return parseFloat(m1[1].replace(/,/g,''));
-  // Try floor_price / cap_price fields
+  // Try floor/cap strike fields
   if(market.floor_strike) return parseFloat(market.floor_strike);
   if(market.cap_strike) return parseFloat(market.cap_strike);
-  // Parse from ticker suffix — handles KXBTC15M-26MAR101715 → 101715
-  // Also handles KXBTCT83500 → 83500
+  // Try ticker suffix with explicit T prefix: KXBTC15M-26MAR09-T83500
   const ticker = market.ticker || '';
-  const m2 = ticker.match(/[A-Z](\d{4,})$/);  // 4+ digits at end
-  if(m2) return parseFloat(m2[1]);
-  return null;
+  const mT = ticker.match(/T(\d{4,})(?:-|$)/);
+  if(mT) return parseFloat(mT[1]);
+  // KXBTC15M "Up or Down" — no fixed strike, use current BTC price as reference
+  // livePrice will be used when available (set in applyAutoStrike)
+  return livePrice || null;
 }
 
 // Calculate live YES midpoint from bid/ask
@@ -866,27 +875,44 @@ function renderKalshiMarketBar(){
   spread.style.color = '#dde0f5';
   const last = parseFloat(kalshiMarket.last_price_dollars)||0;
   document.getElementById('km-last').textContent = last>0?`$${last.toFixed(2)}`:'—';
-  if(kalshiAutoStrike){
-    document.getElementById('km-strike').textContent = `$${kalshiAutoStrike.toLocaleString()}`;
+  // Detect Up/Down market vs strike market
+  const isUpDown = !kalshiMarket.floor_strike && !kalshiMarket.cap_strike &&
+    !(kalshiMarket.yes_sub_title||'').match(/\$[\d,]+/);
+  const strikeEl = document.getElementById('km-strike');
+  if(isUpDown){
+    strikeEl.textContent = 'UP / DOWN (uses live price)';
+    strikeEl.style.color = '#7b9fff';
+    document.getElementById('auto-strike-btn').style.display='none';
+  } else if(kalshiAutoStrike){
+    strikeEl.textContent = `$${kalshiAutoStrike.toLocaleString()}`;
+    strikeEl.style.color = '#f7c948';
     document.getElementById('auto-strike-btn').style.display='block';
   }
-  // Show LIVE badge on contract preview if YES price is from Kalshi
+  // Show LIVE badge on contract preview
   const badge = document.getElementById('cp-source');
   if(badge){badge.textContent=kalshiYESPrice?'LIVE ●':'ESTIMATED'; badge.style.background=kalshiYESPrice?'#00e5a020':'#1a1a35'; badge.style.color=kalshiYESPrice?'#00e5a0':'#444';}
 }
 
 // Apply auto-detected strike to the input
+// For KXBTC15M "Up or Down" markets, strike = current BTC price (refreshes each time)
 function applyAutoStrike(){
-  if(!kalshiAutoStrike) return;
+  // For Up/Down markets, always use current live price as reference
+  const isUpDown = kalshiMarket && !kalshiMarket.floor_strike && !kalshiMarket.cap_strike &&
+    !(kalshiMarket.yes_sub_title||'').match(/\$[\d,]+/);
+  const strike = isUpDown ? (livePrice||kalshiAutoStrike) : kalshiAutoStrike;
+  if(!strike) return;
+  kalshiAutoStrike = strike;
   const ki = document.getElementById('ki');
-  ki.value = kalshiAutoStrike;
-  strikeInput = kalshiAutoStrike;
-  // Update hint to show it's auto-filled
+  if(ki) ki.value = Math.round(strike);
+  strikeInput = strike;
   const kh = document.getElementById('kh');
-  if(kh){ kh.textContent = `✓ Auto-filled from ${kalshiMarket?kalshiMarket.ticker:'Kalshi'} — you can override manually.`; kh.style.color='#00e5a060'; }
-  // Hide the "enter strike" prompt
+  if(isUpDown){
+    if(kh){ kh.textContent = `✓ Up/Down market — strike set to current BTC price $${Math.round(strike).toLocaleString()}. Updates at trade open.`; kh.style.color='#7b9fff80'; }
+  } else {
+    if(kh){ kh.textContent = `✓ Auto-filled from ${kalshiMarket?kalshiMarket.ticker:'Kalshi'} — you can override manually.`; kh.style.color='#00e5a060'; }
+  }
   const sh = document.getElementById('sh');
-  if(sh && amtInput<=0) sh.textContent = 'Set bet amount to enable trading';
+  if(sh && amtInput<=0){ sh.textContent = 'Set bet amount to enable trading'; sh.style.display='block'; }
   else if(sh && amtInput>0) sh.style.display='none';
   priceChartDirty=true;
   renderTradeSetup(); renderSignalPanel(); renderPrice(); drawPriceChart();
@@ -895,7 +921,10 @@ function applyAutoStrike(){
 // Auto-apply strike whenever market bar updates
 function renderKalshiMarketBarAndApplyStrike(){
   renderKalshiMarketBar();
-  if(kalshiAutoStrike && (strikeInput===0 || strikeInput!==kalshiAutoStrike)){
+  // Always re-apply for Up/Down markets so strike tracks live BTC price
+  const isUpDown = kalshiMarket && !kalshiMarket.floor_strike && !kalshiMarket.cap_strike &&
+    !(kalshiMarket.yes_sub_title||'').match(/\$[\d,]+/);
+  if(isUpDown || !strikeInput || strikeInput!==kalshiAutoStrike){
     applyAutoStrike();
   }
 }
@@ -951,9 +980,9 @@ function kalshiWSConnect(ticker){
 async function kalshiInit(){
   setKalshiStatus('loading','KALSHI ...');
   const market = await kalshiFetchMarket();
-  if(!market){ setKalshiStatus('off','KALSHI OFF'); return; }
+  if(!market){ return; } // kalshiFetchMarket already sets status + hint
   kalshiMarket = market;
-  kalshiAutoStrike = parseKalshiStrike(market);
+  kalshiAutoStrike = parseKalshiStrike(market); // may be livePrice for Up/Down
   const mid = kalshiYESMid(market);
   if(mid) kalshiYESPrice = mid;
   setKalshiStatus('partial','KALSHI REST');
@@ -963,13 +992,19 @@ async function kalshiInit(){
   if(full){ kalshiMarket = full; kalshiYESPrice=kalshiYESMid(full)||kalshiYESPrice; renderKalshiMarketBarAndApplyStrike(); }
   // Open WebSocket
   kalshiWSConnect(market.ticker);
-  // Refresh market every 15 min to pick up new cycle
+  // Refresh every 60s — picks up new 15-min cycle and refreshes Up/Down strike
   setInterval(async()=>{
     const m = await kalshiFetchMarket();
-    if(m&&m.ticker!==kalshiMarket?.ticker){
+    if(!m) return;
+    if(m.ticker!==kalshiMarket?.ticker){
+      // New market cycle started
       kalshiMarket=m; kalshiAutoStrike=parseKalshiStrike(m); kalshiYESPrice=kalshiYESMid(m)||null;
       renderKalshiMarketBarAndApplyStrike();
       kalshiWSConnect(m.ticker);
+    } else {
+      // Same market — re-sync Up/Down strike to current BTC price
+      kalshiAutoStrike = parseKalshiStrike(m);
+      renderKalshiMarketBarAndApplyStrike();
     }
   }, 60000);
 }
@@ -1842,7 +1877,8 @@ async function fetchBalance(){
 }
 
 async function fetchPositions(){
-  const d = await kalshiAuthFetch('GET', '/portfolio/positions', {count_filter:'position'});
+  // count_filter was removed from Kalshi API in Nov 2025 — omit it
+  const d = await kalshiAuthFetch('GET', '/portfolio/positions');
   const all = d.market_positions || [];
   return all.filter(p=>p.ticker&&p.ticker.toUpperCase().includes('BTC'));
 }
