@@ -174,6 +174,85 @@ input[type=number]{-moz-appearance:textfield}
 
 .fnote{margin-top:12px;font-size:7px;color:#0e0e1c;letter-spacing:1px;text-align:center}
 #toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);padding:10px 18px;border-radius:10px;font-size:11px;font-family:'Courier New',monospace;font-weight:700;letter-spacing:1px;pointer-events:none;opacity:0;transition:opacity .3s;z-index:9999;max-width:340px;text-align:center}
+
+/* ═══ RISK PANEL ═══ */
+#risk-panel{background:#0a0005;border:1px solid #ff456625;border-radius:14px;padding:12px 14px;margin-bottom:10px}
+#risk-panel.ok{background:#00060a;border-color:#00e5a025}
+#risk-panel.warn{background:#0a0800;border-color:#f7c94830;animation:pulse .9s infinite}
+.risk-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.risk-title{font-size:8px;letter-spacing:4px;color:#f7c948}
+.risk-badge{font-size:7px;padding:2px 8px;border-radius:4px;font-weight:700;letter-spacing:1px}
+.risk-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:10px}
+.risk-cell{background:#07070f;border-radius:8px;padding:7px 9px}
+.risk-cell-lbl{font-size:7px;color:#333;letter-spacing:2px;margin-bottom:3px}
+.risk-cell-val{font-size:12px;font-weight:900}
+.risk-cell-sub{font-size:7px;color:#2a2a40;margin-top:1px}
+.risk-bar-row{margin-bottom:7px}
+.risk-bar-lbl{display:flex;justify-content:space-between;font-size:8px;margin-bottom:3px}
+.risk-bar-bg{height:6px;background:#141428;border-radius:3px;overflow:hidden}
+.risk-bar-fill{height:100%;border-radius:3px;transition:width .5s ease}
+.risk-block{background:#07070f;border-radius:9px;padding:9px 11px;margin-bottom:7px;font-size:10px}
+.risk-block-title{font-size:7px;letter-spacing:3px;color:#444;margin-bottom:6px}
+.risk-check-row{display:flex;align-items:center;gap:7px;margin-bottom:5px;font-size:10px}
+.risk-check-row:last-child{margin-bottom:0}
+.risk-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.risk-check-lbl{flex:1;color:#666}
+.risk-check-val{font-weight:700;font-size:9px}
+.ev-display{background:#07070f;border-radius:9px;padding:9px 11px;margin-bottom:7px}
+.ev-display-big{font-size:22px;font-weight:900;line-height:1}
+.ev-display-sub{font-size:9px;color:#444;margin-top:3px}
+#risk-block-btn{width:100%;padding:9px 0;border-radius:8px;font-family:inherit;font-size:9px;font-weight:900;letter-spacing:2px;cursor:pointer;border:none;margin-top:4px;display:none}
+
+/* ═══ RESPONSIVE ═══ */
+/* Mobile: single column, compact (default) */
+#app{max-width:440px;margin:0 auto;padding:14px 11px 60px}
+
+/* Tablet / small desktop: wider, 2-col trade layout */
+@media(min-width:700px){
+  #app{max-width:720px;padding:20px 20px 60px}
+  #top-row{gap:14px}
+  #lp{font-size:28px}
+  #cw{width:130px;height:130px}
+  #csv{width:130px;height:130px}
+  #ci #ct{font-size:24px}
+  .vrd-main{font-size:44px}
+  .card{padding:14px 18px}
+  #p-trade{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
+  #verdict{grid-column:1/-1}
+  #prob-split{grid-column:1/-1}
+  #sw{grid-column:1/2}
+  #aw{grid-column:1/2}
+  #risk-panel{grid-column:2/3;margin-bottom:0}
+  #vel-card{grid-column:1/2}
+  #sig-bars{grid-column:2/3}
+  #model-stats-card{grid-column:1/-1}
+  .sg{grid-template-columns:repeat(4,1fr)}
+  .lbl{font-size:9px}
+  .sb-label{width:110px}
+  .bbtn{font-size:15px;padding:15px 0}
+}
+
+/* Large desktop: wider, more breathing room */
+@media(min-width:1100px){
+  #app{max-width:1000px;padding:28px 32px 60px}
+  #top-row{gap:20px}
+  #lp{font-size:34px}
+  #cw,#csv{width:140px;height:140px}
+  #ci #ct{font-size:28px}
+  .card{padding:16px 20px;border-radius:16px}
+  #p-trade{grid-template-columns:1fr 1fr 1fr;gap:14px}
+  #verdict{grid-column:1/-1}
+  #prob-split{grid-column:1/-1}
+  #sw{grid-column:1/2}
+  #aw{grid-column:1/2}
+  #risk-panel{grid-column:2/3;margin-bottom:0}
+  #vel-card{grid-column:3/4;grid-row:3/5}
+  #sig-bars{grid-column:2/3}
+  #model-stats-card{grid-column:1/-1}
+  .vrd-main{font-size:52px}
+  .tabs-wrap{display:flex;gap:8px}
+  .tb{font-size:9px;letter-spacing:3px}
+}
 </style>
 </head>
 <body>
@@ -246,6 +325,58 @@ input[type=number]{-moz-appearance:textfield}
     <div id="prob-split" style="margin-bottom:10px">
       <div id="prob-up" style="width:50%;background:#00e5a080">UP 50%</div>
       <div id="prob-dn" style="width:50%;background:#ff456880">DN 50%</div>
+    </div>
+
+    <!-- RISK MANAGEMENT PANEL -->
+    <div id="risk-panel" class="ok">
+      <div class="risk-header">
+        <div class="risk-title">⚡ RISK MANAGEMENT</div>
+        <div id="risk-badge" class="risk-badge" style="background:#00e5a015;border:1px solid #00e5a030;color:#00e5a0">ALL CLEAR</div>
+      </div>
+
+      <!-- EV + Recommended size -->
+      <div class="risk-grid">
+        <div class="risk-cell">
+          <div class="risk-cell-lbl">EXPECTED VALUE</div>
+          <div class="risk-cell-val" id="risk-ev" style="color:#555">—</div>
+          <div class="risk-cell-sub" id="risk-ev-sub">vs Kalshi price</div>
+        </div>
+        <div class="risk-cell">
+          <div class="risk-cell-lbl">RECOMMENDED BET</div>
+          <div class="risk-cell-val" id="risk-rec-bet" style="color:#f7c948">—</div>
+          <div class="risk-cell-sub">Kelly × 1% rule</div>
+        </div>
+        <div class="risk-cell">
+          <div class="risk-cell-lbl">DAILY RISK USED</div>
+          <div class="risk-cell-val" id="risk-daily" style="color:#00e5a0">$0</div>
+          <div class="risk-cell-sub" id="risk-daily-sub">of 5% daily cap</div>
+        </div>
+        <div class="risk-cell">
+          <div class="risk-cell-lbl">CONSEC. LOSSES</div>
+          <div class="risk-cell-val" id="risk-streak" style="color:#00e5a0">0</div>
+          <div class="risk-cell-sub" id="risk-streak-sub">brake at 3</div>
+        </div>
+      </div>
+
+      <!-- Risk checks -->
+      <div class="risk-block">
+        <div class="risk-block-title">RISK CHECKS</div>
+        <div class="risk-check-row" id="rc-ev"><div class="risk-dot"></div><span class="risk-check-lbl">Min 5% expected value edge</span><span class="risk-check-val" id="rcv-ev">—</span></div>
+        <div class="risk-check-row" id="rc-conf"><div class="risk-dot"></div><span class="risk-check-lbl">Model confidence ≥ 58%</span><span class="risk-check-val" id="rcv-conf">—</span></div>
+        <div class="risk-check-row" id="rc-daily"><div class="risk-dot"></div><span class="risk-check-lbl">Daily loss limit not hit</span><span class="risk-check-val" id="rcv-daily">—</span></div>
+        <div class="risk-check-row" id="rc-streak"><div class="risk-dot"></div><span class="risk-check-lbl">Consec. loss brake OK</span><span class="risk-check-val" id="rcv-streak">—</span></div>
+        <div class="risk-check-row" id="rc-size"><div class="risk-dot"></div><span class="risk-check-lbl">Bet within 2% account cap</span><span class="risk-check-val" id="rcv-size">—</span></div>
+      </div>
+
+      <!-- Profit target / Stop info -->
+      <div class="risk-block">
+        <div class="risk-block-title">AUTO-EXIT RULES (ACTIVE TRADE)</div>
+        <div class="risk-check-row"><div class="risk-dot" style="background:#00e5a0"></div><span class="risk-check-lbl">Take profit at</span><span class="risk-check-val" id="risk-tp" style="color:#00e5a0">—</span></div>
+        <div class="risk-check-row"><div class="risk-dot" style="background:#ff4566"></div><span class="risk-check-lbl">Stop loss at</span><span class="risk-check-val" id="risk-sl" style="color:#ff4566">—</span></div>
+        <div class="risk-check-row"><div class="risk-dot" style="background:#f7c948"></div><span class="risk-check-lbl">Trailing peak</span><span class="risk-check-val" id="risk-peak" style="color:#f7c948">—</span></div>
+      </div>
+
+      <button id="risk-block-btn" onclick="applyRiskSizing()">USE RECOMMENDED SIZE ▶</button>
     </div>
 
     <!-- TRADE SETUP -->
@@ -568,6 +699,25 @@ let strikeInput=0, amtInput=0;
 let priceChartDirty=true, projChartDirty=true, pnlChartDirty=true;
 let lastAdvisory=null;
 
+// ── RISK MANAGEMENT STATE ──
+let riskState={
+  dailyLoss: 0,          // total $ lost today
+  dailyStart: new Date().toDateString(), // reset daily
+  consecutiveLosses: 0,  // streak counter
+  lastLossTime: 0,       // timestamp of last loss (cooldown)
+  accountBalance: 0,     // pulled from Kalshi or manually set
+  tpTriggered: false,    // take-profit already fired this trade
+  slTriggered: false,    // stop-loss already fired
+};
+const RISK_CONF_MIN    = 58;   // % min model confidence to trade
+const RISK_EV_MIN      = 0.05; // minimum expected value edge
+const RISK_MAX_ACCT_PCT= 0.02; // 2% max account risk per trade
+const RISK_DAILY_CAP   = 0.05; // 5% daily loss cap
+const RISK_CONSEC_BRAKE= 3;    // halve bet after N consecutive losses
+const RISK_TP_ROI      = 0.60; // take profit at 60% of max potential profit
+const RISK_SL_ROI      =-0.50; // stop loss at 50% of bet (unrealized -50%)
+const RISK_COOLDOWN_MS = 60000;// 1-minute cooldown after loss
+
 // ═══════════════════════════════════════════════════
 // NEURAL NETWORK (8→6→1)
 // ═══════════════════════════════════════════════════
@@ -786,58 +936,36 @@ let kalshiWS = null;       // WebSocket instance
 let kalshiAutoStrike = null; // parsed float strike from current market
 let wsReconnectTimer = null;
 
-// Fetch via Vercel proxy — logs every step visibly in the UI
+// Fetch via Vercel proxy (avoids CORS on Kalshi public endpoints)
 async function kalshiPublicFetch(path, params={}){
   const qp = new URLSearchParams({path, method:'GET', ...params});
-  const url = `/api/kalshi?${qp.toString()}`;
-  kalshiLog(`→ GET ${url}`);
   try{
-    const r = await fetch(url);
-    kalshiLog(`← HTTP ${r.status} ${r.statusText}`);
-    const text = await r.text();
-    kalshiLog(`← body: ${text.substring(0,200)}`);
-    if(!r.ok){ kalshiLog(`✗ Non-OK response`); return null; }
-    try{ return JSON.parse(text); }
-    catch(e){ kalshiLog(`✗ JSON parse failed: ${e.message}`); return null; }
+    const r = await fetch(`/api/kalshi?${qp.toString()}`);
+    if(!r.ok){ console.warn('[Kalshi] HTTP', r.status, path); return null; }
+    return await r.json();
   }catch(e){
-    kalshiLog(`✗ fetch threw: ${e.message}`);
+    console.warn('[Kalshi] fetch error:', e.message);
     return null;
-  }
-}
-
-// Visible diagnostic log — shows in the TRADE tab setup hint area
-function kalshiLog(msg){
-  console.log('[Kalshi]', msg);
-  const sh = document.getElementById('sh');
-  if(sh){ sh.style.display='block'; sh.style.color='#555'; sh.style.fontSize='8px';
-    const lines = (sh.dataset.log||'').split('\n').filter(Boolean).slice(-6);
-    lines.push(msg);
-    sh.dataset.log = lines.join('\n');
-    sh.textContent = lines.join('\n');
   }
 }
 
 async function kalshiFetchMarket(){
-  kalshiLog('Fetching KXBTC15M market...');
   const d = await kalshiPublicFetch('/markets', {series_ticker:BTC_SERIES, status:'open', limit:'5'});
-  if(!d){ kalshiLog('✗ No response from proxy'); return null; }
+  if(!d) return null;
   const markets = d.markets || [];
-  kalshiLog(`Got ${markets.length} market(s)`);
   if(!markets.length){
     setKalshiStatus('off', 'MARKET CLOSED');
-    kalshiLog('No open markets — exchange may be closed');
+    const sh = document.getElementById('sh');
+    if(sh){ sh.textContent = 'No open BTC 15m market on Kalshi right now — check back soon.'; sh.style.display='block'; }
     return null;
   }
   markets.sort((a,b)=>new Date(a.close_time)-new Date(b.close_time));
-  kalshiLog(`Using: ${markets[0].ticker}`);
   return markets[0];
 }
 
 async function kalshiFetchDetails(ticker){
-  kalshiLog(`Fetching details for ${ticker}...`);
   const d = await kalshiPublicFetch(`/markets/${ticker}`);
-  if(!d){ kalshiLog('✗ No details response'); return null; }
-  return d.market || d;
+  return d ? (d.market || d) : null;
 }
 
 // Parse the strike price from a Kalshi BTC market.
@@ -857,9 +985,9 @@ function parseKalshiStrike(market){
   const ticker = market.ticker || '';
   const mT = ticker.match(/T(\d{4,})(?:-|$)/);
   if(mT) return parseFloat(mT[1]);
-  // KXBTC15M "Up or Down" — no fixed strike, use current BTC price as reference
-  // livePrice will be used when available (set in applyAutoStrike)
-  return livePrice || null;
+  // KXBTC15M "Up or Down" — no fixed strike.
+  // Return null here; kalshiInit will call applyAutoStrike() once livePrice arrives.
+  return null;
 }
 
 // Calculate live YES midpoint from bid/ask
@@ -908,7 +1036,7 @@ function renderKalshiMarketBar(){
     strikeEl.style.color = '#7b9fff';
     document.getElementById('auto-strike-btn').style.display='none';
   } else if(kalshiAutoStrike){
-    strikeEl.textContent = `$${kalshiAutoStrike.toLocaleString()}`;
+    strikeEl.textContent = `$${kalshiAutoStrike.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;
     strikeEl.style.color = '#f7c948';
     document.getElementById('auto-strike-btn').style.display='block';
   }
@@ -918,20 +1046,18 @@ function renderKalshiMarketBar(){
 }
 
 // Apply auto-detected strike to the input
-// For KXBTC15M "Up or Down" markets, strike = current BTC price (refreshes each time)
+// For KXBTC15M "Up or Down" markets, strike = current BTC price
 function applyAutoStrike(){
-  // For Up/Down markets, always use current live price as reference
-  const isUpDown = kalshiMarket && !kalshiMarket.floor_strike && !kalshiMarket.cap_strike &&
-    !(kalshiMarket.yes_sub_title||'').match(/\$[\d,]+/);
-  const strike = isUpDown ? (livePrice||kalshiAutoStrike) : kalshiAutoStrike;
-  if(!strike) return;
-  kalshiAutoStrike = strike;
+  const isUpDown = kalshiMarket && !kalshiAutoStrike;
+  const strike = isUpDown ? livePrice : kalshiAutoStrike;
+  if(!strike) return; // livePrice not ready yet — kalshiInit will retry
+  if(isUpDown) kalshiAutoStrike = strike; // cache so model has it
   const ki = document.getElementById('ki');
-  if(ki) ki.value = Math.round(strike);
+  if(ki) ki.value = strike.toFixed(2);
   strikeInput = strike;
   const kh = document.getElementById('kh');
   if(isUpDown){
-    if(kh){ kh.textContent = `✓ Up/Down market — strike set to current BTC price $${Math.round(strike).toLocaleString()}. Updates at trade open.`; kh.style.color='#7b9fff80'; }
+    if(kh){ kh.textContent = `✓ Up/Down market — strike set to current BTC price $${strike.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}. Updates at trade open.`; kh.style.color='#7b9fff80'; }
   } else {
     if(kh){ kh.textContent = `✓ Auto-filled from ${kalshiMarket?kalshiMarket.ticker:'Kalshi'} — you can override manually.`; kh.style.color='#00e5a060'; }
   }
@@ -1004,30 +1130,40 @@ function kalshiWSConnect(ticker){
 async function kalshiInit(){
   setKalshiStatus('loading','KALSHI ...');
   const market = await kalshiFetchMarket();
-  if(!market){ return; } // kalshiFetchMarket already sets status + hint
+  if(!market){ return; }
   kalshiMarket = market;
-  kalshiAutoStrike = parseKalshiStrike(market); // may be livePrice for Up/Down
+  kalshiAutoStrike = parseKalshiStrike(market); // null for Up/Down until livePrice ready
   const mid = kalshiYESMid(market);
   if(mid) kalshiYESPrice = mid;
   setKalshiStatus('partial','KALSHI REST');
-  renderKalshiMarketBarAndApplyStrike();
-  // Fetch full details for richer price data
+  // Try to apply strike now; if livePrice not ready yet, poll until it is
+  if(livePrice){
+    renderKalshiMarketBarAndApplyStrike();
+  } else {
+    const waitForPrice = setInterval(()=>{
+      if(livePrice){
+        clearInterval(waitForPrice);
+        kalshiAutoStrike = parseKalshiStrike(kalshiMarket); // re-parse with livePrice
+        renderKalshiMarketBarAndApplyStrike();
+      }
+    }, 500);
+  }
+  // Fetch full market details
   const full = await kalshiFetchDetails(market.ticker);
   if(full){ kalshiMarket = full; kalshiYESPrice=kalshiYESMid(full)||kalshiYESPrice; renderKalshiMarketBarAndApplyStrike(); }
   // Open WebSocket
   kalshiWSConnect(market.ticker);
-  // Refresh every 60s — picks up new 15-min cycle and refreshes Up/Down strike
+  // Refresh every 60s — picks up new 15-min cycle and resyncs Up/Down strike
   setInterval(async()=>{
     const m = await kalshiFetchMarket();
     if(!m) return;
     if(m.ticker!==kalshiMarket?.ticker){
-      // New market cycle started
       kalshiMarket=m; kalshiAutoStrike=parseKalshiStrike(m); kalshiYESPrice=kalshiYESMid(m)||null;
       renderKalshiMarketBarAndApplyStrike();
       kalshiWSConnect(m.ticker);
     } else {
-      // Same market — re-sync Up/Down strike to current BTC price
-      kalshiAutoStrike = parseKalshiStrike(m);
+      // Re-sync Up/Down strike to current BTC price every minute
+      if(!kalshiAutoStrike && livePrice){ kalshiAutoStrike=null; }
       renderKalshiMarketBarAndApplyStrike();
     }
   }, 60000);
@@ -1236,79 +1372,188 @@ function drawPriceChart(){
   const cv=document.getElementById('pcc'); if(!cv)return;
   const dpr=window.devicePixelRatio||1;
   const W2=cv.offsetWidth; if(W2===0)return;
-  cv.width=W2*dpr; cv.height=96*dpr;
-  const ctx=cv.getContext('2d'), W=cv.width, H=cv.height, P=4*dpr, PB=14*dpr;
+  const CH=160; // taller — like Kalshi chart
+  cv.width=W2*dpr; cv.height=CH*dpr;
+  cv.style.height=CH+'px';
+  const ctx=cv.getContext('2d');
+  const W=cv.width, H=cv.height;
+  const PL=8*dpr, PR=80*dpr, PT=16*dpr, PB=20*dpr; // left/right/top/bottom padding
+  const CW=W-PL-PR, ch=H-PT-PB; // chart content width/height
 
-  // Use tick buffer if available (second-resolution), else minute candles
-  const useTicks = tickBuffer.length>=5;
-  const chartData = useTicks ? tickBuffer : prices.map((p,i)=>({t:tickWindowStart+i*60000,p}));
+  // ── Rolling 30-second window ──
+  const WINDOW_MS=30000;
+  const now=Date.now();
+  const windowStart=now-WINDOW_MS;
+
+  let chartData;
+  if(tickBuffer.length>=2){
+    chartData=tickBuffer.filter(x=>x.t>=windowStart);
+    if(chartData.length<2) chartData=tickBuffer.slice(-30);
+  } else {
+    chartData=prices.map((p,i)=>({t:tickWindowStart+i*60000,p})).slice(-30);
+  }
   if(chartData.length<2)return;
 
-  const pts = chartData.map(x=>x.p);
-  const sv = strikeInput>0?strikeInput:0;
-  const allP = sv>0?[...pts,sv]:pts;
-  const mn=Math.min(...allP)*.9999, mx=Math.max(...allP)*1.0001, rng=mx-mn||1;
+  const pts=chartData.map(x=>x.p);
+  const sv=strikeInput>0?strikeInput:0;
 
-  const tx=i=>P+(i/(chartData.length-1))*(W-P*2);
-  const ty=v=>PB+((mx-v)/rng)*(H-PB-P*2);
+  // Y range — tight zoom on actual price movement
+  const rawMn=Math.min(...pts), rawMx=Math.max(...pts);
+  const pad=(rawMx-rawMn)*0.3||rawMx*0.0005;
+  const mn=rawMn-pad, mx=rawMx+pad, rng=mx-mn||1;
+
+  // X: timestamp-based so scrolling is smooth
+  const tEnd=chartData[chartData.length-1].t;
+  const tStart=tEnd-WINDOW_MS;
+  const tx=t=>PL+Math.max(0,Math.min(1,(t-tStart)/WINDOW_MS))*CW;
+  const ty=v=>PT+((mx-v)/rng)*ch;
 
   ctx.clearRect(0,0,W,H);
 
-  // Time axis labels (show :00 :05 :10 ... marks within 15m window)
-  if(useTicks&&chartData.length>1){
-    const tFirst=chartData[0].t, tLast=chartData[chartData.length-1].t;
-    const tRange=tLast-tFirst||1;
-    ctx.font=`${6*dpr}px 'Courier New'`;
-    ctx.fillStyle='#1a1a35';
-    ctx.textAlign='center';
-    // Draw minute marks
-    for(let m=0;m<=15;m++){
-      const tMark=tickWindowStart+m*60000;
-      if(tMark<tFirst||tMark>tLast)continue;
-      const x=P+(tMark-tFirst)/tRange*(W-P*2);
-      ctx.fillText(m+'m',x,H-1*dpr);
-      ctx.beginPath(); ctx.moveTo(x,H-PB+2*dpr); ctx.lineTo(x,H-PB+5*dpr);
-      ctx.strokeStyle='#1a1a35'; ctx.lineWidth=dpr; ctx.stroke();
+  const hasStrike=sv>0;
+  const sy=hasStrike?ty(sv):null;
+  const curAbove=hasStrike&&pts[pts.length-1]>=sv;
+  const GREEN='#00e5a0', RED='#ff4566', ORANGE='#f97316';
+
+  // ── Color-coded area fill — green above strike, red below, orange if no strike ──
+  if(hasStrike){
+    // Above-strike fill (green), clipped above strike line
+    ctx.save();
+    ctx.beginPath(); ctx.rect(PL,PT,CW,sy-PT); ctx.clip();
+    ctx.beginPath();
+    ctx.moveTo(tx(chartData[0].t),sy);
+    chartData.forEach(d=>ctx.lineTo(tx(d.t),ty(d.p)));
+    ctx.lineTo(tx(chartData[chartData.length-1].t),sy);
+    ctx.closePath();
+    const ga=ctx.createLinearGradient(0,PT,0,sy);
+    ga.addColorStop(0,GREEN+'50'); ga.addColorStop(1,GREEN+'08');
+    ctx.fillStyle=ga; ctx.fill();
+    ctx.restore();
+
+    // Below-strike fill (red), clipped below strike line
+    ctx.save();
+    ctx.beginPath(); ctx.rect(PL,sy,CW,H-PB-sy); ctx.clip();
+    ctx.beginPath();
+    ctx.moveTo(tx(chartData[0].t),sy);
+    chartData.forEach(d=>ctx.lineTo(tx(d.t),ty(d.p)));
+    ctx.lineTo(tx(chartData[chartData.length-1].t),sy);
+    ctx.closePath();
+    const gr=ctx.createLinearGradient(0,sy,0,H-PB);
+    gr.addColorStop(0,RED+'18'); gr.addColorStop(1,RED+'04');
+    ctx.fillStyle=gr; ctx.fill();
+    ctx.restore();
+  } else {
+    // No strike — plain orange fill
+    ctx.beginPath();
+    ctx.moveTo(tx(chartData[0].t),H-PB);
+    chartData.forEach(d=>ctx.lineTo(tx(d.t),ty(d.p)));
+    ctx.lineTo(tx(chartData[chartData.length-1].t),H-PB);
+    ctx.closePath();
+    const go=ctx.createLinearGradient(0,PT,0,H-PB);
+    go.addColorStop(0,ORANGE+'55'); go.addColorStop(1,ORANGE+'00');
+    ctx.fillStyle=go; ctx.fill();
+  }
+
+  // ── Price line — green above strike, red below, crossover mid-segment ──
+  if(hasStrike){
+    for(let i=1;i<chartData.length;i++){
+      const a=chartData[i-1], b=chartData[i];
+      const ax=tx(a.t),ay=ty(a.p),bx=tx(b.t),by=ty(b.p);
+      const aAbove=a.p>=sv, bAbove=b.p>=sv;
+      if(aAbove===bAbove){
+        ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by);
+        ctx.strokeStyle=aAbove?GREEN:RED;
+        ctx.lineWidth=2*dpr; ctx.lineJoin='round'; ctx.lineCap='round'; ctx.stroke();
+      } else {
+        // Interpolate crossover point
+        const frac=(sv-a.p)/(b.p-a.p);
+        const cx2=ax+(bx-ax)*frac, cy2=sy;
+        ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(cx2,cy2);
+        ctx.strokeStyle=aAbove?GREEN:RED;
+        ctx.lineWidth=2*dpr; ctx.lineJoin='round'; ctx.lineCap='round'; ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(cx2,cy2); ctx.lineTo(bx,by);
+        ctx.strokeStyle=bAbove?GREEN:RED;
+        ctx.lineWidth=2*dpr; ctx.lineJoin='round'; ctx.lineCap='round'; ctx.stroke();
+      }
     }
-    ctx.textAlign='left';
+  } else {
+    ctx.beginPath();
+    chartData.forEach((d,i)=>i===0?ctx.moveTo(tx(d.t),ty(d.p)):ctx.lineTo(tx(d.t),ty(d.p)));
+    ctx.strokeStyle=ORANGE; ctx.lineWidth=2*dpr; ctx.lineJoin='round'; ctx.lineCap='round'; ctx.stroke();
   }
 
-  const col=pts[pts.length-1]>=pts[0]?'#00e5a0':'#ff4566';
+  // ── Strike line — solid, bright, with price label ──
+  if(hasStrike){
+    const strikeCol=curAbove?GREEN:RED;
+    // Full-width solid line
+    ctx.beginPath(); ctx.moveTo(PL,sy); ctx.lineTo(PL+CW,sy);
+    ctx.strokeStyle=strikeCol; ctx.lineWidth=1.5*dpr;
+    ctx.setLineDash([5*dpr,3*dpr]); ctx.stroke(); ctx.setLineDash([]);
 
-  // Area fill
-  ctx.beginPath(); ctx.moveTo(P,H-PB);
-  pts.forEach((p,i)=>ctx.lineTo(tx(i),ty(p)));
-  ctx.lineTo(tx(pts.length-1),H-PB); ctx.closePath();
-  const g=ctx.createLinearGradient(0,0,0,H);
-  g.addColorStop(0,col+'35'); g.addColorStop(1,col+'00');
-  ctx.fillStyle=g; ctx.fill();
+    // Price pill on left edge
+    const strikeLabel='$'+sv.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+    ctx.font=`bold ${8.5*dpr}px -apple-system,sans-serif`;
+    const slw=ctx.measureText(strikeLabel).width;
+    const sPad=4*dpr, sH=14*dpr, sR=3*dpr;
+    const spx=PL+4*dpr, spy=sy-sH/2;
+    ctx.beginPath();
+    ctx.roundRect?ctx.roundRect(spx,spy,slw+sPad*2,sH,sR):ctx.rect(spx,spy,slw+sPad*2,sH);
+    ctx.fillStyle=strikeCol+'25'; ctx.fill();
+    ctx.strokeStyle=strikeCol; ctx.lineWidth=dpr; ctx.stroke();
+    ctx.fillStyle=strikeCol; ctx.fillText(strikeLabel,spx+sPad,spy+sH*0.73);
+  }
 
-  // Price line
+  // ── Current price dot + pill label ──
+  const lastD=chartData[chartData.length-1];
+  const lastX=tx(lastD.t), lastY=ty(lastD.p);
+  const curPrice=lastD.p;
+  const aboveNow=sv>0&&curPrice>=sv;
+  const pillCol=sv>0?(aboveNow?'#00e5a0':'#ff4566'):'#f97316';
+
+  // Dot
+  ctx.beginPath(); ctx.arc(lastX,lastY,4*dpr,0,Math.PI*2);
+  ctx.fillStyle=pillCol; ctx.fill();
+
+  // Pill label on right
+  const priceLabel='$'+curPrice.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+  ctx.font=`bold ${9*dpr}px -apple-system,sans-serif`;
+  const plw=ctx.measureText(priceLabel).width;
+  const pillPad=5*dpr, pillH=16*dpr, pillR=4*dpr;
+  const px=lastX+8*dpr, py=lastY-pillH/2;
+  const pillW=plw+pillPad*2;
   ctx.beginPath();
-  pts.forEach((p,i)=>i===0?ctx.moveTo(tx(i),ty(p)):ctx.lineTo(tx(i),ty(p)));
-  ctx.strokeStyle=col; ctx.lineWidth=1.5*dpr; ctx.lineJoin='round'; ctx.lineCap='round'; ctx.stroke();
+  ctx.roundRect?ctx.roundRect(px,py,pillW,pillH,pillR):ctx.rect(px,py,pillW,pillH);
+  ctx.fillStyle=pillCol; ctx.fill();
+  ctx.fillStyle='#000'; ctx.fillText(priceLabel,px+pillPad,py+pillH*0.72);
 
-  // Current price dot
-  const lastX=tx(pts.length-1), lastY=ty(pts[pts.length-1]);
-  ctx.beginPath(); ctx.arc(lastX,lastY,3*dpr,0,Math.PI*2);
-  ctx.fillStyle=col; ctx.fill();
-
-  // Strike line
-  if(sv>0){
-    const sy=ty(sv);
-    ctx.beginPath(); ctx.moveTo(P,sy); ctx.lineTo(W-P,sy);
-    ctx.strokeStyle=active?(active.bet==='UP'?'#00e5a070':'#ff456870'):'#f7c94870';
-    ctx.lineWidth=1.5*dpr; ctx.setLineDash([5*dpr,3*dpr]); ctx.stroke(); ctx.setLineDash([]);
-    ctx.fillStyle=active?(active.bet==='UP'?'#00e5a090':'#ff456890'):'#f7c94890';
-    ctx.font=`${7*dpr}px 'Courier New'`; ctx.fillText('STRIKE',P+3*dpr,sy-3*dpr);
+  // ── Time axis: rolling seconds every 5s ──
+  ctx.font=`${7*dpr}px 'Courier New'`;
+  ctx.fillStyle='#444'; ctx.textAlign='center';
+  // Snap to 5-second grid
+  const tAxisStart=Math.ceil(tStart/5000)*5000;
+  for(let t=tAxisStart; t<=tEnd+1000; t+=5000){
+    const x=tx(t);
+    if(x<PL||x>PL+CW)continue;
+    const secsAgo=Math.round((tEnd-t)/1000);
+    const label=secsAgo===0?'now':`-${secsAgo}s`;
+    ctx.fillStyle='#444';
+    ctx.fillText(label,x,H-4*dpr);
+    ctx.beginPath(); ctx.moveTo(x,H-PB); ctx.lineTo(x,H-PB+3*dpr);
+    ctx.strokeStyle='#2a2a2a'; ctx.lineWidth=dpr; ctx.stroke();
   }
+  ctx.textAlign='left';
 
-  // Exit marker
-  if(exitIdx!==null&&exitIdx<pts.length){
-    const ex=tx(exitIdx), ey=ty(pts[exitIdx]);
-    ctx.beginPath(); ctx.moveTo(ex,P); ctx.lineTo(ex,H-PB);
-    ctx.strokeStyle='#f7c948'; ctx.lineWidth=1.5*dpr; ctx.setLineDash([3*dpr,3*dpr]); ctx.stroke(); ctx.setLineDash([]);
-    ctx.beginPath(); ctx.arc(ex,ey,4*dpr,0,Math.PI*2); ctx.fillStyle='#f7c948'; ctx.fill();
+  // ── Exit marker (timestamp-based) ──
+  if(exitIdx!==null&&active){
+    const exitTick=tickBuffer[exitIdx];
+    if(exitTick){
+      const ex=tx(exitTick.t), ey=ty(exitTick.p);
+      if(ex>=PL&&ex<=PL+CW){
+        ctx.beginPath(); ctx.moveTo(ex,PT); ctx.lineTo(ex,H-PB);
+        ctx.strokeStyle='#f7c948'; ctx.lineWidth=1.5*dpr; ctx.setLineDash([3*dpr,3*dpr]); ctx.stroke(); ctx.setLineDash([]);
+        ctx.beginPath(); ctx.arc(ex,ey,4*dpr,0,Math.PI*2); ctx.fillStyle='#f7c948'; ctx.fill();
+      }
+    }
   }
 }
 
@@ -1567,6 +1812,209 @@ function renderSignalPanel(){
   document.getElementById('ms-raw').textContent=`${L.rawComposite.toFixed(2)}`;
   document.getElementById('ms-above-final').textContent=`${sm.aboveProb}%`;
   document.getElementById('ms-below-final').textContent=`${sm.belowProb}%`;
+
+  // Update risk panel whenever signal updates
+  renderRiskPanel();
+}
+
+// ═══════════════════════════════════════════════════
+// RISK MANAGEMENT ENGINE
+// ═══════════════════════════════════════════════════
+
+function resetDailyIfNeeded(){
+  const today=new Date().toDateString();
+  if(riskState.dailyStart!==today){
+    riskState.dailyStart=today;
+    riskState.dailyLoss=0;
+  }
+}
+
+function getRiskAccountBalance(){
+  // Prefer live Kalshi balance; fall back to amtInput×50 heuristic
+  const el=document.getElementById('pf-bal');
+  if(el&&el.textContent&&el.textContent!=='—'){
+    const n=parseFloat(el.textContent.replace(/[^0-9.]/g,''));
+    if(n>0)return n;
+  }
+  // Estimate from recent trade amounts
+  if(trades.length>0){
+    const avgBet=trades.reduce((s,t)=>s+t.amount,0)/trades.length;
+    return avgBet*50;
+  }
+  return 100; // fallback: $100
+}
+
+function computeKellyBet(prob, yesPrice, balance){
+  // Kelly: f* = (b*p - q) / b  where b = (1-price)/price (odds)
+  // For binary: b = (1.00 - yesPrice)/yesPrice
+  const p=Math.max(0.01,Math.min(0.99,prob/100));
+  const q=1-p;
+  const b=(1.00-yesPrice)/Math.max(0.01,yesPrice);
+  const kelly=(b*p-q)/b;
+  const halfKelly=Math.max(0,kelly*0.5); // use half-kelly for safety
+  // Cap at RISK_MAX_ACCT_PCT of account
+  return Math.min(halfKelly*balance, RISK_MAX_ACCT_PCT*balance);
+}
+
+function computeEV(modelProb, yesPrice){
+  // EV = (model_prob × $1.00) - cost
+  return (modelProb/100)*1.00 - yesPrice;
+}
+
+function computeRiskAssessment(){
+  resetDailyIfNeeded();
+  const sm=computeStrikeModel(prices,strikeInput);
+  const balance=getRiskAccountBalance();
+  const dailyCap=balance*RISK_DAILY_CAP;
+  const maxBet=balance*RISK_MAX_ACCT_PCT;
+  const consecutiveLosses=riskState.consecutiveLosses;
+  const inCooldown=(Date.now()-riskState.lastLossTime)<RISK_COOLDOWN_MS;
+
+  let ev=null, evOk=false, confOk=false, modelProb=0, yesPrice=0.5, recBet=0;
+
+  if(sm&&strikeInput>0){
+    const recDir=sm.aboveProb>sm.belowProb?'UP':'DOWN';
+    yesPrice=estimateYESPriceLive(sm,recDir);
+    modelProb=Math.max(sm.aboveProb,sm.belowProb);
+    ev=computeEV(modelProb, yesPrice);
+    evOk=ev>=RISK_EV_MIN;
+    confOk=modelProb>=RISK_CONF_MIN;
+    recBet=computeKellyBet(modelProb, yesPrice, balance);
+    // Halve on consecutive loss streak
+    if(consecutiveLosses>=RISK_CONSEC_BRAKE) recBet*=0.5;
+    recBet=Math.round(recBet*100)/100;
+  }
+
+  const dailyOk=riskState.dailyLoss<dailyCap;
+  const streakOk=consecutiveLosses<RISK_CONSEC_BRAKE;
+  const sizeOk=amtInput<=0||amtInput<=maxBet;
+  const cooldownOk=!inCooldown;
+
+  // Trade profit target and stop-loss in $ terms
+  const potentialProfit=active?kalshiPotentialProfit(active.amount,active.entryYESPrice):0;
+  const tp=active?(potentialProfit*RISK_TP_ROI):0;
+  const sl=active?(-active.amount*Math.abs(RISK_SL_ROI)):0;
+
+  const allGreen=evOk&&confOk&&dailyOk&&streakOk&&sizeOk&&cooldownOk;
+
+  return{ev,evOk,confOk,dailyOk,streakOk,sizeOk,cooldownOk,allGreen,
+    recBet,modelProb,yesPrice,balance,dailyCap,maxBet,
+    consecutiveLosses,inCooldown,potentialProfit,tp,sl};
+}
+
+function renderRiskPanel(){
+  const r=computeRiskAssessment();
+  const panel=document.getElementById('risk-panel');
+  if(!panel) return;
+
+  // Panel state
+  const blocked=!r.evOk||!r.confOk||!r.dailyOk||r.inCooldown;
+  panel.className=blocked?'warn':r.allGreen?'ok':'';
+  const badge=document.getElementById('risk-badge');
+  if(blocked){
+    badge.textContent='BLOCKED'; badge.style.color='#ff4566';
+    badge.style.background='#ff456615'; badge.style.borderColor='#ff456640';
+  } else if(r.allGreen){
+    badge.textContent='ALL CLEAR'; badge.style.color='#00e5a0';
+    badge.style.background='#00e5a015'; badge.style.borderColor='#00e5a030';
+  } else {
+    badge.textContent='CAUTION'; badge.style.color='#f7c948';
+    badge.style.background='#f7c94815'; badge.style.borderColor='#f7c94830';
+  }
+
+  // EV
+  const evEl=document.getElementById('risk-ev');
+  if(r.ev!==null){
+    evEl.textContent=`${r.ev>=0?'+':''}${(r.ev*100).toFixed(1)}¢`;
+    evEl.style.color=r.evOk?'#00e5a0':'#ff4566';
+    document.getElementById('risk-ev-sub').textContent=r.evOk?'✓ edge present':'✗ no edge — skip';
+  } else { evEl.textContent='—'; evEl.style.color='#555'; }
+
+  // Recommended bet
+  const rbEl=document.getElementById('risk-rec-bet');
+  if(r.recBet>0){
+    rbEl.textContent=`$${r.recBet.toFixed(2)}`;
+    rbEl.style.color=r.consecutiveLosses>=RISK_CONSEC_BRAKE?'#f7c948':'#f7c948';
+    document.getElementById('risk-block-btn').style.display='block';
+  } else { rbEl.textContent='—'; rbEl.style.color='#555'; document.getElementById('risk-block-btn').style.display='none'; }
+
+  // Daily loss
+  resetDailyIfNeeded();
+  const dEl=document.getElementById('risk-daily');
+  dEl.textContent=`$${riskState.dailyLoss.toFixed(2)}`;
+  dEl.style.color=r.dailyOk?'#00e5a0':'#ff4566';
+  document.getElementById('risk-daily-sub').textContent=`of $${r.dailyCap.toFixed(2)} daily cap`;
+
+  // Consecutive losses
+  const csEl=document.getElementById('risk-streak');
+  csEl.textContent=riskState.consecutiveLosses;
+  csEl.style.color=r.streakOk?'#00e5a0':'#f7c948';
+  document.getElementById('risk-streak-sub').textContent=r.consecutiveLosses>=RISK_CONSEC_BRAKE?'⚠ BET HALVED':'brake at '+RISK_CONSEC_BRAKE;
+
+  // Check rows
+  function setCheck(id,valId,ok,val){
+    const row=document.getElementById(id);
+    const dot=row?row.querySelector('.risk-dot'):null;
+    if(dot) dot.style.background=ok?'#00e5a0':'#ff4566';
+    const valEl=document.getElementById(valId);
+    if(valEl){valEl.textContent=val; valEl.style.color=ok?'#00e5a0':'#ff4566';}
+  }
+  setCheck('rc-ev','rcv-ev',r.evOk, r.ev!==null?`${(r.ev*100).toFixed(1)}¢`:'—');
+  setCheck('rc-conf','rcv-conf',r.confOk, r.modelProb>0?`${r.modelProb}%`:'—');
+  setCheck('rc-daily','rcv-daily',r.dailyOk&&!r.inCooldown, r.inCooldown?'COOLDOWN':r.dailyOk?'OK':'STOP');
+  setCheck('rc-streak','rcv-streak',r.streakOk, r.streakOk?'OK':`${r.consecutiveLosses} losses`);
+  setCheck('rc-size','rcv-size',r.sizeOk||amtInput<=0, amtInput>0?`$${amtInput.toFixed(2)} / $${r.maxBet.toFixed(2)}`:'—');
+
+  // Auto-exit rules
+  if(active){
+    document.getElementById('risk-tp').textContent=`+$${(active.amount*(1/active.entryYESPrice-1)*RISK_TP_ROI).toFixed(2)} unrealized`;
+    document.getElementById('risk-sl').textContent=`-$${(active.amount*Math.abs(RISK_SL_ROI)).toFixed(2)} unrealized`;
+    document.getElementById('risk-peak').textContent=peakROI!==null?`+$${peakROI.toFixed(2)} so far`:'watching...';
+  } else {
+    document.getElementById('risk-tp').textContent='set at trade open';
+    document.getElementById('risk-sl').textContent='set at trade open';
+    document.getElementById('risk-peak').textContent='no active trade';
+  }
+
+  return r;
+}
+
+function applyRiskSizing(){
+  const r=computeRiskAssessment();
+  if(r.recBet>0){
+    document.getElementById('ai').value=r.recBet.toFixed(2);
+    amtInput=r.recBet;
+    renderTradeSetup();
+    showToast(`✓ Bet sized to $${r.recBet.toFixed(2)} (Kelly+1% rule)`,'#f7c948');
+  }
+}
+
+function updateRiskOnTradeClosed(result, finalPnL){
+  if(result==='LOSS'||finalPnL<0){
+    riskState.dailyLoss+=Math.abs(finalPnL||0);
+    riskState.consecutiveLosses++;
+    riskState.lastLossTime=Date.now();
+  } else if(result==='WIN'){
+    riskState.consecutiveLosses=0; // reset streak on win
+  }
+  resetDailyIfNeeded();
+}
+
+function checkRiskAutoExit(unrealizedPnL){
+  if(!active||riskState.tpTriggered||riskState.slTriggered)return;
+  const maxProfit=kalshiPotentialProfit(active.amount,active.entryYESPrice);
+  const tp=maxProfit*RISK_TP_ROI;
+  const sl=-active.amount*Math.abs(RISK_SL_ROI);
+
+  if(unrealizedPnL>=tp){
+    riskState.tpTriggered=true;
+    showToast(`🎯 Take profit hit! +$${unrealizedPnL.toFixed(2)} — closing trade`,'#00e5a0');
+    setTimeout(()=>closeTrade(),800);
+  } else if(unrealizedPnL<=sl){
+    riskState.slTriggered=true;
+    showToast(`🛑 Stop loss hit! -$${Math.abs(unrealizedPnL).toFixed(2)} — closing trade`,'#ff4566');
+    setTimeout(()=>closeTrade(),800);
+  }
 }
 
 function renderTradeSetup(){
@@ -1641,6 +2089,10 @@ function renderActiveTrade(clock){
 
   // Track peak unrealized P&L
   if(peakROI===null||unrealizedPnL>peakROI) peakROI=unrealizedPnL;
+
+  // ── Risk: check take-profit / stop-loss auto-exit ──
+  checkRiskAutoExit(unrealizedPnL);
+  renderRiskPanel();
 
   // Stats grid
   document.getElementById('sroi').textContent=`${unrealizedPnL>=0?'+':''}${fmtUSD(unrealizedPnL)}`; document.getElementById('sroi').style.color=unrealizedPnL>=0?'#00e5a0':'#ff4566';
@@ -1757,6 +2209,7 @@ function placeTrade(bet){
     time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}),
     result:null,exit:null,finalPnL:null};
   trades.push(t); active=t; peakROI=null; exitIdx=null; priceChartDirty=true; projChartDirty=true;
+  riskState.tpTriggered=false; riskState.slTriggered=false;
   showActive(); renderLog();
 
   // Place real Kalshi order if connected
@@ -1781,6 +2234,7 @@ function closeTrade(){
   exitIdx=prices.length-1;
   trades=trades.map(t=>t.id!==active.id?t:{...t,result:winNow?'WIN':'LOSS',exit:livePrice,finalPnL,earlyExit:true});
   recordTrade({...active,result:winNow?'WIN':'LOSS'});
+  updateRiskOnTradeClosed(winNow?'WIN':'LOSS', finalPnL);
   active=null; peakROI=null; priceChartDirty=true; projChartDirty=true;
 
   // Close real Kalshi position if connected
@@ -1819,6 +2273,7 @@ function clockTick(){
     const finalPnL=won?kalshiPotentialProfit(active.amount,active.entryYESPrice):-active.amount;
     trades=trades.map(t=>t.id!==active.id?t:{...t,result:won?'WIN':'LOSS',exit,finalPnL});
     recordTrade({...active,result:won?'WIN':'LOSS'});
+    updateRiskOnTradeClosed(won?'WIN':'LOSS', finalPnL);
     active=null; peakROI=null; showSetup(); renderLog(); updateBrainPanel();
     // Reset tick buffer for new window
     tickBuffer=[]; tickWindowStart=get15mWindowStart();
