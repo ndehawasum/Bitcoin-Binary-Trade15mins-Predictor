@@ -924,6 +924,14 @@ function applyAutoStrike(){
   renderTradeSetup(); renderSignalPanel(); renderPrice(); drawPriceChart();
 }
 
+// Auto-apply strike whenever market bar updates
+function renderKalshiMarketBarAndApplyStrike(){
+  renderKalshiMarketBar();
+  if(kalshiAutoStrike && (strikeInput===0 || strikeInput!==kalshiAutoStrike)){
+    applyAutoStrike();
+  }
+}
+
 // estimateYESPriceLive — uses real Kalshi YES price when available, falls back to model
 function estimateYESPriceLive(sm, bet){
   if(kalshiYESPrice!==null){
@@ -957,7 +965,7 @@ function kalshiWSConnect(ticker){
             if(d.last_price_dollars!=null) kalshiMarket.last_price_dollars = d.last_price_dollars;
             const mid = kalshiYESMid(kalshiMarket);
             if(mid!==null){ kalshiYESPrice = mid; setKalshiStatus('ws','KALSHI LIVE'); }
-            renderKalshiMarketBar();
+            renderKalshiMarketBarAndApplyStrike();
           }
         }
       }catch(_){}
@@ -981,10 +989,10 @@ async function kalshiInit(){
   const mid = kalshiYESMid(market);
   if(mid) kalshiYESPrice = mid;
   setKalshiStatus('partial','KALSHI REST');
-  renderKalshiMarketBar();
+  renderKalshiMarketBarAndApplyStrike();
   // Fetch full details for richer price data
   const full = await kalshiFetchDetails(market.ticker);
-  if(full){ kalshiMarket = full; kalshiYESPrice=kalshiYESMid(full)||kalshiYESPrice; renderKalshiMarketBar(); }
+  if(full){ kalshiMarket = full; kalshiYESPrice=kalshiYESMid(full)||kalshiYESPrice; renderKalshiMarketBarAndApplyStrike(); }
   // Open WebSocket
   kalshiWSConnect(market.ticker);
   // Refresh market every 15 min to pick up new cycle
@@ -992,7 +1000,7 @@ async function kalshiInit(){
     const m = await kalshiFetchMarket();
     if(m&&m.ticker!==kalshiMarket?.ticker){
       kalshiMarket=m; kalshiAutoStrike=parseKalshiStrike(m); kalshiYESPrice=kalshiYESMid(m)||null;
-      renderKalshiMarketBar();
+      renderKalshiMarketBarAndApplyStrike();
       kalshiWSConnect(m.ticker);
     }
   }, 60000);
@@ -1834,9 +1842,9 @@ let authConnected = false;
 let authRefreshTimer = null;
 
 // All authenticated calls go through the Netlify function
-// /api/kalshi?path=<kalshi_path>&method=GET&<extra_params>
+// /.netlify/functions/kalshi?path=<kalshi_path>&method=GET&<extra_params>
 async function kalshiAuthFetch(method, kalshiPath, extraParams){
-  const base = '/api/kalshi';
+  const base = '/.netlify/functions/kalshi';
   const qp = new URLSearchParams({path: kalshiPath, method: method.toUpperCase()});
   if(extraParams) Object.entries(extraParams).forEach(([k,v])=>qp.set(k,v));
   const r = await fetch(`${base}?${qp.toString()}`);
@@ -1905,7 +1913,7 @@ async function kalshiPlaceOrder(bet, amountDollars){
     buy_max_cost: maxCostCents,
   };
 
-  const base = '/api/kalshi';
+  const base = '/.netlify/functions/kalshi';
   const qp = new URLSearchParams({path: '/portfolio/orders', method: 'POST'});
   const r = await fetch(`${base}?${qp.toString()}`, {
     method: 'POST',
@@ -1943,7 +1951,7 @@ async function kalshiClosePosition(){
     time_in_force: 'fill_or_kill',
   };
 
-  const base = '/api/kalshi';
+  const base = '/.netlify/functions/kalshi';
   const qp = new URLSearchParams({path: '/portfolio/orders', method: 'POST'});
   try{
     const r = await fetch(`${base}?${qp.toString()}`, {
