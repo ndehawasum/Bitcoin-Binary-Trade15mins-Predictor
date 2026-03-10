@@ -786,34 +786,58 @@ let kalshiWS = null;       // WebSocket instance
 let kalshiAutoStrike = null; // parsed float strike from current market
 let wsReconnectTimer = null;
 
-// Fetch current open BTC 15-minute market via Vercel proxy (avoids CORS)
+// Fetch via Vercel proxy — logs every step visibly in the UI
 async function kalshiPublicFetch(path, params={}){
   const qp = new URLSearchParams({path, method:'GET', ...params});
+  const url = `/api/kalshi?${qp.toString()}`;
+  kalshiLog(`→ GET ${url}`);
   try{
-    const r = await fetch(`/api/kalshi?${qp.toString()}`);
-    if(!r.ok) return null;
-    return await r.json();
-  }catch(_){return null;}
+    const r = await fetch(url);
+    kalshiLog(`← HTTP ${r.status} ${r.statusText}`);
+    const text = await r.text();
+    kalshiLog(`← body: ${text.substring(0,200)}`);
+    if(!r.ok){ kalshiLog(`✗ Non-OK response`); return null; }
+    try{ return JSON.parse(text); }
+    catch(e){ kalshiLog(`✗ JSON parse failed: ${e.message}`); return null; }
+  }catch(e){
+    kalshiLog(`✗ fetch threw: ${e.message}`);
+    return null;
+  }
+}
+
+// Visible diagnostic log — shows in the TRADE tab setup hint area
+function kalshiLog(msg){
+  console.log('[Kalshi]', msg);
+  const sh = document.getElementById('sh');
+  if(sh){ sh.style.display='block'; sh.style.color='#555'; sh.style.fontSize='8px';
+    const lines = (sh.dataset.log||'').split('\n').filter(Boolean).slice(-6);
+    lines.push(msg);
+    sh.dataset.log = lines.join('\n');
+    sh.textContent = lines.join('\n');
+  }
 }
 
 async function kalshiFetchMarket(){
+  kalshiLog('Fetching KXBTC15M market...');
   const d = await kalshiPublicFetch('/markets', {series_ticker:BTC_SERIES, status:'open', limit:'5'});
-  if(!d) return null;
+  if(!d){ kalshiLog('✗ No response from proxy'); return null; }
   const markets = d.markets || [];
+  kalshiLog(`Got ${markets.length} market(s)`);
   if(!markets.length){
-    // No open markets — could be outside trading hours
     setKalshiStatus('off', 'MARKET CLOSED');
-    const sh = document.getElementById('sh');
-    if(sh){ sh.textContent = 'No open BTC 15m market on Kalshi right now — check back soon.'; sh.style.display='block'; }
+    kalshiLog('No open markets — exchange may be closed');
     return null;
   }
   markets.sort((a,b)=>new Date(a.close_time)-new Date(b.close_time));
+  kalshiLog(`Using: ${markets[0].ticker}`);
   return markets[0];
 }
 
 async function kalshiFetchDetails(ticker){
+  kalshiLog(`Fetching details for ${ticker}...`);
   const d = await kalshiPublicFetch(`/markets/${ticker}`);
-  return d ? (d.market || d) : null;
+  if(!d){ kalshiLog('✗ No details response'); return null; }
+  return d.market || d;
 }
 
 // Parse the strike price from a Kalshi BTC market.
@@ -2113,7 +2137,8 @@ async function autoConnectKey(){
     setKalshiStatus('live','KALSHI AUTH');
     showToast('✅ Kalshi connected','#00e5a0');
   }catch(e){
-    console.log('Auto-connect failed:', e.message);
+    console.warn('Auto-connect failed:', e.message);
+    showToast('⚠ Auth: '+e.message, '#f7c948');
   }
 }
 
