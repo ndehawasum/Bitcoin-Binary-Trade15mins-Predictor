@@ -226,20 +226,20 @@ input[type=number]{-moz-appearance:textfield}
   </div>
 
   <div id="tabs">
-    <button class="tb on" data-p="signal">SIGNAL</button>
-    <button class="tb" data-p="trade">TRADE</button>
+    <button class="tb on" data-p="trade">TRADE</button>
     <button class="tb" data-p="log" id="ltb">LOG (0)</button>
     <button class="tb" data-p="portfolio" id="ptab">🔑 KEY</button>
     <button class="tb" data-p="brain">🧠</button>
   </div>
 
-  <!-- SIGNAL -->
-  <div class="pnl on" id="p-signal">
+  <!-- TRADE (merged with SIGNAL) -->
+  <div class="pnl on" id="p-trade">
 
+    <!-- VERDICT + PROB BARS -->
     <div id="verdict" style="background:#0c0c1c;border:1px solid #1a1a35">
       <div class="vrd-eye lbl gold">STRIKE VERDICT</div>
       <div class="vrd-main" id="vrd-main" style="color:#555">WAITING…</div>
-      <div class="vrd-strike" id="vrd-strike">Enter strike in Trade tab</div>
+      <div class="vrd-strike" id="vrd-strike">Detecting strike from Kalshi...</div>
       <div class="vrd-conf" id="vrd-conf" style="color:#555"></div>
     </div>
 
@@ -248,103 +248,7 @@ input[type=number]{-moz-appearance:textfield}
       <div id="prob-dn" style="width:50%;background:#ff456880">DN 50%</div>
     </div>
 
-    <div class="card" id="vel-card">
-      <div class="lbl gold">MARKET ANALYSIS</div>
-      <div class="vel-row"><span class="vel-lbl">Current velocity</span><span class="vel-val" id="vel-val">—</span></div>
-      <div class="vel-row"><span class="vel-lbl">Projected close</span><span class="vel-val" id="proj-close">—</span></div>
-      <div class="vel-row"><span class="vel-lbl">Strike distance</span><span class="vel-val" id="str-dist">—</span></div>
-      <div class="vel-row"><span class="vel-lbl">Time above strike</span><span class="vel-val" id="time-above">—</span></div>
-      <div class="vel-row"><span class="vel-lbl">Momentum bias</span><span class="vel-val" id="mom-bias">—</span></div>
-    </div>
-
-    <div class="card" id="sig-bars">
-      <div class="lbl gold">INDICATOR STRENGTH</div>
-      <div id="bars-list"></div>
-    </div>
-
-    <!-- Model stats breakdown -->
-    <div class="card" id="model-stats-card" style="display:none">
-      <div class="lbl gold" style="margin-bottom:10px">📐 MODEL BREAKDOWN</div>
-
-      <!-- Layer rows -->
-      <div style="font-size:8px;color:#2a2a40;letter-spacing:2px;margin-bottom:6px">HOW THE VERDICT IS CALCULATED</div>
-
-      <div class="model-layer" id="ml-tech">
-        <div class="ml-header">
-          <span class="ml-name">① TECHNICAL INDICATORS</span>
-          <span class="ml-weight">50% weight</span>
-        </div>
-        <div class="ml-body">
-          <div class="ml-stat-row"><span class="ml-stat-lbl">Bull score</span><span class="ml-stat-val" id="ms-bull">—</span></div>
-          <div class="ml-stat-row"><span class="ml-stat-lbl">Bear score</span><span class="ml-stat-val" id="ms-bear">—</span></div>
-          <div class="ml-stat-row"><span class="ml-stat-lbl">Tech UP probability</span><span class="ml-stat-val" id="ms-tech-pct" style="font-weight:900">—</span></div>
-        </div>
-        <div class="ml-contrib-bar-bg"><div class="ml-contrib-bar" id="mcb-tech"></div></div>
-      </div>
-
-      <div class="model-layer" id="ml-vel">
-        <div class="ml-header">
-          <span class="ml-name">② VELOCITY PROJECTION</span>
-          <span class="ml-weight">30% weight</span>
-        </div>
-        <div class="ml-body">
-          <div class="ml-stat-row"><span class="ml-stat-lbl">Current $/sec</span><span class="ml-stat-val" id="ms-vel">—</span></div>
-          <div class="ml-stat-row"><span class="ml-stat-lbl">Projected close</span><span class="ml-stat-val" id="ms-proj">—</span></div>
-          <div class="ml-stat-row"><span class="ml-stat-lbl">Projection vs strike</span><span class="ml-stat-val" id="ms-proj-rel" style="font-weight:900">—</span></div>
-        </div>
-        <div class="ml-contrib-bar-bg"><div class="ml-contrib-bar" id="mcb-vel"></div></div>
-      </div>
-
-      <div class="model-layer" id="ml-prox">
-        <div class="ml-header">
-          <span class="ml-name">③ STRIKE PROXIMITY</span>
-          <span class="ml-weight">10% weight</span>
-        </div>
-        <div class="ml-body">
-          <div class="ml-stat-row"><span class="ml-stat-lbl">Current distance</span><span class="ml-stat-val" id="ms-dist">—</span></div>
-          <div class="ml-stat-row"><span class="ml-stat-lbl">Cushion direction</span><span class="ml-stat-val" id="ms-cushion" style="font-weight:900">—</span></div>
-        </div>
-        <div class="ml-contrib-bar-bg"><div class="ml-contrib-bar" id="mcb-prox"></div></div>
-      </div>
-
-      <div class="model-layer" id="ml-time">
-        <div class="ml-header">
-          <span class="ml-name">④ TIME ABOVE STRIKE</span>
-          <span class="ml-weight">10% weight</span>
-        </div>
-        <div class="ml-body">
-          <div class="ml-stat-row"><span class="ml-stat-lbl">Samples above</span><span class="ml-stat-val" id="ms-above-n">—</span></div>
-          <div class="ml-stat-row"><span class="ml-stat-lbl">% of window</span><span class="ml-stat-val" id="ms-above-pct" style="font-weight:900">—</span></div>
-        </div>
-        <div class="ml-contrib-bar-bg"><div class="ml-contrib-bar" id="mcb-time"></div></div>
-      </div>
-
-      <div class="model-layer" id="ml-nn">
-        <div class="ml-header">
-          <span class="ml-name">⑤ NEURAL NETWORK</span>
-          <span class="ml-weight" id="ms-nn-w">0% weight</span>
-        </div>
-        <div class="ml-body">
-          <div class="ml-stat-row"><span class="ml-stat-lbl">Training samples</span><span class="ml-stat-val" id="ms-nn-n">—</span></div>
-          <div class="ml-stat-row"><span class="ml-stat-lbl">NN raw output</span><span class="ml-stat-val" id="ms-nn-out">—</span></div>
-          <div class="ml-stat-row"><span class="ml-stat-lbl">Influence on verdict</span><span class="ml-stat-val" id="ms-nn-inf" style="font-weight:900">—</span></div>
-        </div>
-        <div class="ml-contrib-bar-bg"><div class="ml-contrib-bar" id="mcb-nn"></div></div>
-      </div>
-
-      <!-- Final blend -->
-      <div style="background:#07070f;border-radius:9px;padding:10px 12px;margin-top:4px">
-        <div style="font-size:8px;color:#2a2a40;letter-spacing:2px;margin-bottom:8px">FINAL BLEND</div>
-        <div class="ml-stat-row" style="margin-bottom:5px"><span class="ml-stat-lbl">Raw composite score</span><span class="ml-stat-val" id="ms-raw">—</span></div>
-        <div class="ml-stat-row" style="margin-bottom:5px"><span class="ml-stat-lbl">ABOVE probability</span><span class="ml-stat-val" id="ms-above-final" style="font-weight:900;color:#00e5a0">—</span></div>
-        <div class="ml-stat-row"><span class="ml-stat-lbl">BELOW probability</span><span class="ml-stat-val" id="ms-below-final" style="font-weight:900;color:#ff4566">—</span></div>
-      </div>
-    </div>
-
-  </div>
-
-  <!-- TRADE -->
-  <div class="pnl" id="p-trade">
+    <!-- TRADE SETUP -->
     <div id="sw" class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <div class="lbl gold" style="margin:0">TRADE SETUP</div>
@@ -353,7 +257,6 @@ input[type=number]{-moz-appearance:textfield}
           <span id="ks-label" style="font-size:8px;color:#333;letter-spacing:1px">KALSHI —</span>
         </div>
       </div>
-      <!-- Live Kalshi market info bar -->
       <div id="kalshi-market-bar" style="display:none;background:#07070f;border-radius:8px;padding:8px 11px;margin-bottom:10px">
         <div style="font-size:7px;color:#2a2a40;letter-spacing:3px;margin-bottom:5px">LIVE FROM KALSHI</div>
         <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px">
@@ -374,8 +277,8 @@ input[type=number]{-moz-appearance:textfield}
           <div class="lbl" style="margin:0">KALSHI STRIKE PRICE</div>
           <button id="auto-strike-btn" style="display:none;font-size:7px;background:#f7c94815;border:1px solid #f7c94840;color:#f7c948;padding:2px 8px;border-radius:4px;cursor:pointer;font-family:inherit" onclick="applyAutoStrike()">USE AUTO ▶</button>
         </div>
-        <div class="iw"><span class="ip" style="color:#f7c948">$</span><input class="fi" type="number" id="ki" placeholder="e.g. 68683.61"/></div>
-        <div class="fh" id="kh">Copy from Kalshi — prediction recalculates instantly.</div>
+        <div class="iw"><span class="ip" style="color:#f7c948">$</span><input class="fi" type="number" id="ki" placeholder="Auto-detecting from Kalshi..."/></div>
+        <div class="fh" id="kh">Auto-populated from live Kalshi market. You can override manually.</div>
       </div>
       <div style="margin-bottom:10px">
         <div class="lbl">BET AMOUNT ($)</div>
@@ -383,8 +286,7 @@ input[type=number]{-moz-appearance:textfield}
       </div>
       <div class="sbw" id="sbw">
         <div style="display:flex;justify-content:space-between;font-size:9px;margin-bottom:5px">
-          <span style="color:#444">Live price vs strike</span>
-          <span id="spct" style="font-weight:900"></span>
+          <span style="color:#444">Live price vs strike</span><span id="spct" style="font-weight:900"></span>
         </div>
         <div class="sbar"><div class="sc"></div><div class="sf" id="sf"></div></div>
         <div style="display:flex;justify-content:space-between;font-size:7px;color:#222;margin-top:3px"><span>BELOW</span><span>STRIKE</span><span>ABOVE</span></div>
@@ -393,7 +295,6 @@ input[type=number]{-moz-appearance:textfield}
         <button class="bbtn" id="bup" disabled style="border-color:#00e5a0;color:#00e5a0;background:transparent">UP<div class="bh" id="uph"></div></button>
         <button class="bbtn" id="bdn" disabled style="border-color:#ff4566;color:#ff4566;background:transparent">DOWN<div class="bh" id="dnh"></div></button>
       </div>
-      <!-- Kalshi contract preview -->
       <div id="contract-preview" style="display:none;background:#07070f;border-radius:9px;padding:10px 12px;margin-top:8px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
           <div style="font-size:8px;color:#2a2a40;letter-spacing:3px">KALSHI CONTRACT</div>
@@ -412,22 +313,16 @@ input[type=number]{-moz-appearance:textfield}
           <span style="color:#aaa;font-weight:700">Potential profit</span><span id="cp-profit" style="font-weight:900;font-size:13px;color:#00e5a0">—</span>
         </div>
       </div>
-      <div id="sh">Enter strike price and bet amount to enable</div>
+      <div id="sh">Detecting Kalshi market...</div>
     </div>
 
+    <!-- ACTIVE TRADE DASHBOARD -->
     <div id="aw" style="animation:fadein .2s ease">
-
-      <!-- ADVISORY - most prominent element -->
       <div id="adv">
-        <div class="adv-top">
-          <span class="adv-action" id="aa">WATCHING</span>
-          <span class="adv-roi" id="ar">—</span>
-        </div>
+        <div class="adv-top"><span class="adv-action" id="aa">WATCHING</span><span class="adv-roi" id="ar">—</span></div>
         <div class="adv-msg" id="am"></div>
         <button id="aeb" onclick="closeTrade()"></button>
       </div>
-
-      <!-- Stats row -->
       <div class="card" id="ac">
         <div style="display:flex;justify-content:space-between;margin-bottom:10px">
           <div><div style="font-size:7px;color:#333;letter-spacing:3px;margin-bottom:3px">BET</div><div id="abt" style="font-size:19px;font-weight:900"></div></div>
@@ -440,7 +335,6 @@ input[type=number]{-moz-appearance:textfield}
           <div class="sb2"><div class="sl3">PEAK P&amp;L</div><div class="sv2" id="spk" style="color:#f7c948">—</div></div>
           <div class="sb2"><div class="sl3">WIN NOW?</div><div class="sv2" id="swin">—</div></div>
         </div>
-        <!-- Kalshi contract details during trade -->
         <div style="background:#07070f;border-radius:8px;padding:8px 10px;margin-bottom:10px">
           <div style="display:flex;justify-content:space-between;font-size:9px;margin-bottom:4px">
             <span style="color:#333">Entry YES price</span><span id="at-entry-yes" style="color:#f7c948;font-weight:700">—</span>
@@ -460,34 +354,90 @@ input[type=number]{-moz-appearance:textfield}
           <div class="rb"><div class="rbc"></div><div class="rpm" id="rpm"></div><div class="rbf" id="rbf"></div></div>
           <div class="rbl"><span>entry price</span><span>─</span><span>$1.00</span></div>
         </div>
-        <div class="wbw">
-          <div class="wbr"><span style="color:#333;letter-spacing:2px">MARKET WINDOW</span><span id="wt" style="font-weight:700;font-size:9px">15:00</span></div>
-          <div class="wb"><div class="wbf" id="wbf" style="background:#00e5a050;width:0%"></div></div>
+        <canvas id="proj-cv" height="80" style="display:block;width:100%;margin-top:8px"></canvas>
+        <div style="display:flex;justify-content:space-between;font-size:8px;color:#1a1a35;margin-top:2px;padding:0 2px">
+          <span>now</span><span id="wt" style="color:#333">—</span><span>expiry</span>
         </div>
+        <div id="ptl" style="font-size:8px;color:#2a2a40;text-align:center;margin-top:3px"></div>
       </div>
-
-      <div class="card" style="margin-bottom:9px">
-        <div style="display:flex;justify-content:space-between;font-size:8px;margin-bottom:6px">
-          <span class="lbl gold" style="margin:0">ROI PROJECTION</span>
-          <span style="color:#2a2a40" id="ptl">—</span>
-        </div>
-        <canvas id="proj-cv" height="80"></canvas>
-        <div class="pf"><span>NOW</span><span style="color:#f7c94840">projected</span><span>EXPIRY</span></div>
+      <div id="sll"><span style="font-size:8px;color:#333;letter-spacing:2px">LIVE SIGNAL</span>
+        <span id="ls2" style="font-size:9px;font-weight:700"></span>
       </div>
-
-      <div class="card" style="padding:8px 13px;margin-bottom:8px">
-        <div id="sll"><span style="font-size:8px;color:#333;letter-spacing:2px">LIVE SIGNAL</span>
-          <div style="display:flex;align-items:center;gap:7px">
-            <span id="sld" style="font-size:13px;font-weight:700"></span>
-            <span id="sls" style="font-size:8px"></span>
-          </div>
-        </div>
-      </div>
-
       <button id="mc" onclick="closeTrade()">CLOSE TRADE MANUALLY</button>
     </div>
-  </div>
 
+    <!-- MARKET ANALYSIS -->
+    <div class="card" id="vel-card" style="margin-top:8px">
+      <div class="lbl gold">MARKET ANALYSIS</div>
+      <div class="vel-row"><span class="vel-lbl">Current velocity</span><span class="vel-val" id="vel-val">—</span></div>
+      <div class="vel-row"><span class="vel-lbl">Projected close</span><span class="vel-val" id="proj-close">—</span></div>
+      <div class="vel-row"><span class="vel-lbl">Strike distance</span><span class="vel-val" id="str-dist">—</span></div>
+      <div class="vel-row"><span class="vel-lbl">Time above strike</span><span class="vel-val" id="time-above">—</span></div>
+      <div class="vel-row"><span class="vel-lbl">Momentum bias</span><span class="vel-val" id="mom-bias">—</span></div>
+    </div>
+
+    <!-- INDICATOR STRENGTH -->
+    <div class="card" id="sig-bars">
+      <div class="lbl gold">INDICATOR STRENGTH</div>
+      <div id="bars-list"></div>
+    </div>
+
+    <!-- MODEL BREAKDOWN -->
+    <div class="card" id="model-stats-card" style="display:none">
+      <div class="lbl gold" style="margin-bottom:10px">📐 MODEL BREAKDOWN</div>
+      <div style="font-size:8px;color:#2a2a40;letter-spacing:2px;margin-bottom:6px">HOW THE VERDICT IS CALCULATED</div>
+      <div class="model-layer" id="ml-tech">
+        <div class="ml-header"><span class="ml-name">① TECHNICAL INDICATORS</span><span class="ml-weight">50% weight</span></div>
+        <div class="ml-body">
+          <div class="ml-stat-row"><span class="ml-stat-lbl">Bull score</span><span class="ml-stat-val" id="ms-bull">—</span></div>
+          <div class="ml-stat-row"><span class="ml-stat-lbl">Bear score</span><span class="ml-stat-val" id="ms-bear">—</span></div>
+          <div class="ml-stat-row"><span class="ml-stat-lbl">Tech UP probability</span><span class="ml-stat-val" id="ms-tech-pct" style="font-weight:900">—</span></div>
+        </div>
+        <div class="ml-contrib-bar-bg"><div class="ml-contrib-bar" id="mcb-tech"></div></div>
+      </div>
+      <div class="model-layer" id="ml-vel">
+        <div class="ml-header"><span class="ml-name">② VELOCITY PROJECTION</span><span class="ml-weight">30% weight</span></div>
+        <div class="ml-body">
+          <div class="ml-stat-row"><span class="ml-stat-lbl">Current $/sec</span><span class="ml-stat-val" id="ms-vel">—</span></div>
+          <div class="ml-stat-row"><span class="ml-stat-lbl">Projected close</span><span class="ml-stat-val" id="ms-proj">—</span></div>
+          <div class="ml-stat-row"><span class="ml-stat-lbl">Projection vs strike</span><span class="ml-stat-val" id="ms-proj-rel" style="font-weight:900">—</span></div>
+        </div>
+        <div class="ml-contrib-bar-bg"><div class="ml-contrib-bar" id="mcb-vel"></div></div>
+      </div>
+      <div class="model-layer" id="ml-prox">
+        <div class="ml-header"><span class="ml-name">③ STRIKE PROXIMITY</span><span class="ml-weight">10% weight</span></div>
+        <div class="ml-body">
+          <div class="ml-stat-row"><span class="ml-stat-lbl">Current distance</span><span class="ml-stat-val" id="ms-dist">—</span></div>
+          <div class="ml-stat-row"><span class="ml-stat-lbl">Cushion direction</span><span class="ml-stat-val" id="ms-cushion" style="font-weight:900">—</span></div>
+        </div>
+        <div class="ml-contrib-bar-bg"><div class="ml-contrib-bar" id="mcb-prox"></div></div>
+      </div>
+      <div class="model-layer" id="ml-time">
+        <div class="ml-header"><span class="ml-name">④ TIME ABOVE STRIKE</span><span class="ml-weight">10% weight</span></div>
+        <div class="ml-body">
+          <div class="ml-stat-row"><span class="ml-stat-lbl">Samples above</span><span class="ml-stat-val" id="ms-above-n">—</span></div>
+          <div class="ml-stat-row"><span class="ml-stat-lbl">% of window</span><span class="ml-stat-val" id="ms-above-pct" style="font-weight:900">—</span></div>
+        </div>
+        <div class="ml-contrib-bar-bg"><div class="ml-contrib-bar" id="mcb-time"></div></div>
+      </div>
+      <div class="model-layer" id="ml-nn">
+        <div class="ml-header"><span class="ml-name">⑤ NEURAL NETWORK</span><span class="ml-weight" id="ms-nn-w">0% weight</span></div>
+        <div class="ml-body">
+          <div class="ml-stat-row"><span class="ml-stat-lbl">Training samples</span><span class="ml-stat-val" id="ms-nn-n">—</span></div>
+          <div class="ml-stat-row"><span class="ml-stat-lbl">NN raw output</span><span class="ml-stat-val" id="ms-nn-out">—</span></div>
+          <div class="ml-stat-row"><span class="ml-stat-lbl">Influence on verdict</span><span class="ml-stat-val" id="ms-nn-inf" style="font-weight:900">—</span></div>
+        </div>
+        <div class="ml-contrib-bar-bg"><div class="ml-contrib-bar" id="mcb-nn"></div></div>
+      </div>
+      <div style="background:#07070f;border-radius:9px;padding:10px 12px;margin-top:4px">
+        <div style="font-size:8px;color:#2a2a40;letter-spacing:2px;margin-bottom:8px">FINAL BLEND</div>
+        <div class="ml-stat-row" style="margin-bottom:5px"><span class="ml-stat-lbl">Raw composite score</span><span class="ml-stat-val" id="ms-raw">—</span></div>
+        <div class="ml-stat-row" style="margin-bottom:5px"><span class="ml-stat-lbl">ABOVE probability</span><span class="ml-stat-val" id="ms-above-final" style="font-weight:900;color:#00e5a0">—</span></div>
+        <div class="ml-stat-row"><span class="ml-stat-lbl">BELOW probability</span><span class="ml-stat-val" id="ms-below-final" style="font-weight:900;color:#ff4566">—</span></div>
+      </div>
+    </div>
+
+  </div>
   <!-- LOG -->
   <div class="pnl" id="p-log">
     <div class="card">
@@ -858,12 +808,17 @@ async function kalshiFetchDetails(ticker){
 function parseKalshiStrike(market){
   if(!market) return null;
   // Try subtitle/yes_sub_title first (most reliable)
-  const sub = market.yes_sub_title || market.subtitle || '';
-  // Format: "Above $83,500" or "> $83500"
-  const m1 = sub.match(/\$?([\d,]+(?:\.\d+)?)/);
+  // Format: "Above $83,500" or "> $83500" or "Bitcoin above $101,715"
+  const sub = market.yes_sub_title || market.subtitle || market.title || '';
+  const m1 = sub.match(/\$\s*([\d,]+(?:\.\d+)?)/);
   if(m1) return parseFloat(m1[1].replace(/,/g,''));
-  // Fallback: parse from ticker suffix (T83500 → 83500)
-  const m2 = (market.ticker||'').match(/T(\d+)$/);
+  // Try floor_price / cap_price fields
+  if(market.floor_strike) return parseFloat(market.floor_strike);
+  if(market.cap_strike) return parseFloat(market.cap_strike);
+  // Parse from ticker suffix — handles KXBTC15M-26MAR101715 → 101715
+  // Also handles KXBTCT83500 → 83500
+  const ticker = market.ticker || '';
+  const m2 = ticker.match(/[A-Z](\d{4,})$/);  // 4+ digits at end
   if(m2) return parseFloat(m2[1]);
   return null;
 }
@@ -920,6 +875,13 @@ function applyAutoStrike(){
   const ki = document.getElementById('ki');
   ki.value = kalshiAutoStrike;
   strikeInput = kalshiAutoStrike;
+  // Update hint to show it's auto-filled
+  const kh = document.getElementById('kh');
+  if(kh){ kh.textContent = `✓ Auto-filled from ${kalshiMarket?kalshiMarket.ticker:'Kalshi'} — you can override manually.`; kh.style.color='#00e5a060'; }
+  // Hide the "enter strike" prompt
+  const sh = document.getElementById('sh');
+  if(sh && amtInput<=0) sh.textContent = 'Set bet amount to enable trading';
+  else if(sh && amtInput>0) sh.style.display='none';
   priceChartDirty=true;
   renderTradeSetup(); renderSignalPanel(); renderPrice(); drawPriceChart();
 }
@@ -1587,8 +1549,15 @@ function renderTradeSetup(){
   } else cp.style.display='none';
 
   const sh=document.getElementById('sh');
-  sh.textContent=strikeInput<=0?'Enter Kalshi strike price':amtInput<=0?'Enter bet amount':'';
-  sh.style.display=(!can&&(strikeInput<=0||amtInput<=0))?'block':'none';
+  if(strikeInput<=0){
+    sh.textContent = kalshiAutoStrike ? '⟳ Detecting strike from Kalshi...' : 'Waiting for Kalshi market...';
+    sh.style.display='block';
+  } else if(amtInput<=0){
+    sh.textContent = 'Enter bet amount to enable trading';
+    sh.style.display='block';
+  } else {
+    sh.style.display='none';
+  }
 }
 
 function renderActiveTrade(clock){
@@ -1825,7 +1794,7 @@ document.querySelectorAll('.tb').forEach(btn=>{
     document.querySelectorAll('.tb').forEach(b=>b.classList.remove('on'));
     document.querySelectorAll('.pnl').forEach(p=>p.classList.remove('on'));
     btn.classList.add('on'); document.getElementById(`p-${btn.dataset.p}`).classList.add('on');
-    if(btn.dataset.p==='signal')renderSignalPanel();
+    if(btn.dataset.p==='trade'){renderSignalPanel();renderTradeSetup();}
     if(btn.dataset.p==='log'){pnlChartDirty=true;drawPnLCharts();}
     if(btn.dataset.p==='brain')updateBrainPanel();
     if(btn.dataset.p==='portfolio'&&authConnected)refreshPortfolio();
@@ -1988,9 +1957,11 @@ async function maybeAutoClose(advisory){
 // ── Render portfolio ──
 function renderBalance(bal){
   if(!bal) return;
-  // balance comes back in cents from Kalshi
-  const b = ((bal.balance)||0)/100;
-  const p = ((bal.portfolio_value)||0)/100;
+  // Kalshi returns {balance: N, portfolio_value: N} where N is in cents
+  // Sometimes wrapped in another {balance: {...}} — unwrap if needed
+  const data = (bal.balance && typeof bal.balance === 'object') ? bal.balance : bal;
+  const b = (data.balance||0)/100;
+  const p = (data.portfolio_value||0)/100;
   const el = document.getElementById('pf-bal');
   if(el) el.textContent = '$'+b.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
   const ep = document.getElementById('pf-port');
@@ -2076,7 +2047,7 @@ async function refreshPortfolio(){
       fetchFills()
     ]);
     window._lastFills = fills;
-    renderBalance(balRes.balance || balRes); // handle both {balance:{...}} and flat
+    renderBalance(balRes); // renderBalance handles all response shapes
     renderPositions(positions);
     renderFills(fills);
   }catch(e){console.warn('Portfolio refresh failed:',e.message);}
@@ -2086,28 +2057,52 @@ async function refreshPortfolio(){
 function showKeyModal(){ document.getElementById('key-modal').style.display='block'; }
 function hideKeyModal(){ document.getElementById('key-modal').style.display='none'; }
 
+// Auto-connect silently on page load — no button needed
+async function autoConnectKey(){
+  try{
+    const res = await testConnection();
+    const balObj = res.balance !== undefined ? res : {balance: res};
+    authConnected = true;
+    document.getElementById('auth-gate').style.display='none';
+    document.getElementById('portfolio-content').style.display='block';
+    document.getElementById('ptab').textContent='💼 PORT';
+    renderBalance(balObj);
+    refreshPortfolio();
+    if(authRefreshTimer) clearInterval(authRefreshTimer);
+    authRefreshTimer = setInterval(refreshPortfolio, 30000);
+    setKalshiStatus('live','KALSHI AUTH');
+    showToast('✅ Kalshi connected','#00e5a0');
+  }catch(e){
+    // Silent fail — user can still connect manually via KEY tab
+    console.log('Auto-connect failed (env vars may not be set):', e.message);
+  }
+}
+
+// Manual connect via modal
 async function connectKey(){
   const errEl = document.getElementById('modal-err');
   const btn = document.getElementById('modal-connect-btn');
   errEl.style.display='none';
   btn.textContent='TESTING...'; btn.disabled=true;
   try{
-    const bal = await testConnection();
+    const res = await testConnection();
+    // testConnection returns {balance:{...}} or flat object — handle both
+    const balObj = res.balance !== undefined ? res : {balance: res};
     authConnected = true;
     hideKeyModal();
     document.getElementById('auth-gate').style.display='none';
     document.getElementById('portfolio-content').style.display='block';
     document.getElementById('ptab').textContent='💼 PORT';
-    renderBalance(bal.balance);
+    renderBalance(balObj);
     refreshPortfolio();
     if(authRefreshTimer) clearInterval(authRefreshTimer);
     authRefreshTimer = setInterval(refreshPortfolio, 30000);
     setKalshiStatus('live','KALSHI AUTH');
   }catch(e){
     let msg = e.message || JSON.stringify(e);
-    if(msg.includes('500')||msg.includes('Missing')) msg = 'Netlify env vars not set. Add KALSHI_KEY_ID and KALSHI_PRIVATE_KEY in Site Settings → Environment Variables, then redeploy.';
-    else if(msg.includes('401')||msg.includes('403')) msg = 'Auth failed — check your Key ID and Private Key are correct in Netlify env vars.';
-    else if(msg.includes('Failed to fetch')) msg = 'Could not reach the Netlify function. Make sure you\'ve deployed with the netlify.toml and functions/ folder.';
+    if(msg.includes('500')||msg.includes('Missing')) msg = 'Env vars not set. Add KALSHI_KEY_ID and KALSHI_PRIVATE_KEY in Vercel → Settings → Environment Variables, then redeploy.';
+    else if(msg.includes('401')||msg.includes('403')) msg = 'Auth failed — check your Key ID and Private Key are correct in Vercel env vars.';
+    else if(msg.includes('Failed to fetch')||msg.includes('404')) msg = 'Could not reach the API function. Make sure api/kalshi.js is deployed and vercel.json is at the repo root.';
     errEl.textContent = msg;
     errEl.style.display='block';
   }
@@ -2151,29 +2146,25 @@ async function init(){
   // Load initial candle history
   const data=await loadInit();
   if(data){prices=data.p;livePrice=data.c;source=data.s;mode='live';
-    // Seed tick buffer from last known price
     pushTick(livePrice);
-    // Connect WebSocket streams for live ticks
     connectBinanceWS();
     connectKrakenWS();
   } else {
     const b=83000+Math.random()*5000;prices=synth(b,60);livePrice=prices[prices.length-1];
     source='DEMO';mode='demo';document.getElementById('demo-ban').style.display='block';
-    // Demo mode: simulate ticks via fast interval
     setInterval(()=>{
       if(mode!=='demo')return;
       const last=livePrice||83000;
       onNewPrice(Math.max(last*0.995,last+(Math.random()-.498)*(last*.0005)),'DEMO');
     },500);
   }
-  // Start Kalshi API in parallel
+  // Start Kalshi market API
   kalshiInit();
-  // Roll new candle every 60s (keep 60-candle history for indicators)
+  // Auto-connect portfolio silently — no button tap needed
+  autoConnectKey();
+  // Roll new candle every 60s
   setInterval(()=>{
-    if(livePrice&&prices.length>0){
-      prices=[...prices.slice(-59),livePrice];
-      // Reset tick buffer on new candle boundary
-    }
+    if(livePrice&&prices.length>0) prices=[...prices.slice(-59),livePrice];
   },60000);
   priceChartDirty=true;
   renderPrice(); renderSignalPanel(); renderTradeSetup(); drawPriceChart(); renderHeader(); updateBrainPanel();
