@@ -5,342 +5,205 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>BTC · 15M EDGE</title>
 <style>
-/* ── RESET ── */
 *{box-sizing:border-box;margin:0;padding:0}
-::-webkit-scrollbar{width:3px;height:3px}
-::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:#1a1a35;border-radius:2px}
+html,body{background:#07070f;font-family:'Courier New',monospace;color:#dde0f5;overflow-x:hidden}
 input[type=number]::-webkit-outer-spin-button,
 input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
 input[type=number]{-moz-appearance:textfield}
-
-/* ── BASE ── */
-html,body{background:#07070f;font-family:'Courier New',monospace;color:#dde0f5;height:100%;overflow:hidden}
-.lbl{font-size:7px;letter-spacing:3px;color:#444;text-transform:uppercase}
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:#07070f}
+::-webkit-scrollbar-thumb{background:#1a1a35;border-radius:2px}
+#app{max-width:440px;margin:0 auto;padding:14px 11px 60px}
+.card{background:#0c0c1c;border:1px solid #1a1a35;border-radius:14px;padding:12px 14px;margin-bottom:10px}
+.lbl{font-size:8px;letter-spacing:4px;color:#444;margin-bottom:6px}
 .gold{color:#f7c948}
-.card{background:#0c0c1c;border:1px solid #1a1a35;border-radius:9px;padding:8px 10px}
 
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
-@keyframes fadein{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
-@keyframes blink{50%{opacity:0}}
+/* header */
+#hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.logo-k{font-size:9px;letter-spacing:5px;color:#f7c948}
+.logo-m{font-size:20px;font-weight:900;letter-spacing:-1px;background:linear-gradient(100deg,#f7c948,#ff7b00);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hdr-r{text-align:right}
+.hdr-t{font-size:9px;color:#333;margin-bottom:2px}
+.dot-row{display:flex;align-items:center;gap:5px;justify-content:flex-end}
+.src{font-size:9px;letter-spacing:1px}
+.dot{width:7px;height:7px;border-radius:50%;transition:background .15s}
 
-/* ══════════════════════════════════════════════
-   DESKTOP DASHBOARD LAYOUT  (≥900px)
-   Three-column grid that fits 100vh, zero scroll
-══════════════════════════════════════════════ */
-#app{
-  display:grid;
-  width:100vw;
-  height:100vh;
-  padding:7px 8px 5px;
-  grid-template-columns: 200px 1fr 200px;
-  grid-template-rows: 36px auto 70px 1fr 14px;
-  grid-template-areas:
-    "hdr   hdr   hdr"
-    "demo  demo  demo"
-    "chart chart chart"
-    "left  mid   right"
-    "foot  foot  foot";
-  gap:5px;
-  overflow:hidden;
-}
+/* demo */
+#demo-ban{background:#1a1200;border:1px solid #f7c94830;border-radius:9px;padding:6px 11px;margin-bottom:9px;font-size:9px;color:#f7c948;display:none}
 
-/* ── HEADER ── */
-#hdr{
-  grid-area:hdr;
-  display:flex;justify-content:space-between;align-items:center;
-}
-.logo-k{font-size:8px;letter-spacing:5px;color:#f7c948}
-.logo-m{font-size:17px;font-weight:900;letter-spacing:-1px;
-  background:linear-gradient(100deg,#f7c948,#ff7b00);
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.hdr-mid{display:flex;align-items:center;gap:10px}
-.hdr-r{display:flex;align-items:center;gap:8px}
-.hdr-t{font-size:8px;color:#333}
-.dot-row{display:flex;align-items:center;gap:5px}
-.src{font-size:8px;letter-spacing:1px}
-.dot{width:6px;height:6px;border-radius:50%;transition:background .15s}
+/* top row */
+#top-row{display:flex;gap:9px;margin-bottom:10px}
+#pc{flex:1;background:#0c0c1c;border:1px solid #1a1a35;border-radius:14px;padding:12px 14px}
+#lp{font-size:22px;font-weight:900;color:#f7c948;letter-spacing:-1px;line-height:1}
+#pd{font-size:11px;margin-top:3px}
+#si{font-size:9px;margin-top:5px;color:#333}
+#spd-row{display:flex;gap:8px;margin-top:5px}
+.spd-chip{font-size:8px;padding:2px 7px;border-radius:4px;font-weight:700}
+#cc{background:#0c0c1c;border:1px solid #1a1a35;border-radius:14px;padding:9px;display:flex;align-items:center;justify-content:center}
+#cw{position:relative;width:110px;height:110px}
+#csv{position:absolute;top:0;left:0;transform:rotate(-90deg)}
+#ci{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.clbl{font-size:7px;color:#2a2a40;letter-spacing:3px}
+#ct{font-size:20px;font-weight:900;line-height:1.1}
 
-/* ── DEMO BANNER ── */
-#demo-ban{
-  grid-area:demo;
-  display:none;
-  background:#1a1200;border:1px solid #f7c94830;border-radius:7px;
-  padding:3px 10px;font-size:8px;color:#f7c948;align-items:center;
-}
+/* mini price chart */
+#pcc{width:100%;height:72px;display:block}
 
-/* ── PRICE CHART BAR ── */
-#chart-card{
-  grid-area:chart;
-  background:#0c0c1c;border:1px solid #1a1a35;border-radius:9px;
-  padding:4px 10px 3px;
-  display:grid;
-  grid-template-columns:120px 1fr 90px;
-  gap:8px;
-  align-items:center;
-  overflow:hidden;
-}
-#chart-price-block{display:flex;flex-direction:column;gap:1px}
-#lp{font-size:20px;font-weight:900;color:#f7c948;letter-spacing:-1px;line-height:1}
-#pd{font-size:10px}
-#si{font-size:7px;color:#555;margin-top:1px}
-#spd-row{display:flex;gap:4px;margin-top:2px}
-.spd-chip{font-size:7px;padding:1px 5px;border-radius:4px;font-weight:700}
-#pcc{display:block;width:100%;height:62px}
-/* clock in chart bar */
-#chart-clock{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
-#ct{font-size:18px;font-weight:900;color:#00e5a0;line-height:1}
-.clbl{font-size:6px;color:#333;letter-spacing:2px}
-#clock-ring{display:block}
-
-/* ── LEFT COLUMN ── */
-#left-col{
-  grid-area:left;
-  display:flex;flex-direction:column;gap:5px;
-  overflow:hidden;min-height:0;
-}
+/* tabs */
+#tabs{display:flex;gap:6px;margin-bottom:10px}
+.tb{flex:1;padding:6px 0;border-radius:8px;border:none;cursor:pointer;font-family:inherit;font-size:8px;letter-spacing:3px;background:#0c0c1c;color:#444;font-weight:400;transition:all .12s}
+.tb.on{background:#f7c948;color:#07070f;font-weight:900}
+.pnl{display:none}.pnl.on{display:block}
 
 /* verdict */
-#verdict{
-  background:#0c0c1c;border:1px solid #1a1a35;border-radius:9px;
-  padding:8px 10px;text-align:center;flex-shrink:0;
-}
-.vrd-eye{font-size:6px;letter-spacing:3px;color:#444;margin-bottom:2px}
-.vrd-main{font-size:24px;font-weight:900;letter-spacing:1px;line-height:1.1;color:#555}
-.vrd-strike{font-size:8px;margin-top:2px;opacity:.6}
-.vrd-conf{font-size:10px;font-weight:700;margin-top:1px}
+#verdict{border-radius:14px;padding:12px 14px;margin-bottom:10px;text-align:center}
+.vrd-eye{font-size:8px;letter-spacing:4px;margin-bottom:4px}
+.vrd-main{font-size:38px;font-weight:900;letter-spacing:2px;line-height:1}
+.vrd-strike{font-size:10px;margin-top:4px;opacity:.7}
+.vrd-conf{font-size:11px;font-weight:700;margin-top:3px}
 
 /* prob split */
-#prob-split{
-  display:flex;border-radius:7px;overflow:hidden;height:22px;flex-shrink:0;
-}
-#prob-up,#prob-dn{
-  display:flex;align-items:center;justify-content:center;
-  font-weight:900;font-size:10px;color:#07070f;transition:width .8s ease;
-}
+#prob-split{display:flex;border-radius:10px;overflow:hidden;margin-bottom:10px;height:30px}
+#prob-up,#prob-dn{display:flex;align-items:center;justify-content:center;font-weight:900;font-size:12px;color:#07070f;transition:width .8s ease}
 
-/* indicators */
-#sig-bars{
-  flex:1;min-height:0;overflow-y:auto;
-}
-.sb-row{display:flex;align-items:center;gap:5px;margin-bottom:4px}
-.sb-row:last-child{margin-bottom:0}
-.sb-label{width:68px;font-size:7px;color:#666;flex-shrink:0}
-.sb-bar-bg{flex:1;height:4px;background:#141428;border-radius:3px;overflow:hidden}
-.sb-bar-fill{height:100%;border-radius:3px;transition:width .6s ease}
-.sb-pct{width:22px;text-align:right;font-size:7px;font-weight:700}
-
-/* ── MIDDLE COLUMN ── */
-#mid-col{
-  grid-area:mid;
-  display:flex;flex-direction:column;gap:5px;
-  overflow:hidden;min-height:0;
-}
-
-/* trade panel */
-#p-trade{
-  display:flex;flex-direction:column;gap:5px;
-  overflow-y:auto;min-height:0;flex:1;
-}
-#p-trade>*{flex-shrink:0}
-
-/* setup / active hidden/shown by JS */
-#sw{}
-#aw{animation:fadein .2s ease}
-
-/* Kalshi market bar */
-#kalshi-market-bar{
-  display:none;background:#07070f;border-radius:7px;
-  padding:6px 9px;margin-bottom:4px;
-}
-
-/* trade inputs */
-.iw{display:flex;align-items:center;background:#07070f;border:1px solid #1a1a35;border-radius:7px;overflow:hidden;margin-bottom:4px}
-.ip{padding:5px 8px;font-size:10px;border-right:1px solid #1a1a35}
-.fi{flex:1;background:transparent;border:none;outline:none;font-size:12px;font-weight:700;padding:5px 8px;font-family:inherit;color:#f7c948}
-.fi.amt{color:#ddd}
-.fh{font-size:7px;color:#2a2a40;margin-bottom:6px}
-/* strike bar */
-.sbw{background:#07070f;border-radius:7px;padding:6px 8px;margin-bottom:7px;display:none}
-.sbar{height:5px;background:#141428;border-radius:3px;position:relative;overflow:hidden}
-.sc{position:absolute;left:50%;top:0;width:1.5px;height:100%;background:#f7c94850}
-.sf{position:absolute;height:100%;border-radius:3px;transition:width .3s,left .3s}
-/* bet buttons */
-.bb{display:flex;gap:6px;margin-bottom:5px}
-.bbtn{flex:1;padding:9px 0;border-radius:8px;font-family:inherit;font-size:12px;font-weight:900;letter-spacing:2px;cursor:pointer;border:2px solid;transition:opacity .15s}
-.bbtn:disabled{opacity:.3;cursor:not-allowed}
-.bh{font-size:6px;opacity:.4;margin-top:1px}
-#sh{font-size:7px;color:#2a2a40;text-align:center}
-#contract-preview{display:none;background:#07070f;border-radius:7px;padding:8px 10px;margin-top:5px}
-
-/* active trade cards */
-#adv{border-radius:9px;padding:8px 10px;display:none;animation:fadein .15s ease}
-.adv-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:2px}
-.adv-action{font-size:11px;letter-spacing:2px;font-weight:900}
-.adv-roi{font-size:11px;font-weight:900}
-.adv-msg{font-size:8px;color:#aaa;line-height:1.4}
-#aeb{width:100%;margin-top:6px;padding:7px 0;border-radius:7px;font-family:inherit;font-size:10px;font-weight:900;letter-spacing:2px;cursor:pointer;display:none;border:none}
-.sg{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:7px}
-.sb2{background:#07070f;border-radius:6px;padding:5px 3px;text-align:center}
-.sl3{font-size:6px;color:#2a2a40;letter-spacing:1px;margin-bottom:2px}
-.sv2{font-size:10px;font-weight:900}
-.rbw{margin-bottom:6px}
-.rbt{display:flex;justify-content:space-between;font-size:7px;margin-bottom:2px}
-.rb{height:6px;background:#141428;border-radius:4px;overflow:hidden;position:relative}
-.rbc{position:absolute;left:50%;top:0;width:1.5px;height:100%;background:#1a1a35}
-.rpm{position:absolute;top:0;width:1.5px;height:100%;background:#f7c94870;display:none}
-.rbf{position:absolute;height:100%;transition:width .4s ease}
-.rbl{display:flex;justify-content:space-between;font-size:6px;color:#1a1a2e;margin-top:1px}
-#proj-cv{width:100%;height:55px;display:block;margin-top:5px}
-#sll{display:flex;justify-content:space-between;align-items:center;font-size:8px}
-.wbf{height:100%;border-radius:2px;transition:width 1s linear}
-#mc{width:100%;padding:6px 0;border-radius:7px;background:transparent;border:1px solid #ff456630;color:#ff456660;font-family:inherit;font-size:7px;letter-spacing:2px;cursor:pointer;margin-top:5px}
-
-/* ── RIGHT COLUMN ── */
-#right-col{
-  grid-area:right;
-  display:flex;flex-direction:column;gap:5px;
-  overflow:hidden;min-height:0;
-}
-
-/* market analysis */
-#vel-card{flex-shrink:0}
-.vel-row{display:flex;justify-content:space-between;align-items:center;padding:2px 0;border-bottom:1px solid #0a0a1e;font-size:8px}
+/* velocity */
+.vel-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #0a0a1e}
 .vel-row:last-child{border-bottom:none}
-.vel-lbl{color:#555;font-size:7px}
-.vel-val{font-weight:700;font-size:8px}
+.vel-lbl{color:#555;font-size:9px}
+.vel-val{font-weight:700}
+
+/* signal bars */
+.sb-row{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.sb-row:last-child{margin-bottom:0}
+.sb-label{width:90px;font-size:8px;color:#666;flex-shrink:0}
+.sb-bar-bg{flex:1;height:6px;background:#141428;border-radius:3px;overflow:hidden}
+.sb-bar-fill{height:100%;border-radius:3px;transition:width .6s ease}
+.sb-pct{width:26px;text-align:right;font-size:8px;font-weight:700}
+
+/* trade setup */
+.iw{display:flex;align-items:center;background:#07070f;border:1px solid #1a1a35;border-radius:8px;overflow:hidden;margin-bottom:5px}
+.ip{padding:7px 10px;font-size:12px;border-right:1px solid #1a1a35}
+.fi{flex:1;background:transparent;border:none;outline:none;font-size:14px;font-weight:700;padding:7px 10px;font-family:inherit;color:#f7c948}
+.fi.amt{color:#ddd}
+.fh{font-size:8px;color:#2a2a40;margin-bottom:8px}
+.sbw{background:#07070f;border-radius:8px;padding:8px 10px;margin-bottom:10px;display:none}
+.sbar{height:7px;background:#141428;border-radius:4px;position:relative;overflow:hidden}
+.sc{position:absolute;left:50%;top:0;width:2px;height:100%;background:#f7c94850}
+.sf{position:absolute;height:100%;border-radius:4px;transition:width .3s,left .3s}
+.bb{display:flex;gap:8px;margin-bottom:6px}
+.bbtn{flex:1;padding:14px 0;border-radius:11px;font-family:inherit;font-size:14px;font-weight:900;letter-spacing:3px;cursor:pointer;transition:opacity .15s,background .15s;border:2px solid}
+.bbtn:disabled{opacity:.3;cursor:not-allowed}
+.bh{font-size:7px;opacity:.4;margin-top:2px}
+#sh{font-size:8px;color:#2a2a40;text-align:center;margin-top:5px}
+
+/* kalshi market bar */
+#kalshi-market-bar{display:none;background:#07070f;border-radius:9px;padding:8px 11px;margin-bottom:10px}
+
+/* contract preview */
+#contract-preview{display:none;background:#07070f;border-radius:10px;padding:11px 13px;margin-top:9px}
+
+/* active trade */
+#aw{display:none;animation:fadein .2s ease}
+#adv{border-radius:12px;padding:11px 13px;margin-bottom:10px;display:none;animation:fadein .2s ease}
+.adv-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.adv-action{font-size:13px;letter-spacing:3px;font-weight:900}
+.adv-roi{font-size:13px;font-weight:900}
+.adv-msg{font-size:10px;color:#aaa;line-height:1.5;margin-top:3px}
+#aeb{width:100%;margin-top:8px;padding:10px 0;border-radius:9px;font-family:inherit;font-size:12px;font-weight:900;letter-spacing:3px;cursor:pointer;display:none;border:none}
+.sg{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:10px}
+.sb2{background:#07070f;border-radius:7px;padding:6px 4px;text-align:center}
+.sl3{font-size:7px;color:#2a2a40;letter-spacing:1px;margin-bottom:2px}
+.sv2{font-size:11px;font-weight:900}
+.rbw{margin-bottom:9px}
+.rbt{display:flex;justify-content:space-between;font-size:8px;margin-bottom:3px}
+.rb{height:8px;background:#141428;border-radius:4px;overflow:hidden;position:relative}
+.rbc{position:absolute;left:50%;top:0;width:2px;height:100%;background:#1a1a35}
+.rpm{position:absolute;top:0;width:2px;height:100%;background:#f7c94870;display:none}
+.rbf{position:absolute;height:100%;transition:width .4s ease}
+.rbl{display:flex;justify-content:space-between;font-size:7px;color:#1a1a2e;margin-top:2px}
+#proj-cv{display:block;width:100%;margin-top:9px}
+#sll{display:flex;justify-content:space-between;align-items:center}
+.wbw{margin-bottom:0}
+.wbr{display:flex;justify-content:space-between;font-size:8px;margin-bottom:3px}
+.wb{height:3px;background:#141428;border-radius:2px;overflow:hidden}
+.wbf{height:100%;border-radius:2px;transition:width 1s linear}
+#mc{width:100%;padding:8px 0;border-radius:9px;background:transparent;border:1px solid #ff456630;color:#ff456660;font-family:inherit;font-size:9px;letter-spacing:3px;cursor:pointer;margin-top:7px}
+
+/* log */
+#ls{display:flex;justify-content:space-between;padding:9px 11px;background:#07070f;border-radius:9px;margin-bottom:10px;display:none}
+.sb3{text-align:center}
+.sl4{font-size:7px;color:#2a2a40;letter-spacing:3px;margin-bottom:2px}
+.sv3{font-size:15px;font-weight:900}
+#pnl-cv{width:100%;height:96px;display:block}
+#bar-cv{width:100%;height:76px;display:block}
+.tr{padding:7px 0;border-bottom:1px solid #0a0a18}
+.tr:last-child{border-bottom:none}
+.trt{display:flex;justify-content:space-between;align-items:center;font-size:11px}
+.trb{font-size:9px;margin-top:2px;display:flex;gap:9px}
+#cl{margin-top:10px;width:100%;padding:7px 0;border-radius:8px;background:transparent;border:1px solid #ff456625;color:#ff456660;font-family:inherit;font-size:8px;letter-spacing:3px;cursor:pointer;display:none}
+#le{text-align:center;color:#1a1a30;font-size:12px;padding:18px 0}
+
+/* brain */
+#nn-status{background:#07070f;border-radius:9px;padding:9px 11px;margin-bottom:9px}
+.nn-row{display:flex;justify-content:space-between;font-size:10px;margin-bottom:5px}
+.nn-row:last-child{margin-bottom:0}
+#nn-acc-bg{height:5px;background:#141428;border-radius:3px;overflow:hidden;margin-top:4px}
+#nn-acc-bar{height:100%;background:linear-gradient(90deg,#f7c948,#00e5a0);border-radius:3px;transition:width .8s ease;width:0%}
+.brain-btn{width:100%;padding:9px 0;border-radius:9px;font-family:inherit;font-size:9px;letter-spacing:3px;cursor:pointer;margin-bottom:6px;display:block;text-align:center}
+#exp-btn{background:#f7c94815;border:1px solid #f7c94840;color:#f7c948}
+#imp-lbl{background:#00e5a010;border:1px solid #00e5a030;color:#00e5a0}
+#rst-btn{background:transparent;border:1px solid #ff456625;color:#ff456660}
+
+/* model breakdown */
+.model-layer{background:#07070f;border-radius:9px;padding:9px 11px;margin-bottom:6px}
+.ml-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.ml-name{font-size:8px;letter-spacing:2px;color:#f7c948;font-weight:700}
+.ml-weight{font-size:7px;color:#2a2a40;background:#141428;padding:2px 6px;border-radius:4px}
+.ml-body{margin-bottom:5px}
+.ml-stat-row{display:flex;justify-content:space-between;align-items:center;font-size:10px;margin-bottom:4px}
+.ml-stat-row:last-child{margin-bottom:0}
+.ml-stat-lbl{color:#555}
+.ml-contrib-bar-bg{height:5px;background:#141428;border-radius:3px;overflow:hidden}
+.ml-contrib-bar{height:100%;border-radius:3px;transition:width .7s ease}
 
 /* risk panel */
-#risk-panel{
-  background:#0a0005;border:1px solid #ff456625;border-radius:9px;
-  padding:8px 10px;flex:1;min-height:0;overflow-y:auto;
-}
+#risk-panel{background:#0a0005;border:1px solid #ff456625;border-radius:14px;padding:12px 14px;margin-bottom:10px}
 #risk-panel.ok{background:#00060a;border-color:#00e5a025}
 #risk-panel.warn{background:#0a0800;border-color:#f7c94830;animation:pulse .9s infinite}
-.risk-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:7px}
-.risk-title{font-size:7px;letter-spacing:3px;color:#f7c948}
-.risk-badge{font-size:6px;padding:2px 7px;border-radius:4px;font-weight:700;letter-spacing:1px}
-.risk-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:7px}
-.risk-cell{background:#07070f;border-radius:6px;padding:5px 7px}
-.risk-cell-lbl{font-size:6px;color:#333;letter-spacing:1px;margin-bottom:1px}
-.risk-cell-val{font-size:11px;font-weight:900}
-.risk-cell-sub{font-size:6px;color:#2a2a40;margin-top:1px}
-.risk-block{background:#07070f;border-radius:7px;padding:6px 8px;margin-bottom:5px;font-size:9px}
-.risk-block-title{font-size:6px;letter-spacing:3px;color:#444;margin-bottom:4px}
-.risk-check-row{display:flex;align-items:center;gap:5px;margin-bottom:3px}
+.risk-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.risk-title{font-size:8px;letter-spacing:4px;color:#f7c948}
+.risk-badge{font-size:7px;padding:2px 8px;border-radius:4px;font-weight:700;letter-spacing:1px}
+.risk-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:10px}
+.risk-cell{background:#07070f;border-radius:8px;padding:7px 9px}
+.risk-cell-lbl{font-size:7px;color:#333;letter-spacing:2px;margin-bottom:3px}
+.risk-cell-val{font-size:12px;font-weight:900}
+.risk-cell-sub{font-size:7px;color:#2a2a40;margin-top:1px}
+.risk-block{background:#07070f;border-radius:9px;padding:9px 11px;margin-bottom:7px;font-size:10px}
+.risk-block-title{font-size:7px;letter-spacing:3px;color:#444;margin-bottom:6px}
+.risk-check-row{display:flex;align-items:center;gap:7px;margin-bottom:5px;font-size:10px}
 .risk-check-row:last-child{margin-bottom:0}
-.risk-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
-.risk-check-lbl{flex:1;color:#666;font-size:7px}
-.risk-check-val{font-weight:700;font-size:7px}
-#risk-block-btn{width:100%;padding:6px 0;border-radius:6px;font-family:inherit;font-size:7px;font-weight:900;letter-spacing:2px;cursor:pointer;border:none;margin-top:3px;display:none}
+.risk-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.risk-check-lbl{flex:1;color:#666}
+.risk-check-val{font-weight:700;font-size:9px}
+#risk-block-btn{width:100%;padding:9px 0;border-radius:8px;font-family:inherit;font-size:9px;font-weight:900;letter-spacing:2px;cursor:pointer;border:none;margin-top:4px;display:none}
 
-/* ── DESKTOP TABS (right col bottom) ── */
-#desk-tabs{
-  display:flex;gap:3px;flex-shrink:0;
-}
-#desk-tabs .tb{
-  flex:1;padding:4px 0;border-radius:5px;border:none;cursor:pointer;
-  font-family:inherit;font-size:7px;letter-spacing:2px;
-  background:#0c0c1c;color:#444;font-weight:400;transition:all .12s;
-}
-#desk-tabs .tb.on{background:#f7c948;color:#07070f;font-weight:900}
-#desk-log-panel{flex:1;min-height:0;overflow-y:auto;background:#0c0c1c;border:1px solid #1a1a35;border-radius:9px;padding:8px 10px;display:flex;flex-direction:column}
-.tr{padding:4px 0;border-bottom:1px solid #0a0a18;font-size:9px}
-.tr:last-child{border-bottom:none}
-.trt{display:flex;justify-content:space-between;align-items:center}
-.trb{font-size:7px;margin-top:1px;display:flex;gap:6px;color:#2a2a40}
+/* toast */
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);padding:9px 18px;border-radius:10px;font-size:11px;font-family:'Courier New',monospace;font-weight:700;letter-spacing:1px;pointer-events:none;opacity:0;transition:opacity .3s;z-index:9999;max-width:340px;text-align:center}
 
-/* ── MOBILE TABS (hidden on desktop) ── */
-#tabs{display:none}
-.pnl{display:none}
-.pnl.on{display:block}
+/* footnote */
+.fnote{font-size:7px;color:#0e0e1c;letter-spacing:2px;text-align:center;margin-top:14px}
 
-/* ── LOG / BRAIN / PORTFOLIO (mobile panels, hidden on desktop) ── */
-#p-log .card,#p-brain .card,#p-portfolio .card{border-radius:9px}
-#le{text-align:center;color:#1a1a30;font-size:10px;padding:14px 0}
-#log-rows .tr{padding:5px 0}
-#cl{margin-top:7px;width:100%;padding:5px 0;border-radius:7px;background:transparent;border:1px solid #ff456625;color:#ff456650;font-family:inherit;font-size:7px;letter-spacing:2px;cursor:pointer;display:none}
-.sb3{text-align:center}.sl4{font-size:6px;color:#2a2a40;letter-spacing:2px;margin-bottom:2px}.sv3{font-size:14px;font-weight:900}
-#nn-acc-bg{height:3px;background:#141428;border-radius:2px;overflow:hidden;margin-top:3px}
-#nn-acc-bar{height:100%;background:linear-gradient(90deg,#f7c948,#00e5a0);border-radius:2px;transition:width .8s ease;width:0%}
-.brain-btn{width:100%;padding:6px 0;border-radius:7px;font-family:inherit;font-size:7px;letter-spacing:2px;cursor:pointer;margin-bottom:4px;display:block;text-align:center;border:1px solid}
-#exp-btn{background:#f7c94815;border-color:#f7c94840;color:#f7c948}
-#imp-lbl{background:#00e5a010;border-color:#00e5a030;color:#00e5a0}
-#rst-btn{background:transparent;border-color:#ff456625;color:#ff456660}
-.nn-row{display:flex;justify-content:space-between;font-size:8px;margin-bottom:3px}
-
-/* ── MODEL BREAKDOWN ── */
-.model-layer{background:#07070f;border-radius:6px;padding:6px 8px;margin-bottom:4px}
-.ml-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
-.ml-name{font-size:7px;letter-spacing:1px;color:#f7c948;font-weight:700}
-.ml-weight{font-size:6px;color:#2a2a40;background:#141428;padding:1px 4px;border-radius:3px}
-.ml-body{margin-bottom:4px}
-.ml-stat-row{display:flex;justify-content:space-between;align-items:center;font-size:8px;margin-bottom:2px}
-.ml-stat-row:last-child{margin-bottom:0}
-.ml-stat-lbl{color:#555;font-size:7px}
-.ml-contrib-bar-bg{height:3px;background:#141428;border-radius:2px;overflow:hidden}
-.ml-contrib-bar{height:100%;border-radius:2px;transition:width .7s ease}
-
-/* ── TOAST ── */
-#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);padding:7px 14px;border-radius:7px;font-size:9px;font-family:'Courier New',monospace;font-weight:700;letter-spacing:1px;pointer-events:none;opacity:0;transition:opacity .3s;z-index:9999;max-width:300px;text-align:center}
-
-/* ── FOOTER ── */
-.fnote{grid-area:foot;font-size:6px;color:#0e0e1c;letter-spacing:1px;text-align:center;display:flex;align-items:center;justify-content:center}
-
-/* ══════════════════════════════════════════════
-   MOBILE FALLBACK  (<900px) — original scroll layout
-══════════════════════════════════════════════ */
-@media(max-width:899px){
-  html,body{overflow-x:hidden;overflow-y:auto;height:auto}
-  #app{
-    display:block;
-    max-width:440px;margin:0 auto;
-    padding:12px 10px 50px;
-    height:auto;overflow:visible;
-  }
-  #tabs{display:flex;gap:4px;margin-bottom:8px}
-  .tb{flex:1;padding:5px 0;border-radius:6px;border:none;cursor:pointer;font-family:inherit;font-size:7px;letter-spacing:2px;background:#0c0c1c;color:#444;font-weight:400;transition:all .12s}
-  .tb.on{background:#f7c948;color:#07070f;font-weight:900}
-  .pnl{display:none}.pnl.on{display:block}
-  #left-col,#mid-col,#right-col{display:contents}
-  #chart-card{display:block;margin-bottom:8px;padding:8px 10px}
-  #chart-price-block{display:none}
-  #chart-clock{display:none}
-  /* mobile top row: price + clock */
-  #mob-top{display:flex;gap:8px;margin-bottom:8px}
-  #mob-price{flex:1;background:#0c0c1c;border:1px solid #1a1a35;border-radius:10px;padding:10px 12px}
-  #mob-clock{background:#0c0c1c;border:1px solid #1a1a35;border-radius:10px;padding:8px;display:flex;align-items:center;justify-content:center}
-  #mob-clock-inner{position:relative;width:80px;height:80px}
-  #lp{font-size:22px}
-  #pd{font-size:11px;margin-top:2px}
-  #si{font-size:8px;margin-top:4px}
-  #spd-row{display:flex;gap:6px;margin-top:4px}
-  #verdict{margin-bottom:8px}
-  .vrd-main{font-size:32px}
-  #prob-split{height:26px;margin-bottom:8px}
-  #sig-bars{margin-bottom:8px}
-  #vel-card{margin-bottom:8px}
-  #risk-panel{margin-bottom:8px}
-  #desk-tabs{display:none!important}
-  #desk-log-panel{display:none!important}
-  #hdr{margin-bottom:8px}
-  #demo-ban{margin-bottom:8px}
-  .card{margin-bottom:0}
-  #p-trade .card{margin-bottom:8px}
-  #p-trade #sw{margin-bottom:8px}
-}
+/* animations */
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes fadein{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
 </style>
 </head>
 
 <body>
 <div id="app">
 
-  <!-- ── HEADER ── -->
   <div id="hdr">
-    <div>
-      <div class="logo-k">KALSHI</div>
-      <div class="logo-m">BTC 15M EDGE</div>
-    </div>
+    <div><div class="logo-k">KALSHI</div><div class="logo-m">BTC 15M EDGE</div></div>
     <div class="hdr-r">
       <div class="hdr-t" id="hdr-t">--:--:--</div>
       <div class="dot-row">
@@ -350,60 +213,41 @@ html,body{background:#07070f;font-family:'Courier New',monospace;color:#dde0f5;h
     </div>
   </div>
 
-  <!-- ── DEMO BANNER ── -->
   <div id="demo-ban">⚡ Demo mode — APIs unreachable. Real UTC clock active.</div>
 
-  <!-- ── CHART BAR (desktop: price | chart | clock) ── -->
-  <div id="chart-card">
-    <div id="chart-price-block">
-      <div class="lbl" style="margin-bottom:2px">BTC/USD</div>
-      <div id="lp" style="font-size:20px;font-weight:900;color:#f7c948;letter-spacing:-1px;line-height:1">…</div>
-      <div id="pd" style="font-size:10px;margin-top:1px"></div>
-      <div id="si" style="font-size:7px;color:#555;margin-top:2px"></div>
-      <div id="spd-row" style="display:flex;gap:4px;margin-top:3px">
+  <div id="top-row">
+    <div id="pc">
+      <div style="font-size:8px;letter-spacing:4px;color:#333;margin-bottom:2px">BTC/USD</div>
+      <div id="lp">…</div>
+      <div id="pd"></div>
+      <div id="si"></div>
+      <div id="spd-row">
         <div class="spd-chip" id="chip-vel" style="background:#1a1a35;color:#555">VEL —</div>
-        <div class="spd-chip" id="chip-str" style="background:#1a1a35;color:#555">STR —</div>
+        <div class="spd-chip" id="chip-str" style="background:#1a1a35;color:#555">STRIKE —</div>
       </div>
     </div>
-    <canvas id="pcc" height="62"></canvas>
-    <div id="chart-clock">
-      <div class="clbl">MARKET</div>
-      <svg id="clock-ring" width="52" height="52" style="transform:rotate(-90deg)">
-        <circle cx="26" cy="26" r="22" fill="none" stroke="#13132a" stroke-width="5"/>
-        <circle id="ca" cx="26" cy="26" r="22" fill="none" stroke="#00e5a0" stroke-width="5"
-          stroke-dasharray="138.23" stroke-dashoffset="0" stroke-linecap="round"
-          style="transition:stroke-dashoffset 1s linear,stroke .5s"/>
-      </svg>
-      <div id="ct" style="font-size:16px;font-weight:900;color:#00e5a0;margin-top:-2px">15:00</div>
-      <div class="clbl">EXPIRES</div>
-    </div>
-  </div>
-
-  <!-- ── MOBILE TOP ROW (price + clock, hidden on desktop) ── -->
-  <div id="mob-top">
-    <div id="mob-price">
-      <div class="lbl" style="margin-bottom:2px">BTC/USD</div>
-      <div id="lp-mob" style="font-size:20px;font-weight:900;color:#f7c948;letter-spacing:-1px;line-height:1">…</div>
-      <div id="pd-mob" style="font-size:10px;margin-top:2px"></div>
-    </div>
-    <div id="mob-clock">
-      <div id="mob-clock-inner">
-        <svg width="80" height="80" style="position:absolute;top:0;left:0;transform:rotate(-90deg)">
-          <circle cx="40" cy="40" r="34" fill="none" stroke="#13132a" stroke-width="7"/>
-          <circle id="ca-mob" cx="40" cy="40" r="34" fill="none" stroke="#00e5a0" stroke-width="7"
-            stroke-dasharray="213.63" stroke-dashoffset="0" stroke-linecap="round"
+    <div id="cc">
+      <div id="cw">
+        <svg id="csv" width="110" height="110">
+          <circle cx="55" cy="55" r="50" fill="none" stroke="#13132a" stroke-width="9"/>
+          <circle id="ca" cx="55" cy="55" r="50" fill="none" stroke="#00e5a0" stroke-width="9"
+            stroke-dasharray="314.16" stroke-dashoffset="0" stroke-linecap="round"
             style="transition:stroke-dashoffset 1s linear,stroke .5s"/>
         </svg>
-        <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">
-          <div class="clbl">MKT</div>
-          <div id="ct-mob" style="font-size:16px;font-weight:900;color:#00e5a0;line-height:1.1">15:00</div>
-          <div class="clbl">EXP</div>
+        <div id="ci">
+          <div class="clbl">MARKET</div>
+          <div id="ct" style="color:#00e5a0">15:00</div>
+          <div class="clbl">EXPIRES</div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ══ MOBILE TABS ══ -->
+  <div class="card" style="padding:10px 13px;margin-bottom:10px">
+    <div class="lbl">PRICE CHART</div>
+    <canvas id="pcc" height="72"></canvas>
+  </div>
+
   <div id="tabs">
     <button class="tb on" data-p="trade">TRADE</button>
     <button class="tb" data-p="log" id="ltb">LOG (0)</button>
@@ -411,368 +255,356 @@ html,body{background:#07070f;font-family:'Courier New',monospace;color:#dde0f5;h
     <button class="tb" data-p="brain">🧠</button>
   </div>
 
-  <!-- ══════════════════ LEFT COLUMN ══════════════════ -->
-  <div id="left-col">
+  <!-- TRADE TAB -->
+  <div class="pnl on" id="p-trade">
 
     <!-- Verdict -->
     <div id="verdict" style="background:#0c0c1c;border:1px solid #1a1a35">
-      <div class="vrd-eye lbl">STRIKE VERDICT</div>
+      <div class="vrd-eye lbl gold">STRIKE VERDICT</div>
       <div class="vrd-main" id="vrd-main" style="color:#555">WAITING…</div>
-      <div class="vrd-strike" id="vrd-strike" style="font-size:8px;margin-top:2px;opacity:.6">Detecting strike from Kalshi...</div>
-      <div class="vrd-conf" id="vrd-conf" style="font-size:10px;font-weight:700;margin-top:1px;color:#555"></div>
+      <div class="vrd-strike" id="vrd-strike">Detecting strike from Kalshi...</div>
+      <div class="vrd-conf" id="vrd-conf" style="color:#555"></div>
     </div>
 
-    <!-- Prob bars -->
+    <!-- Prob split -->
     <div id="prob-split">
       <div id="prob-up" style="width:50%;background:#00e5a080">UP 50%</div>
       <div id="prob-dn" style="width:50%;background:#ff456880">DN 50%</div>
     </div>
 
-    <!-- Indicator strength -->
-    <div class="card" id="sig-bars">
-      <div class="lbl gold" style="margin-bottom:5px">INDICATOR STRENGTH</div>
-      <div id="bars-list"></div>
-    </div>
-
-  </div><!-- /left-col -->
-
-  <!-- ══════════════════ MIDDLE COLUMN ══════════════════ -->
-  <div id="mid-col">
-
-    <!-- TRADE tab panel -->
-    <div class="pnl on" id="p-trade">
-
-      <!-- TRADE SETUP (visible pre-trade) -->
-      <div id="sw" class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-          <div class="lbl gold" style="margin:0">TRADE SETUP</div>
-          <div style="display:flex;align-items:center;gap:4px">
-            <div id="ks-dot" style="width:5px;height:5px;border-radius:50%;background:#555"></div>
-            <span id="ks-label" style="font-size:7px;color:#333;letter-spacing:1px">KALSHI —</span>
-          </div>
-        </div>
-
-        <!-- Kalshi market bar -->
-        <div id="kalshi-market-bar">
-          <div class="lbl" style="margin-bottom:3px">LIVE FROM KALSHI</div>
-          <div style="display:flex;justify-content:space-between;font-size:8px;margin-bottom:2px">
-            <span style="color:#555">Ticker</span><span id="km-ticker" style="color:#f7c948;font-weight:700;font-size:7px">—</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;font-size:8px;margin-bottom:2px">
-            <span style="color:#555">YES bid/ask</span><span id="km-spread" style="font-weight:700">—</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;font-size:8px;margin-bottom:2px">
-            <span style="color:#555">Last YES</span><span id="km-last" style="font-weight:700;color:#00e5a0">—</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;font-size:8px">
-            <span style="color:#555">Strike</span><span id="km-strike" style="font-weight:700;color:#f7c948">—</span>
-          </div>
-        </div>
-
-        <!-- Strike price input -->
-        <div style="margin-bottom:6px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
-            <div class="lbl" style="margin:0">STRIKE PRICE</div>
-            <button id="auto-strike-btn" style="display:none;font-size:6px;background:#f7c94815;border:1px solid #f7c94840;color:#f7c948;padding:1px 5px;border-radius:3px;cursor:pointer;font-family:inherit" onclick="applyAutoStrike()">AUTO ▶</button>
-          </div>
-          <div class="iw"><span class="ip" style="color:#f7c948">$</span><input class="fi" type="number" id="ki" placeholder="Auto-detecting..."/></div>
-          <div class="fh" id="kh">Auto-populated from live Kalshi market.</div>
-        </div>
-
-        <!-- Bet amount -->
-        <div style="margin-bottom:7px">
-          <div class="lbl" style="margin-bottom:2px">BET AMOUNT ($)</div>
-          <div class="iw"><span class="ip" style="color:#888">$</span><input class="fi amt" type="number" id="ai" placeholder="0.00" min="0.01" step="0.01"/></div>
-        </div>
-
-        <!-- Strike bar -->
-        <div class="sbw" id="sbw">
-          <div style="display:flex;justify-content:space-between;font-size:7px;margin-bottom:3px">
-            <span style="color:#444">Live price vs strike</span><span id="spct" style="font-weight:900"></span>
-          </div>
-          <div class="sbar"><div class="sc"></div><div class="sf" id="sf"></div></div>
-          <div style="display:flex;justify-content:space-between;font-size:6px;color:#222;margin-top:2px"><span>BELOW</span><span>STRIKE</span><span>ABOVE</span></div>
-        </div>
-
-        <!-- UP / DOWN buttons -->
-        <div class="bb">
-          <button class="bbtn" id="bup" disabled style="border-color:#00e5a0;color:#00e5a0;background:transparent">UP<div class="bh" id="uph"></div></button>
-          <button class="bbtn" id="bdn" disabled style="border-color:#ff4566;color:#ff4566;background:transparent">DOWN<div class="bh" id="dnh"></div></button>
-        </div>
-
-        <!-- Contract preview -->
-        <div id="contract-preview">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-            <div class="lbl" style="margin:0">KALSHI CONTRACT</div>
-            <div id="cp-source" style="font-size:6px;padding:1px 5px;border-radius:3px;background:#1a1a35;color:#444">ESTIMATED</div>
-          </div>
-          <div style="display:flex;justify-content:space-between;font-size:8px;margin-bottom:2px"><span style="color:#555">Est. YES price</span><span id="cp-yes" style="font-weight:700;color:#f7c948">—</span></div>
-          <div style="display:flex;justify-content:space-between;font-size:8px;margin-bottom:2px"><span style="color:#555">Contracts</span><span id="cp-contracts" style="font-weight:700">—</span></div>
-          <div style="display:flex;justify-content:space-between;font-size:8px;margin-bottom:2px"><span style="color:#555">Max payout</span><span id="cp-payout" style="font-weight:700;color:#00e5a0">—</span></div>
-          <div style="display:flex;justify-content:space-between;font-size:9px;border-top:1px solid #1a1a35;padding-top:5px;margin-top:3px">
-            <span style="color:#aaa;font-weight:700">Potential profit</span><span id="cp-profit" style="font-weight:900;color:#00e5a0">—</span>
-          </div>
-        </div>
-
-        <div id="sh" style="margin-top:4px">Detecting Kalshi market...</div>
-      </div><!-- /sw -->
-
-      <!-- ACTIVE TRADE (visible during trade) -->
-      <div id="aw">
-
-        <!-- Advisory -->
-        <div id="adv">
-          <div class="adv-top"><span class="adv-action" id="aa">WATCHING</span><span class="adv-roi" id="ar">—</span></div>
-          <div class="adv-msg" id="am"></div>
-          <button id="aeb" onclick="closeTrade()"></button>
-        </div>
-
-        <!-- Live stats card -->
-        <div class="card" id="ac">
-          <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-            <div><div class="lbl" style="margin-bottom:1px">BET</div><div id="abt" style="font-size:16px;font-weight:900"></div></div>
-            <div style="text-align:center"><div class="lbl" style="margin-bottom:1px">STRIKE</div><div id="ast" style="font-size:12px;font-weight:700;color:#f7c948"></div><div id="asr" style="font-size:7px;margin-top:1px"></div></div>
-            <div style="text-align:right"><div class="lbl" style="margin-bottom:1px">AMOUNT</div><div id="aam" style="font-size:12px;font-weight:700;color:#666"></div></div>
-          </div>
-          <div class="sg">
-            <div class="sb2"><div class="sl3">UNRLZD P&L</div><div class="sv2" id="sroi">—</div></div>
-            <div class="sb2"><div class="sl3">IF WIN</div><div class="sv2" id="spnl" style="color:#00e5a0">—</div></div>
-            <div class="sb2"><div class="sl3">PEAK P&L</div><div class="sv2" id="spk" style="color:#f7c948">—</div></div>
-            <div class="sb2"><div class="sl3">WIN NOW?</div><div class="sv2" id="swin">—</div></div>
-          </div>
-          <div style="background:#07070f;border-radius:6px;padding:6px 8px;margin-bottom:6px">
-            <div style="display:flex;justify-content:space-between;font-size:8px;margin-bottom:2px"><span style="color:#333">Entry YES</span><span id="at-entry-yes" style="color:#f7c948;font-weight:700">—</span></div>
-            <div style="display:flex;justify-content:space-between;font-size:8px;margin-bottom:2px"><span style="color:#333">Current YES</span><span id="at-cur-yes" style="font-weight:700">—</span></div>
-            <div style="display:flex;justify-content:space-between;font-size:8px;margin-bottom:2px"><span style="color:#333">Contracts</span><span id="at-contracts" style="color:#666">—</span></div>
-            <div style="display:flex;justify-content:space-between;font-size:9px;border-top:1px solid #1a1a35;padding-top:4px;margin-top:2px"><span style="color:#aaa">Max payout</span><span id="at-maxpay" style="font-weight:900;color:#00e5a0">—</span></div>
-          </div>
-          <div class="rbw">
-            <div class="rbt"><span style="color:#333;letter-spacing:1px;font-size:7px">IMPLIED PRICE MOVE</span><span id="rbv" style="font-weight:900;font-size:9px">—</span></div>
-            <div class="rb"><div class="rbc"></div><div class="rpm" id="rpm"></div><div class="rbf" id="rbf"></div></div>
-            <div class="rbl"><span>entry</span><span>─</span><span>$1.00</span></div>
-          </div>
-          <canvas id="proj-cv"></canvas>
-          <div style="display:flex;justify-content:space-between;font-size:7px;color:#1a1a35;margin-top:1px;padding:0 1px"><span>now</span><span id="wt" style="color:#333">—</span><span>expiry</span></div>
-          <div id="ptl" style="font-size:7px;color:#2a2a40;text-align:center;margin-top:2px"></div>
-        </div>
-
-        <!-- Live signal row -->
-        <div id="sll">
-          <span class="lbl" style="margin:0">LIVE SIGNAL</span>
-          <span id="ls2" style="font-size:8px;font-weight:700"></span>
-          <span id="sld" style="font-size:8px;font-weight:900">—</span>
-          <span id="sls" style="font-size:7px">—</span>
-        </div>
-        <div style="height:2px;background:#0c0c1c;border-radius:2px;margin:4px 0;overflow:hidden"><div id="wbf" class="wbf"></div></div>
-        <button id="mc" onclick="closeTrade()">CLOSE TRADE MANUALLY</button>
-
-      </div><!-- /aw -->
-
-      <!-- ── mobile-only panels below (hidden on desktop via .pnl) ── -->
-
-      <!-- LOG -->
-      <div class="pnl" id="p-log">
-        <div class="card">
-          <div id="ls" style="display:none">
-            <div class="sb3"><div class="sl4">TRADES</div><div class="sv3" id="st" style="color:#f7c948">0</div></div>
-            <div class="sb3"><div class="sl4">WIN RATE</div><div class="sv3" id="swr">0%</div></div>
-            <div class="sb3"><div class="sl4">TOTAL P&L</div><div class="sv3" id="spl">$0</div></div>
-          </div>
-          <div id="charts-wrap" style="display:none">
-            <div class="lbl gold" style="margin-bottom:4px">CUMULATIVE P&L</div>
-            <canvas id="pnl-cv" height="80" style="display:block;margin-bottom:7px"></canvas>
-            <div class="lbl gold" style="margin-bottom:4px">PER TRADE P&L</div>
-            <canvas id="bar-cv" height="60" style="display:block;margin-bottom:7px"></canvas>
-          </div>
-          <div id="le">No trades yet</div>
-          <div id="log-rows"></div>
-          <button id="cl" onclick="clearLog()">CLEAR LOG</button>
-        </div>
-      </div>
-
-      <!-- BRAIN -->
-      <div class="pnl" id="p-brain">
-        <div class="card">
-          <div class="lbl gold" style="margin-bottom:6px">🧠 NEURAL NETWORK</div>
-          <div id="nn-status" style="background:#07070f;border-radius:7px;padding:6px 8px;margin-bottom:6px">
-            <div class="nn-row"><span style="color:#444">Training samples</span><span id="nn-s" style="color:#f7c948;font-weight:700">0</span></div>
-            <div class="nn-row"><span style="color:#444">Model accuracy</span><span id="nn-a" style="font-weight:700">—</span></div>
-            <div id="nn-acc-bg"><div id="nn-acc-bar"></div></div>
-          </div>
-          <div style="font-size:8px;color:#555;line-height:1.7;margin-bottom:8px">Trains on every completed trade. After ~10 trades it begins influencing the STRIKE VERDICT probability.</div>
-          <button class="brain-btn" id="exp-btn" onclick="exportNN()">⬇ EXPORT TRAINING DATA</button>
-          <label class="brain-btn" id="imp-lbl">⬆ IMPORT TRAINING DATA<input type="file" id="imp-file" accept=".json" style="display:none" onchange="importNN(event)"></label>
-          <button class="brain-btn" id="rst-btn" onclick="resetNN()">RESET NEURAL NETWORK</button>
-          <div style="font-size:7px;color:#2a2a40;text-align:center;margin-top:3px">No localStorage — export JSON to save between sessions</div>
-        </div>
-      </div>
-
-      <!-- PORTFOLIO -->
-      <div class="pnl" id="p-portfolio">
-        <div id="auth-gate" class="card" style="text-align:center;padding:18px 14px">
-          <div style="font-size:24px;margin-bottom:7px">🔑</div>
-          <div style="font-size:10px;color:#aaa;margin-bottom:5px;line-height:1.6">Connect your Kalshi API key to see live balance, positions, and fills.</div>
-          <div style="font-size:8px;color:#333;margin-bottom:11px">Key held in memory only — never stored.</div>
-          <button onclick="showKeyModal()" style="width:100%;padding:9px 0;border-radius:8px;background:#f7c94815;border:1px solid #f7c94840;color:#f7c948;font-family:inherit;font-size:10px;letter-spacing:2px;cursor:pointer;font-weight:700">CONNECT API KEY</button>
-        </div>
-        <div id="portfolio-content" style="display:none">
-          <div class="card" style="margin-bottom:7px">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
-              <div class="lbl gold" style="margin:0">💰 KALSHI BALANCE</div>
-              <div id="auth-badge" style="font-size:6px;padding:2px 7px;border-radius:4px;background:#00e5a015;border:1px solid #00e5a030;color:#00e5a0">● CONNECTED</div>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px">
-              <div class="sb2"><div class="sl3">BALANCE</div><div class="sv2" id="pf-bal" style="color:#f7c948">—</div></div>
-              <div class="sb2"><div class="sl3">PORTFOLIO</div><div class="sv2" id="pf-port">—</div></div>
-              <div class="sb2"><div class="sl3">LAST UPD</div><div class="sv2" id="pf-upd" style="color:#333;font-size:7px">—</div></div>
-            </div>
-          </div>
-          <div class="card" style="margin-bottom:7px">
-            <div class="lbl gold" style="margin-bottom:6px">📊 OPEN BTC POSITIONS</div>
-            <div id="positions-list"><div style="color:#333;font-size:9px;text-align:center;padding:8px 0">No open positions</div></div>
-          </div>
-          <div class="card">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-              <div class="lbl gold" style="margin:0">📋 RECENT FILLS</div>
-              <button onclick="syncFillsToLog()" style="font-size:6px;background:#7b9fff15;border:1px solid #7b9fff30;color:#7b9fff;padding:2px 6px;border-radius:3px;cursor:pointer;font-family:inherit">SYNC TO LOG</button>
-            </div>
-            <div id="fills-list"><div style="color:#333;font-size:9px;text-align:center;padding:8px 0">No recent fills</div></div>
-          </div>
-          <button onclick="disconnectKey()" style="width:100%;margin-top:6px;padding:6px 0;border-radius:7px;background:transparent;border:1px solid #ff456625;color:#ff456650;font-family:inherit;font-size:7px;letter-spacing:2px;cursor:pointer">DISCONNECT KEY</button>
-        </div>
-      </div>
-
-    </div><!-- /p-trade -->
-
-  </div><!-- /mid-col -->
-
-  <!-- ══════════════════ RIGHT COLUMN ══════════════════ -->
-  <div id="right-col">
-
-    <!-- Market analysis -->
-    <div class="card" id="vel-card">
-      <div class="lbl gold" style="margin-bottom:4px">MARKET ANALYSIS</div>
-      <div class="vel-row"><span class="vel-lbl">Velocity</span><span class="vel-val" id="vel-val">—</span></div>
-      <div class="vel-row"><span class="vel-lbl">Proj. close</span><span class="vel-val" id="proj-close">—</span></div>
-      <div class="vel-row"><span class="vel-lbl">Strike dist.</span><span class="vel-val" id="str-dist">—</span></div>
-      <div class="vel-row"><span class="vel-lbl">Time above</span><span class="vel-val" id="time-above">—</span></div>
-      <div class="vel-row"><span class="vel-lbl">Momentum</span><span class="vel-val" id="mom-bias">—</span></div>
-    </div>
-
     <!-- Risk panel -->
     <div id="risk-panel" class="ok">
       <div class="risk-header">
-        <div class="risk-title">⚡ RISK MGT</div>
+        <div class="risk-title">⚡ RISK MANAGEMENT</div>
         <div id="risk-badge" class="risk-badge" style="background:#00e5a015;border:1px solid #00e5a030;color:#00e5a0">ALL CLEAR</div>
       </div>
       <div class="risk-grid">
         <div class="risk-cell">
-          <div class="risk-cell-lbl">EXP VALUE</div>
+          <div class="risk-cell-lbl">EXPECTED VALUE</div>
           <div class="risk-cell-val" id="risk-ev" style="color:#555">—</div>
-          <div class="risk-cell-sub" id="risk-ev-sub">vs Kalshi</div>
+          <div class="risk-cell-sub" id="risk-ev-sub">vs Kalshi price</div>
         </div>
         <div class="risk-cell">
-          <div class="risk-cell-lbl">REC BET</div>
+          <div class="risk-cell-lbl">RECOMMENDED BET</div>
           <div class="risk-cell-val" id="risk-rec-bet" style="color:#f7c948">—</div>
-          <div class="risk-cell-sub">Kelly × 1%</div>
+          <div class="risk-cell-sub">Kelly × 1% rule</div>
         </div>
         <div class="risk-cell">
-          <div class="risk-cell-lbl">DAILY RISK</div>
+          <div class="risk-cell-lbl">DAILY RISK USED</div>
           <div class="risk-cell-val" id="risk-daily" style="color:#00e5a0">$0</div>
-          <div class="risk-cell-sub" id="risk-daily-sub">of 5% cap</div>
+          <div class="risk-cell-sub" id="risk-daily-sub">of $— daily cap</div>
         </div>
         <div class="risk-cell">
-          <div class="risk-cell-lbl">STREAK</div>
+          <div class="risk-cell-lbl">CONSEC. LOSSES</div>
           <div class="risk-cell-val" id="risk-streak" style="color:#00e5a0">0</div>
-          <div class="risk-cell-sub" id="risk-streak-sub">brake @3</div>
+          <div class="risk-cell-sub" id="risk-streak-sub">brake at 3</div>
         </div>
       </div>
       <div class="risk-block">
-        <div class="risk-block-title">CHECKS</div>
-        <div class="risk-check-row" id="rc-ev"><div class="risk-dot"></div><span class="risk-check-lbl">Min EV 5%</span><span class="risk-check-val" id="rcv-ev">—</span></div>
-        <div class="risk-check-row" id="rc-conf"><div class="risk-dot"></div><span class="risk-check-lbl">Conf ≥ 58%</span><span class="risk-check-val" id="rcv-conf">—</span></div>
-        <div class="risk-check-row" id="rc-daily"><div class="risk-dot"></div><span class="risk-check-lbl">Daily OK</span><span class="risk-check-val" id="rcv-daily">—</span></div>
-        <div class="risk-check-row" id="rc-streak"><div class="risk-dot"></div><span class="risk-check-lbl">Brake OK</span><span class="risk-check-val" id="rcv-streak">—</span></div>
-        <div class="risk-check-row" id="rc-size"><div class="risk-dot"></div><span class="risk-check-lbl">Size ≤ 2%</span><span class="risk-check-val" id="rcv-size">—</span></div>
+        <div class="risk-block-title">RISK CHECKS</div>
+        <div class="risk-check-row" id="rc-ev"><div class="risk-dot"></div><span class="risk-check-lbl">Min 5% EV edge</span><span class="risk-check-val" id="rcv-ev">—</span></div>
+        <div class="risk-check-row" id="rc-conf"><div class="risk-dot"></div><span class="risk-check-lbl">Confidence ≥ 58%</span><span class="risk-check-val" id="rcv-conf">—</span></div>
+        <div class="risk-check-row" id="rc-daily"><div class="risk-dot"></div><span class="risk-check-lbl">Daily limit OK</span><span class="risk-check-val" id="rcv-daily">—</span></div>
+        <div class="risk-check-row" id="rc-streak"><div class="risk-dot"></div><span class="risk-check-lbl">Loss brake OK</span><span class="risk-check-val" id="rcv-streak">—</span></div>
+        <div class="risk-check-row" id="rc-size"><div class="risk-dot"></div><span class="risk-check-lbl">Size ≤ 2% cap</span><span class="risk-check-val" id="rcv-size">—</span></div>
       </div>
-      <div class="risk-block" style="margin-bottom:4px">
-        <div class="risk-block-title">AUTO-EXIT</div>
+      <div class="risk-block" style="margin-bottom:0">
+        <div class="risk-block-title">AUTO-EXIT RULES</div>
         <div class="risk-check-row"><div class="risk-dot" style="background:#00e5a0"></div><span class="risk-check-lbl">Take profit</span><span class="risk-check-val" id="risk-tp" style="color:#00e5a0">—</span></div>
         <div class="risk-check-row"><div class="risk-dot" style="background:#ff4566"></div><span class="risk-check-lbl">Stop loss</span><span class="risk-check-val" id="risk-sl" style="color:#ff4566">—</span></div>
-        <div class="risk-check-row"><div class="risk-dot" style="background:#f7c948"></div><span class="risk-check-lbl">Peak P&L</span><span class="risk-check-val" id="risk-peak" style="color:#f7c948">—</span></div>
+        <div class="risk-check-row"><div class="risk-dot" style="background:#f7c948"></div><span class="risk-check-lbl">Peak P&amp;L</span><span class="risk-check-val" id="risk-peak" style="color:#f7c948">—</span></div>
       </div>
-      <button id="risk-block-btn" onclick="applyRiskSizing()">USE REC SIZE ▶</button>
+      <button id="risk-block-btn" onclick="applyRiskSizing()">USE RECOMMENDED SIZE ▶</button>
     </div>
 
-    <!-- Right col tabs: LOG / PORT / BRAIN -->
-    <div id="desk-tabs">
-      <button class="tb on" id="dtb-log" onclick="showDeskTab('log')">LOG</button>
-      <button class="tb" id="dtb-port" onclick="showDeskTab('port')">🔑</button>
-      <button class="tb" id="dtb-brain" onclick="showDeskTab('brain')">🧠</button>
-    </div>
-
-    <!-- Right col log panel -->
-    <div id="desk-log-panel">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;flex-shrink:0">
-        <div class="lbl gold" style="margin:0">TRADE LOG</div>
-        <div id="desk-log-stats" style="font-size:7px;color:#444">—</div>
-      </div>
-      <div id="desk-log-rows" style="font-size:8px;flex:1;overflow-y:auto;min-height:0">
-        <div style="color:#1a1a30;text-align:center;padding:10px 0;font-size:9px">No trades yet</div>
-      </div>
-    </div>
-
-    <!-- Right col portfolio (shown by showDeskTab) -->
-    <div id="desk-port" style="display:none;flex:1;min-height:0;overflow-y:auto"></div>
-
-    <!-- Right col brain (shown by showDeskTab) -->
-    <div id="desk-brain" style="display:none;flex-shrink:0">
-      <div class="card">
-        <div class="lbl gold" style="margin-bottom:5px">🧠 NEURAL NETWORK</div>
-        <div style="background:#07070f;border-radius:6px;padding:5px 7px;margin-bottom:5px">
-          <div class="nn-row"><span style="color:#444;font-size:7px">Samples</span><span id="desk-nn-s" style="color:#f7c948;font-weight:700;font-size:8px">0</span></div>
-          <div class="nn-row"><span style="color:#444;font-size:7px">Accuracy</span><span id="desk-nn-a" style="font-weight:700;font-size:8px">—</span></div>
-          <div id="nn-acc-bg-d" style="height:3px;background:#141428;border-radius:2px;overflow:hidden;margin-top:2px">
-            <div id="nn-acc-bar-d" style="height:100%;background:linear-gradient(90deg,#f7c948,#00e5a0);border-radius:2px;width:0%"></div>
-          </div>
+    <!-- Trade setup -->
+    <div id="sw" class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div class="lbl gold" style="margin:0">TRADE SETUP</div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div id="ks-dot" style="width:6px;height:6px;border-radius:50%;background:#555"></div>
+          <span id="ks-label" style="font-size:8px;color:#333;letter-spacing:1px">KALSHI —</span>
         </div>
       </div>
+      <div id="kalshi-market-bar">
+        <div style="font-size:7px;color:#2a2a40;letter-spacing:3px;margin-bottom:5px">LIVE FROM KALSHI</div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px">
+          <span style="color:#555">Ticker</span><span id="km-ticker" style="color:#f7c948;font-weight:700;font-size:9px">—</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px">
+          <span style="color:#555">YES bid/ask</span><span id="km-spread" style="font-weight:700">—</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px">
+          <span style="color:#555">Last YES</span><span id="km-last" style="font-weight:700;color:#00e5a0">—</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:10px">
+          <span style="color:#555">Strike</span><span id="km-strike" style="font-weight:700;color:#f7c948">—</span>
+        </div>
+      </div>
+      <div style="margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <div class="lbl" style="margin:0">STRIKE PRICE</div>
+          <button id="auto-strike-btn" style="display:none;font-size:7px;background:#f7c94815;border:1px solid #f7c94840;color:#f7c948;padding:2px 7px;border-radius:4px;cursor:pointer;font-family:inherit" onclick="applyAutoStrike()">AUTO ▶</button>
+        </div>
+        <div class="iw"><span class="ip" style="color:#f7c948">$</span><input class="fi" type="number" id="ki" placeholder="Auto-detecting..."/></div>
+        <div class="fh" id="kh">Auto-populated from live Kalshi market.</div>
+      </div>
+      <div style="margin-bottom:10px">
+        <div class="lbl">BET AMOUNT ($)</div>
+        <div class="iw"><span class="ip" style="color:#888">$</span><input class="fi amt" type="number" id="ai" placeholder="0.00" min="0.01" step="0.01"/></div>
+      </div>
+      <div class="sbw" id="sbw">
+        <div style="display:flex;justify-content:space-between;font-size:9px;margin-bottom:5px">
+          <span style="color:#444">Live price vs strike</span><span id="spct" style="font-weight:900"></span>
+        </div>
+        <div class="sbar"><div class="sc"></div><div class="sf" id="sf"></div></div>
+        <div style="display:flex;justify-content:space-between;font-size:7px;color:#222;margin-top:3px"><span>BELOW</span><span>STRIKE</span><span>ABOVE</span></div>
+      </div>
+      <div class="bb">
+        <button class="bbtn" id="bup" disabled style="border-color:#00e5a0;color:#00e5a0;background:transparent">UP<div class="bh" id="uph"></div></button>
+        <button class="bbtn" id="bdn" disabled style="border-color:#ff4566;color:#ff4566;background:transparent">DOWN<div class="bh" id="dnh"></div></button>
+      </div>
+      <div id="contract-preview">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
+          <div style="font-size:8px;color:#2a2a40;letter-spacing:3px">KALSHI CONTRACT</div>
+          <div id="cp-source" style="font-size:7px;padding:1px 6px;border-radius:3px;background:#1a1a35;color:#444">ESTIMATED</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:4px">
+          <span style="color:#555">Est. YES price</span><span id="cp-yes" style="font-weight:700;color:#f7c948">—</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:4px">
+          <span style="color:#555">Contracts</span><span id="cp-contracts" style="font-weight:700">—</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:4px">
+          <span style="color:#555">Max payout</span><span id="cp-payout" style="font-weight:700;color:#00e5a0">—</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;border-top:1px solid #1a1a35;padding-top:7px;margin-top:3px">
+          <span style="color:#aaa;font-weight:700">Potential profit</span><span id="cp-profit" style="font-weight:900;font-size:13px;color:#00e5a0">—</span>
+        </div>
+      </div>
+      <div id="sh">Detecting Kalshi market...</div>
     </div>
 
-  </div><!-- /right-col -->
+    <!-- Active trade dashboard -->
+    <div id="aw">
+      <div id="adv">
+        <div class="adv-top"><span class="adv-action" id="aa">WATCHING</span><span class="adv-roi" id="ar">—</span></div>
+        <div class="adv-msg" id="am"></div>
+        <button id="aeb" onclick="closeTrade()"></button>
+      </div>
+      <div class="card" id="ac">
+        <div style="display:flex;justify-content:space-between;margin-bottom:10px">
+          <div><div style="font-size:7px;color:#333;letter-spacing:3px;margin-bottom:3px">BET</div><div id="abt" style="font-size:19px;font-weight:900"></div></div>
+          <div style="text-align:center"><div style="font-size:7px;color:#333;letter-spacing:3px;margin-bottom:3px">STRIKE</div><div id="ast" style="font-size:14px;font-weight:700;color:#f7c948"></div><div id="asr" style="font-size:8px;margin-top:2px"></div></div>
+          <div style="text-align:right"><div style="font-size:7px;color:#333;letter-spacing:3px;margin-bottom:3px">AMOUNT</div><div id="aam" style="font-size:14px;font-weight:700;color:#666"></div></div>
+        </div>
+        <div class="sg">
+          <div class="sb2"><div class="sl3">UNRLZD P&amp;L</div><div class="sv2" id="sroi">—</div></div>
+          <div class="sb2"><div class="sl3">IF WIN</div><div class="sv2" id="spnl" style="color:#00e5a0">—</div></div>
+          <div class="sb2"><div class="sl3">PEAK P&amp;L</div><div class="sv2" id="spk" style="color:#f7c948">—</div></div>
+          <div class="sb2"><div class="sl3">WIN NOW?</div><div class="sv2" id="swin">—</div></div>
+        </div>
+        <div style="background:#07070f;border-radius:8px;padding:8px 10px;margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;font-size:9px;margin-bottom:4px">
+            <span style="color:#333">Entry YES price</span><span id="at-entry-yes" style="color:#f7c948;font-weight:700">—</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:9px;margin-bottom:4px">
+            <span style="color:#333">Current implied price</span><span id="at-cur-yes" style="font-weight:700">—</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:9px;margin-bottom:4px">
+            <span style="color:#333">Contracts held</span><span id="at-contracts" style="color:#666">—</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:10px;border-top:1px solid #1a1a35;padding-top:6px;margin-top:3px">
+            <span style="color:#aaa">Max payout if win</span><span id="at-maxpay" style="font-weight:900;color:#00e5a0">—</span>
+          </div>
+        </div>
+        <div class="rbw">
+          <div class="rbt"><span style="color:#333;letter-spacing:2px">IMPLIED PRICE MOVE</span><span id="rbv" style="font-weight:900;font-size:11px">—</span></div>
+          <div class="rb"><div class="rbc"></div><div class="rpm" id="rpm"></div><div class="rbf" id="rbf"></div></div>
+          <div class="rbl"><span>entry price</span><span>─</span><span>$1.00</span></div>
+        </div>
+        <canvas id="proj-cv" height="80" style="display:block;width:100%;margin-top:8px"></canvas>
+        <div style="display:flex;justify-content:space-between;font-size:8px;color:#1a1a35;margin-top:2px;padding:0 2px">
+          <span>now</span><span id="wt" style="color:#333">—</span><span>expiry</span>
+        </div>
+        <div id="ptl" style="font-size:8px;color:#2a2a40;text-align:center;margin-top:3px"></div>
+      </div>
+      <div id="sll"><span style="font-size:8px;color:#333;letter-spacing:2px">LIVE SIGNAL</span>
+        <span id="ls2" style="font-size:9px;font-weight:700"></span>
+        <span id="sld" style="font-size:9px;font-weight:900">—</span>
+        <span id="sls" style="font-size:8px;margin-left:3px">—</span>
+      </div>
+      <div style="height:3px;background:#0c0c1c;border-radius:2px;margin:6px 0 4px;overflow:hidden">
+        <div id="wbf" class="wbf"></div>
+      </div>
+      <button id="mc" onclick="closeTrade()">CLOSE TRADE MANUALLY</button>
+    </div>
 
-  <!-- ── API KEY MODAL ── -->
-  <div id="key-modal" style="display:none;position:fixed;inset:0;background:#07070fdd;z-index:999;padding:20px;overflow-y:auto">
-    <div style="max-width:400px;margin:40px auto;background:#0c0c1c;border:1px solid #1a1a35;border-radius:14px;padding:18px">
-      <div style="font-size:12px;font-weight:900;letter-spacing:2px;color:#f7c948;margin-bottom:4px">🔑 KALSHI CONNECTION</div>
-      <div style="font-size:8px;color:#444;margin-bottom:12px">Your API key is stored securely in Vercel — never in the browser.</div>
-      <div style="background:#07070f;border-radius:9px;padding:10px 12px;margin-bottom:12px;font-size:9px;color:#555;line-height:1.8">
-        <div style="color:#f7c948;font-size:7px;letter-spacing:3px;margin-bottom:6px">SETUP (one time)</div>
-        1. Go to <span style="color:#7b9fff">Vercel → Project → Environment Variables</span><br>
-        2. Add <span style="color:#00e5a0">KALSHI_KEY_ID</span> = your Key ID (UUID)<br>
-        3. Add <span style="color:#00e5a0">KALSHI_PRIVATE_KEY</span> = full PEM key<br>
-        4. Redeploy · 5. Click Connect below
+    <!-- Market analysis -->
+    <div class="card" id="vel-card" style="margin-top:10px">
+      <div class="lbl gold">MARKET ANALYSIS</div>
+      <div class="vel-row"><span class="vel-lbl">Current velocity</span><span class="vel-val" id="vel-val">—</span></div>
+      <div class="vel-row"><span class="vel-lbl">Projected close</span><span class="vel-val" id="proj-close">—</span></div>
+      <div class="vel-row"><span class="vel-lbl">Strike distance</span><span class="vel-val" id="str-dist">—</span></div>
+      <div class="vel-row"><span class="vel-lbl">Time above strike</span><span class="vel-val" id="time-above">—</span></div>
+      <div class="vel-row"><span class="vel-lbl">Momentum bias</span><span class="vel-val" id="mom-bias">—</span></div>
+    </div>
+
+    <!-- Indicator strength -->
+    <div class="card" id="sig-bars">
+      <div class="lbl gold">INDICATOR STRENGTH</div>
+      <div id="bars-list"></div>
+    </div>
+
+    <!-- Model breakdown -->
+    <div class="card" id="model-stats-card" style="display:none">
+      <div class="lbl gold" style="margin-bottom:10px">📐 MODEL BREAKDOWN</div>
+      <div style="font-size:8px;color:#2a2a40;letter-spacing:2px;margin-bottom:6px">HOW THE VERDICT IS CALCULATED</div>
+      <div class="model-layer" id="ml-tech">
+        <div class="ml-header"><span class="ml-name">① TECHNICAL INDICATORS</span><span class="ml-weight">50% weight</span></div>
+        <div class="ml-body">
+          <div class="ml-stat-row"><span class="ml-stat-lbl">Bull score</span><span class="ml-stat-val" id="ms-bull">—</span></div>
+          <div class="ml-stat-row"><span class="ml-stat-lbl">Bear score</span><span class="ml-stat-val" id="ms-bear">—</span></div>
+          <div class="ml-stat-row"><span class="ml-stat-lbl">Tech UP probability</span><span class="ml-stat-val" id="ms-tech-pct" style="font-weight:900">—</span></div>
+        </div>
+        <div class="ml-contrib-bar-bg"><div class="ml-contrib-bar" id="mcb-tech"></div></div>
       </div>
-      <div id="modal-err" style="display:none;background:#120005;border:1px solid #ff456640;border-radius:7px;padding:7px 10px;font-size:9px;color:#ff4566;margin-bottom:10px"></div>
-      <div style="display:flex;gap:7px">
-        <button onclick="hideKeyModal()" style="flex:1;padding:9px 0;border-radius:8px;background:transparent;border:1px solid #1a1a35;color:#444;font-family:inherit;font-size:10px;cursor:pointer">CANCEL</button>
-        <button onclick="connectKey()" id="modal-connect-btn" style="flex:2;padding:9px 0;border-radius:8px;background:#f7c94820;border:1px solid #f7c94850;color:#f7c948;font-family:inherit;font-size:10px;font-weight:900;letter-spacing:2px;cursor:pointer">CONNECT</button>
+      <div class="model-layer" id="ml-vel">
+        <div class="ml-header"><span class="ml-name">② VELOCITY PROJECTION</span><span class="ml-weight">30% weight</span></div>
+        <div class="ml-body">
+          <div class="ml-stat-row"><span class="ml-stat-lbl">Current $/sec</span><span class="ml-stat-val" id="ms-vel">—</span></div>
+          <div class="ml-stat-row"><span class="ml-stat-lbl">Projected close</span><span class="ml-stat-val" id="ms-proj">—</span></div>
+          <div class="ml-stat-row"><span class="ml-stat-lbl">Projection vs strike</span><span class="ml-stat-val" id="ms-proj-rel" style="font-weight:900">—</span></div>
+        </div>
+        <div class="ml-contrib-bar-bg"><div class="ml-contrib-bar" id="mcb-vel"></div></div>
       </div>
+      <div class="model-layer" id="ml-prox">
+        <div class="ml-header"><span class="ml-name">③ STRIKE PROXIMITY</span><span class="ml-weight">10% weight</span></div>
+        <div class="ml-body">
+          <div class="ml-stat-row"><span class="ml-stat-lbl">Current distance</span><span class="ml-stat-val" id="ms-dist">—</span></div>
+          <div class="ml-stat-row"><span class="ml-stat-lbl">Cushion direction</span><span class="ml-stat-val" id="ms-cushion" style="font-weight:900">—</span></div>
+        </div>
+        <div class="ml-contrib-bar-bg"><div class="ml-contrib-bar" id="mcb-prox"></div></div>
+      </div>
+      <div class="model-layer" id="ml-time">
+        <div class="ml-header"><span class="ml-name">④ TIME ABOVE STRIKE</span><span class="ml-weight">10% weight</span></div>
+        <div class="ml-body">
+          <div class="ml-stat-row"><span class="ml-stat-lbl">Samples above</span><span class="ml-stat-val" id="ms-above-n">—</span></div>
+          <div class="ml-stat-row"><span class="ml-stat-lbl">% of window</span><span class="ml-stat-val" id="ms-above-pct" style="font-weight:900">—</span></div>
+        </div>
+        <div class="ml-contrib-bar-bg"><div class="ml-contrib-bar" id="mcb-time"></div></div>
+      </div>
+      <div class="model-layer" id="ml-nn">
+        <div class="ml-header"><span class="ml-name">⑤ NEURAL NETWORK</span><span class="ml-weight" id="ms-nn-w">0% weight</span></div>
+        <div class="ml-body">
+          <div class="ml-stat-row"><span class="ml-stat-lbl">Training samples</span><span class="ml-stat-val" id="ms-nn-n">—</span></div>
+          <div class="ml-stat-row"><span class="ml-stat-lbl">NN output</span><span class="ml-stat-val" id="ms-nn-out">—</span></div>
+          <div class="ml-stat-row"><span class="ml-stat-lbl">Influence</span><span class="ml-stat-val" id="ms-nn-inf" style="font-weight:900">—</span></div>
+        </div>
+        <div class="ml-contrib-bar-bg"><div class="ml-contrib-bar" id="mcb-nn"></div></div>
+      </div>
+      <div style="background:#07070f;border-radius:9px;padding:9px 11px;margin-top:4px">
+        <div style="font-size:7px;color:#2a2a40;letter-spacing:3px;margin-bottom:7px">FINAL BLEND</div>
+        <div class="ml-stat-row" style="margin-bottom:5px"><span class="ml-stat-lbl">Raw composite</span><span class="ml-stat-val" id="ms-raw">—</span></div>
+        <div class="ml-stat-row" style="margin-bottom:5px"><span class="ml-stat-lbl">ABOVE probability</span><span class="ml-stat-val" id="ms-above-final" style="font-weight:900;color:#00e5a0">—</span></div>
+        <div class="ml-stat-row"><span class="ml-stat-lbl">BELOW probability</span><span class="ml-stat-val" id="ms-below-final" style="font-weight:900;color:#ff4566">—</span></div>
+      </div>
+    </div>
+
+  </div><!-- /p-trade -->
+
+  <!-- LOG TAB -->
+  <div class="pnl" id="p-log">
+    <div class="card">
+      <div id="ls">
+        <div class="sb3"><div class="sl4">TRADES</div><div class="sv3" id="st" style="color:#f7c948">0</div></div>
+        <div class="sb3"><div class="sl4">WIN RATE</div><div class="sv3" id="swr">0%</div></div>
+        <div class="sb3"><div class="sl4">TOTAL P&amp;L</div><div class="sv3" id="spl">$0</div></div>
+      </div>
+      <div id="charts-wrap" style="display:none">
+        <div class="lbl gold" style="margin-bottom:6px">CUMULATIVE P&amp;L</div>
+        <canvas id="pnl-cv" height="96" style="display:block;margin-bottom:10px"></canvas>
+        <div class="lbl gold" style="margin-bottom:6px">PER TRADE P&amp;L</div>
+        <canvas id="bar-cv" height="76" style="display:block;margin-bottom:10px"></canvas>
+      </div>
+      <div id="le">No trades yet</div>
+      <div id="log-rows"></div>
+      <button id="cl" onclick="clearLog()">CLEAR LOG</button>
     </div>
   </div>
 
-  <!-- MODEL BREAKDOWN (hidden card, populated by JS) -->
-  <div id="model-stats-card" style="display:none">
-    <div class="model-layer" id="ml-tech"><div class="ml-header"><span class="ml-name">① TECHNICAL</span><span class="ml-weight">50%</span></div><div class="ml-body"><div class="ml-stat-row"><span class="ml-stat-lbl">Bull</span><span id="ms-bull">—</span></div><div class="ml-stat-row"><span class="ml-stat-lbl">Bear</span><span id="ms-bear">—</span></div><div class="ml-stat-row"><span class="ml-stat-lbl">UP prob</span><span id="ms-tech-pct" style="font-weight:900">—</span></div></div><div class="ml-contrib-bar-bg"><div class="ml-contrib-bar" id="mcb-tech"></div></div></div>
-    <div class="model-layer" id="ml-vel"><div class="ml-header"><span class="ml-name">② VELOCITY</span><span class="ml-weight">30%</span></div><div class="ml-body"><div class="ml-stat-row"><span class="ml-stat-lbl">$/sec</span><span id="ms-vel">—</span></div><div class="ml-stat-row"><span class="ml-stat-lbl">Proj close</span><span id="ms-proj">—</span></div><div class="ml-stat-row"><span class="ml-stat-lbl">vs strike</span><span id="ms-proj-rel" style="font-weight:900">—</span></div></div><div class="ml-contrib-bar-bg"><div class="ml-contrib-bar" id="mcb-vel"></div></div></div>
-    <div class="model-layer" id="ml-prox"><div class="ml-header"><span class="ml-name">③ PROXIMITY</span><span class="ml-weight">10%</span></div><div class="ml-body"><div class="ml-stat-row"><span class="ml-stat-lbl">Distance</span><span id="ms-dist">—</span></div><div class="ml-stat-row"><span class="ml-stat-lbl">Cushion</span><span id="ms-cushion" style="font-weight:900">—</span></div></div><div class="ml-contrib-bar-bg"><div class="ml-contrib-bar" id="mcb-prox"></div></div></div>
-    <div class="model-layer" id="ml-time"><div class="ml-header"><span class="ml-name">④ TIME ABOVE</span><span class="ml-weight">10%</span></div><div class="ml-body"><div class="ml-stat-row"><span class="ml-stat-lbl">Samples</span><span id="ms-above-n">—</span></div><div class="ml-stat-row"><span class="ml-stat-lbl">% window</span><span id="ms-above-pct" style="font-weight:900">—</span></div></div><div class="ml-contrib-bar-bg"><div class="ml-contrib-bar" id="mcb-time"></div></div></div>
-    <div class="model-layer" id="ml-nn"><div class="ml-header"><span class="ml-name">⑤ NEURAL NET</span><span class="ml-weight" id="ms-nn-w">0%</span></div><div class="ml-body"><div class="ml-stat-row"><span class="ml-stat-lbl">Samples</span><span id="ms-nn-n">—</span></div><div class="ml-stat-row"><span class="ml-stat-lbl">NN output</span><span id="ms-nn-out">—</span></div><div class="ml-stat-row"><span class="ml-stat-lbl">Influence</span><span id="ms-nn-inf" style="font-weight:900">—</span></div></div><div class="ml-contrib-bar-bg"><div class="ml-contrib-bar" id="mcb-nn"></div></div></div>
-    <div style="background:#07070f;border-radius:7px;padding:7px 9px;margin-top:3px">
-      <div class="lbl" style="margin-bottom:4px">FINAL BLEND</div>
-      <div class="ml-stat-row"><span class="ml-stat-lbl">Raw composite</span><span id="ms-raw">—</span></div>
-      <div class="ml-stat-row"><span class="ml-stat-lbl">ABOVE prob</span><span id="ms-above-final" style="font-weight:900;color:#00e5a0">—</span></div>
-      <div class="ml-stat-row"><span class="ml-stat-lbl">BELOW prob</span><span id="ms-below-final" style="font-weight:900;color:#ff4566">—</span></div>
+  <!-- BRAIN TAB -->
+  <div class="pnl" id="p-brain">
+    <div class="card">
+      <div class="lbl gold" style="margin-bottom:9px">🧠 NEURAL NETWORK</div>
+      <div id="nn-status">
+        <div class="nn-row"><span style="color:#444">Training samples</span><span id="nn-s" style="color:#f7c948;font-weight:700">0</span></div>
+        <div class="nn-row"><span style="color:#444">Model accuracy</span><span id="nn-a" style="font-weight:700">—</span></div>
+        <div id="nn-acc-bg"><div id="nn-acc-bar"></div></div>
+      </div>
+      <div style="font-size:10px;color:#555;line-height:1.75;margin:10px 0 12px">
+        The NN trains on every trade you complete. After ~10 trades it begins influencing the STRIKE VERDICT probability. The more trades recorded, the sharper the predictions. Export JSON after each session to preserve learning.
+      </div>
+      <button class="brain-btn" id="exp-btn" onclick="exportNN()">⬇ EXPORT TRAINING DATA</button>
+      <label class="brain-btn" id="imp-lbl">⬆ IMPORT TRAINING DATA<input type="file" id="imp-file" accept=".json" style="display:none" onchange="importNN(event)"></label>
+      <button class="brain-btn" id="rst-btn" onclick="resetNN()">RESET NEURAL NETWORK</button>
+      <div style="font-size:8px;color:#2a2a40;text-align:center">No localStorage — export JSON to save between sessions</div>
+    </div>
+  </div>
+
+  <!-- PORTFOLIO TAB -->
+  <div class="pnl" id="p-portfolio">
+    <div id="auth-gate" class="card" style="text-align:center;padding:22px 16px">
+      <div style="font-size:28px;margin-bottom:10px">🔑</div>
+      <div style="font-size:11px;color:#aaa;margin-bottom:6px;line-height:1.6">Connect your Kalshi API key to see your live balance, positions, and fills.</div>
+      <div style="font-size:9px;color:#333;margin-bottom:14px">Key is held in memory only — never stored.</div>
+      <button onclick="showKeyModal()" style="width:100%;padding:11px 0;border-radius:9px;background:#f7c94815;border:1px solid #f7c94840;color:#f7c948;font-family:inherit;font-size:11px;letter-spacing:2px;cursor:pointer;font-weight:700">CONNECT API KEY</button>
+    </div>
+    <div id="portfolio-content" style="display:none">
+      <div class="card" style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div class="lbl gold" style="margin:0">💰 KALSHI BALANCE</div>
+          <div id="auth-badge" style="font-size:7px;padding:2px 8px;border-radius:4px;background:#00e5a015;border:1px solid #00e5a030;color:#00e5a0">● CONNECTED</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+          <div class="sb2"><div class="sl3">BALANCE</div><div class="sv2" id="pf-bal" style="color:#f7c948">—</div></div>
+          <div class="sb2"><div class="sl3">PORTFOLIO</div><div class="sv2" id="pf-port">—</div></div>
+          <div class="sb2"><div class="sl3">LAST UPD</div><div class="sv2" id="pf-upd" style="color:#333;font-size:8px">—</div></div>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:10px">
+        <div class="lbl gold" style="margin-bottom:9px">📊 OPEN BTC POSITIONS</div>
+        <div id="positions-list"><div style="color:#333;font-size:11px;text-align:center;padding:12px 0">No open positions</div></div>
+      </div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:9px">
+          <div class="lbl gold" style="margin:0">📋 RECENT FILLS</div>
+          <button onclick="syncFillsToLog()" style="font-size:7px;background:#7b9fff15;border:1px solid #7b9fff30;color:#7b9fff;padding:2px 8px;border-radius:4px;cursor:pointer;font-family:inherit">SYNC TO LOG</button>
+        </div>
+        <div id="fills-list"><div style="color:#333;font-size:11px;text-align:center;padding:12px 0">No recent fills</div></div>
+      </div>
+      <button onclick="disconnectKey()" style="width:100%;margin-top:8px;padding:8px 0;border-radius:8px;background:transparent;border:1px solid #ff456625;color:#ff456650;font-family:inherit;font-size:8px;letter-spacing:2px;cursor:pointer">DISCONNECT KEY</button>
+    </div>
+  </div>
+
+  <!-- API KEY MODAL -->
+  <div id="key-modal" style="display:none;position:fixed;inset:0;background:#07070fdd;z-index:999;padding:20px;overflow-y:auto">
+    <div style="max-width:420px;margin:40px auto;background:#0c0c1c;border:1px solid #1a1a35;border-radius:16px;padding:20px">
+      <div style="font-size:13px;font-weight:900;letter-spacing:2px;color:#f7c948;margin-bottom:4px">🔑 KALSHI CONNECTION</div>
+      <div style="font-size:9px;color:#444;margin-bottom:16px">Your API key is stored securely in Vercel — never in the browser.</div>
+      <div style="background:#07070f;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:10px;color:#555;line-height:1.8">
+        <div style="color:#f7c948;font-size:8px;letter-spacing:3px;margin-bottom:8px">SETUP (one time)</div>
+        1. Go to <span style="color:#7b9fff">Vercel → Project Settings → Environment Variables</span><br>
+        2. Add <span style="color:#00e5a0">KALSHI_KEY_ID</span> = your Key ID (UUID)<br>
+        3. Add <span style="color:#00e5a0">KALSHI_PRIVATE_KEY</span> = full PEM key<br>
+        4. Redeploy the site<br>
+        5. Click Connect below
+      </div>
+      <div id="modal-err" style="display:none;background:#120005;border:1px solid #ff456640;border-radius:8px;padding:8px 11px;font-size:10px;color:#ff4566;margin-bottom:12px"></div>
+      <div style="display:flex;gap:8px">
+        <button onclick="hideKeyModal()" style="flex:1;padding:11px 0;border-radius:9px;background:transparent;border:1px solid #1a1a35;color:#444;font-family:inherit;font-size:11px;cursor:pointer">CANCEL</button>
+        <button onclick="connectKey()" id="modal-connect-btn" style="flex:2;padding:11px 0;border-radius:9px;background:#f7c94820;border:1px solid #f7c94850;color:#f7c948;font-family:inherit;font-size:11px;font-weight:900;letter-spacing:2px;cursor:pointer">CONNECT</button>
+      </div>
     </div>
   </div>
 
@@ -1783,11 +1615,9 @@ function renderActiveTradeFast(){
 function renderPrice(){
   if(!livePrice)return;
   document.getElementById('lp').textContent=fmtK(livePrice);
-
   if(prices.length>1){
     const d=prices[prices.length-1]-prices[prices.length-2], up=d>=0;
     const el=document.getElementById('pd'); el.textContent=(up?'▲ ':'\u25BC ')+Math.abs(d).toFixed(1); el.style.color=up?'#00e5a0':'#ff4566';
-
   }
   // velocity chip — use tick buffer for more accurate velocity
   const vSrc = tickBuffer.length>=10 ? tickBuffer.map(x=>x.p) : prices;
@@ -1795,20 +1625,16 @@ function renderPrice(){
     const v5=vSrc[vSrc.length-1]-vSrc[vSrc.length-5];
     const vc=document.getElementById('chip-vel');
     vc.textContent=`VEL ${v5>=0?'+':''}${v5.toFixed(0)}`; vc.style.background=v5>0?'#00e5a020':'#ff456820'; vc.style.color=v5>0?'#00e5a0':'#ff4566';
-
   }
   const sv=strikeInput;
   const si=document.getElementById('si');
   if(sv>0){
     const a=livePrice>sv, pct=(livePrice-sv)/sv*100;
     si.innerHTML=`Strike <b style="color:#f7c948">${fmtK(sv)}</b> <span style="color:${a?'#00e5a060':'#ff456860'}">${a?'▲ above':'▼ below'}</span>`;
-
     const sc=document.getElementById('chip-str');
     sc.textContent=`${fmtP2(pct)}`; sc.style.background=a?'#00e5a020':'#ff456820'; sc.style.color=a?'#00e5a0':'#ff4566';
-
   } else {
     si.textContent='Set strike price →';
-
   }
 }
 
@@ -2279,7 +2105,6 @@ function renderLog(){
       return `<div class="tr"><div class="trt"><span style="color:#2a2a40;font-size:8px">${t.time}</span><span style="font-weight:700;color:${t.bet==='UP'?'#00e5a0':'#ff4566'}">${t.bet}</span><span style="color:#444;font-size:9px">${fmtK(parseFloat(t.strike))}</span><span style="font-weight:900;color:${rc}">${res}</span></div>${pnl!==null?`<div class="trb"><span style="color:${pnl>=0?'#00e5a0':'#ff4566'}">${pnl>=0?'+':''}${fmtUSD(pnl)}</span><span style="color:#333">${yesStr}</span>${t.earlyExit?'<span style="color:#f7c94840">early exit</span>':''}</div>`:''}</div>`;
     }).join('');}
   pnlChartDirty=true; drawPnLCharts();
-  syncDeskLog();
 }
 
 function updateBrainPanel(){
@@ -2368,13 +2193,7 @@ function clockTick(){
   const ct=document.getElementById('ct');
   const timeStr=`${Math.floor(c.secsLeft/60)}:${String(c.secsLeft%60).padStart(2,'0')}`;
   ct.textContent=timeStr; ct.style.color=col;
-  // Mobile clock ring (r=34, circ=213.63)
-  const arcM=document.getElementById('ca-mob');
-  if(arcM){arcM.style.strokeDashoffset=(2*Math.PI*34)*c.pct; arcM.style.stroke=col;}
-  const ctM=document.getElementById('ct-mob');
-  if(ctM){ctM.textContent=timeStr; ctM.style.color=col;}
-  // Desktop clock ring in chart bar (r=22, circ=138.23)
-  // #ca and #ct are already the desktop chart-bar ring & label — handled above
+
 
   // Cycle reset — window expired
   if(prevSecsLeft!==null&&c.secsLeft>prevSecsLeft+850&&active){
@@ -2765,66 +2584,6 @@ function showToast(msg, color='#f7c948'){
 // ═══════════════════════════════════════════════════
 // DESKTOP LAYOUT
 // ═══════════════════════════════════════════════════
-function initDesktopLayout(){
-  if(window.innerWidth<900) return;
-  syncDeskLog();
-  showDeskTab('log');
-}
-
-function showDeskTab(tab){
-  const panelMap={'log':'desk-log-panel','port':'desk-port','brain':'desk-brain'};
-  ['log','port','brain'].forEach(t=>{
-    const btn=document.getElementById('dtb-'+t);
-    const panel=document.getElementById(panelMap[t]);
-    const isActive=t===tab;
-    if(btn) btn.classList.toggle('on',isActive);
-    if(panel) panel.style.display=isActive?(t==='log'?'flex':'block'):'none';
-  });
-  if(tab==='log') syncDeskLog();
-  if(tab==='brain'){
-    syncDeskBrain();
-  }
-  if(tab==='port'){
-    const dp=document.getElementById('desk-port');
-    if(dp){
-      dp.innerHTML='';
-      // Clone the right content block
-      const isAuth=typeof authConnected!=='undefined'&&authConnected;
-      const src=document.getElementById(isAuth?'portfolio-content':'auth-gate');
-      if(src) dp.appendChild(src.cloneNode(true));
-    }
-  }
-}
-
-function syncDeskLog(){
-  if(window.innerWidth<900)return;
-  const dl=document.getElementById('desk-log-panel');
-  if(!dl)return;
-  const settled=trades.filter(t=>t.result);
-  const wins=settled.filter(t=>t.result==='WIN').length;
-  const totalPnL=trades.filter(t=>t.finalPnL!=null).reduce((s,t)=>s+t.finalPnL,0);
-  const stats=document.getElementById('desk-log-stats');
-  if(stats) stats.textContent=settled.length?`${wins}W / ${settled.length-wins}L · ${totalPnL>=0?'+':''}${fmtUSD(totalPnL)}`:'No trades yet';
-  const rows=document.getElementById('desk-log-rows');
-  if(rows){
-    if(!trades.length){rows.innerHTML='<div style="color:#1a1a30;text-align:center;padding:12px 0">No trades yet</div>';return;}
-    rows.innerHTML=[...trades].reverse().map(t=>{
-      const rc2=t.result==='WIN'?'#00e5a0':t.result==='LOSS'?'#ff4566':'#f7c948';
-      const pnl=t.finalPnL!=null?`<span style="color:${t.finalPnL>=0?'#00e5a0':'#ff4566'}">${t.finalPnL>=0?'+':''}${fmtUSD(t.finalPnL)}</span>`:'';
-      return `<div class="tr"><div class="trt"><span style="color:#2a2a40;font-size:7px">${t.time}</span><span style="color:${t.bet==='UP'?'#00e5a0':'#ff4566'};font-weight:700">${t.bet}</span><span style="color:#444;font-size:8px">${fmtK(parseFloat(t.strike))}</span><span style="font-weight:900;color:${rc2}">${t.result||'OPEN'}</span></div><div class="trb">${pnl}${t.earlyExit?'<span style="color:#f7c94840">early exit</span>':''}</div></div>`;
-    }).join('');
-  }
-}
-
-function syncDeskBrain(){
-  if(window.innerWidth<900)return;
-  const ds=document.getElementById('desk-nn-s'); if(ds) ds.textContent=nnData.length;
-  const da=document.getElementById('desk-nn-a');
-  const acc=nnAcc();
-  if(da){da.textContent=acc!==null?`${(acc*100).toFixed(0)}%`:nnData.length<5?'Need 5+':'—'; da.style.color=acc!==null?(acc>.62?'#00e5a0':acc>.45?'#f7c948':'#ff4566'):'#555';}
-  const bar=document.getElementById('nn-acc-bar-d'); if(bar) bar.style.width=acc!==null?`${acc*100}%`:'0%';
-}
-
 // ═══════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════
@@ -2858,7 +2617,6 @@ async function init(){
   },60000);
   priceChartDirty=true;
   renderPrice(); renderSignalPanel(); renderTradeSetup(); drawPriceChart(); renderHeader(); updateBrainPanel();
-  initDesktopLayout();
 }
 init();
 
