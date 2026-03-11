@@ -796,6 +796,10 @@ function mkAssetSt(){
     chartLastTickPrice: null,
     chartVelSmooth: 0,
     chartPulse: 0,
+    // YES price velocity tracking — rolling 8-second buffer of {t, p} samples
+    yesBuf: [],          // [{t: ms, p: yesPrice}, ...]
+    yesVel: 0,           // smoothed YES velocity (cents/sec, positive = rising)
+    yesVelHistory: [],   // last 5 velocity readings for sustained-reversal detection
   };
 }
 const AST = { BTC: mkAssetSt(), ETH: mkAssetSt() };
@@ -840,6 +844,9 @@ Object.defineProperties(window, {
   chartLastTickPrice:{get(){return A().chartLastTickPrice;},set(v){A().chartLastTickPrice=v;},configurable:true},
   chartVelSmooth:  {get(){return A().chartVelSmooth;},  set(v){A().chartVelSmooth=v;},  configurable:true},
   chartPulse:      {get(){return A().chartPulse;},      set(v){A().chartPulse=v;},      configurable:true},
+  yesBuf:          {get(){return A().yesBuf;},          set(v){A().yesBuf=v;},          configurable:true},
+  yesVel:          {get(){return A().yesVel;},          set(v){A().yesVel=v;},          configurable:true},
+  yesVelHistory:   {get(){return A().yesVelHistory;},   set(v){A().yesVelHistory=v;},   configurable:true},
 });
 
 // ═══════════════════════════════════════════════════
@@ -873,7 +880,7 @@ const RISK_MAX_ACCT_PCT= 0.20;
 const RISK_DAILY_CAP   = 0.05;
 const RISK_CONSEC_BRAKE= 3;
 const RISK_TP_ROI      = 0.60;
-const RISK_SL_ROI      =-0.50;
+const RISK_SL_ROI      =-0.25 // tightened: -25% of stake (was -50%);
 const RISK_COOLDOWN_MS = 60000;
 const SELL_CAPTURE_THRESH_DEFAULT = 0.60;
 const SELL_SIGNAL_THRESH_DEFAULT  = 0.45;
@@ -1701,6 +1708,21 @@ function kalshiWSConnectForAsset(asset, ticker){
             const mid = kalshiYESMid(st.kalshiMarket);
             if(mid!==null){
               st.kalshiYESPrice = mid; st.kalshiYESLastWS = Date.now();
+              // Feed YES velocity buffer
+              const _yt = Date.now();
+              st.yesBuf.push({t:_yt, p:mid});
+              // Keep only last 8 seconds
+              while(st.yesBuf.length > 1 && (_yt - st.yesBuf[0].t) > 8000) st.yesBuf.shift();
+              // Compute velocity (cents/sec) from oldest to newest in buffer
+              if(st.yesBuf.length >= 3){
+                const _yOld = st.yesBuf[0], _yNew = st.yesBuf[st.yesBuf.length-1];
+                const _dt = (_yNew.t - _yOld.t) / 1000;
+                const _rawVel = _dt > 0.5 ? (_yNew.p - _yOld.p) / _dt * 100 : 0; // in cents/sec
+                st.yesVel = st.yesVel * 0.6 + _rawVel * 0.4; // EMA smooth
+                // Rolling velocity history (last 5 readings) for sustained-reversal detection
+                st.yesVelHistory.push(st.yesVel);
+                if(st.yesVelHistory.length > 5) st.yesVelHistory.shift();
+              }
               if(asset===activeAsset) setKalshiStatus('ws','KALSHI LIVE');
             }
             if(asset===activeAsset) renderKalshiMarketBarAndApplyStrike();
@@ -2458,23 +2480,55 @@ function drawPnLCharts(){
   // Per-trade bars
   const cv2=document.getElementById('bar-cv');
   if(cv2&&settled.length>=1){
-    const dpr=window.devicePixelRatio||1; const W2=cv2.offsetWidth; if(W2>0){
-    cv2.width=W2*dpr; cv2.height=76*dpr;
-    const ctx=cv2.getContext('2d'), W=cv2.width, H=cv2.height, P=8*dpr;
+    const dpr=window.devicePixelRatio||1;
+    // offsetWidth is 0 when log tab is hidden — use parent width or fallback to 320
+    const W2=cv2.offsetWidth||cv2.parentElement?.offsetWidth||320;
+    cv2.width=W2*dpr; cv2.height=96*dpr;
+    cv2.style.height='96px';
+    const ctx=cv2.getContext('2d'), W=cv2.width, H=cv2.height;
     ctx.clearRect(0,0,W,H);
     const pnls=settled.map(t=>t.finalPnL);
-    const maxA=Math.max(...pnls.map(Math.abs),.01);
-    const gap=(W-P*2)/Math.max(settled.length,1), bw=Math.max(4*dpr,gap*.7), mid=H/2;
-    ctx.beginPath(); ctx.moveTo(P,mid); ctx.lineTo(W-P,mid); ctx.strokeStyle='#1a1a35'; ctx.lineWidth=dpr; ctx.setLineDash([3*dpr,3*dpr]); ctx.stroke(); ctx.setLineDash([]);
+    const maxA=Math.max(...pnls.map(Math.abs),0.01);
+    // Layout: top 14px = label zone, bottom 14px = label zone, middle = bars
+    const PAD=2*dpr, LABEL_H=14*dpr;
+    const barArea=H-LABEL_H*2; // usable height for bars
+    const mid=LABEL_H+barArea/2; // zero baseline
+    const nBars=settled.length;
+    const totalW=W-PAD*2;
+    const gap=totalW/Math.max(nBars,1);
+    const bw=Math.max(5*dpr, Math.min(gap*0.72, 32*dpr));
+    // Zero line
+    ctx.beginPath(); ctx.moveTo(PAD,mid); ctx.lineTo(W-PAD,mid);
+    ctx.strokeStyle='#1a1a35'; ctx.lineWidth=dpr; ctx.setLineDash([3*dpr,3*dpr]); ctx.stroke(); ctx.setLineDash([]);
     pnls.forEach((pnl,i)=>{
-      const x=P+i*gap+(gap-bw)/2, bh=Math.max(2*dpr,(Math.abs(pnl)/maxA)*(H/2-8*dpr));
-      const y=pnl>=0?mid-bh:mid, col=pnl>=0?'#00e5a0':'#ff4566';
-      ctx.fillStyle=col+'cc';
-      ctx.beginPath(); if(ctx.roundRect)ctx.roundRect(x,y,bw,bh,2*dpr);else ctx.rect(x,y,bw,bh); ctx.fill();
-      if(bh>11*dpr){ctx.fillStyle=col;ctx.font=`${7*dpr}px 'Courier New'`;ctx.textAlign='center';ctx.fillText(`${pnl>=0?'+':''}${fmtUSD(Math.abs(pnl))}`,x+bw/2,pnl>=0?y-3*dpr:y+bh+8*dpr);ctx.textAlign='left';}
+      const cx=PAD+i*gap+gap/2; // centre of this bar slot
+      const x=cx-bw/2;
+      const maxBarH=barArea/2-2*dpr;
+      const bh=Math.max(3*dpr,(Math.abs(pnl)/maxA)*maxBarH);
+      const y=pnl>=0?mid-bh:mid;
+      const col=pnl>=0?'#00e5a0':'#ff4566';
+      // Bar
+      ctx.fillStyle=col+'bb';
+      ctx.beginPath();
+      if(ctx.roundRect)ctx.roundRect(x,y,bw,bh,2*dpr);
+      else ctx.rect(x,y,bw,bh);
+      ctx.fill();
+      // P&L label — always draw, positioned in the label zone above/below bar
+      const label=`${pnl>=0?'+':''}${fmtUSD(pnl)}`;
+      ctx.font=`bold ${Math.max(6,7)*dpr}px 'Courier New'`;
+      ctx.fillStyle=col;
+      ctx.textAlign='center';
+      if(pnl>=0){
+        // WIN: label above bar, in top label zone (y=0..LABEL_H)
+        ctx.fillText(label, cx, Math.max(LABEL_H-2*dpr, y-3*dpr));
+      } else {
+        // LOSS: label below bar, in bottom label zone
+        ctx.fillText(label, cx, Math.min(H-2*dpr, y+bh+LABEL_H-2*dpr));
+      }
+      ctx.textAlign='left';
     });
-    ctx.fillStyle='#2a2a40'; ctx.font=`${7*dpr}px 'Courier New'`; ctx.fillText('PER TRADE',P,H-2*dpr);
-  }}
+    ctx.fillStyle='#2a2a40'; ctx.font=`${7*dpr}px 'Courier New'`; ctx.fillText('PER TRADE',PAD,H-2*dpr);
+  }
 }
 
 // ═══════════════════════════════════════════════════
@@ -2765,7 +2819,7 @@ function computeRiskAssessment(){
   // Trade profit target and stop-loss in $ terms
   const potentialProfit=active?kalshiPotentialProfit(active.amount,active.entryYESPrice):0;
   const tp=active?(potentialProfit*RISK_TP_ROI):0;
-  const sl=active?(-active.amount*Math.abs(RISK_SL_ROI)):0;
+  const sl=active?(-active.amount*0.25):0; // -25% SL
 
   const allGreen=evOk&&confOk&&dailyOk&&streakOk&&sizeOk&&cooldownOk;
 
@@ -3040,123 +3094,171 @@ function updateRiskOnTradeClosed(result, finalPnL){
   persistState(); // persist risk state after every outcome
 }
 
+// ═══════════════════════════════════════════════════
+// AUTO-EXIT ENGINE v2 — YES-price-aware, direction-correct
+// ═══════════════════════════════════════════════════
+//
+// DESIGN PRINCIPLES:
+// 1. Trail in YES price CENTS not % of max profit — denominated in the actual asset traded
+// 2. YES velocity exit — sustained reversal in the market's own pricing triggers exit
+// 3. Time floor — late in the window, lock in any profit rather than risk reversal
+// 4. Tighter SL (-25%) — cut losses faster in volatile 15-min windows
+// 5. Direction-aware — all logic mirrors correctly for UP and DOWN bets
+//
+// YES PRICE SEMANTICS:
+//   UP bet:   winning when YES rises.  yesForBet = kalshiYESPrice (0–1 scale)
+//   DOWN bet: winning when YES falls.  yesForBet = 1 - kalshiYESPrice
+//   "YES moving against bet" = yesForBet falling (regardless of direction)
+//
 function checkRiskAutoExit(unrealizedPnL){
-  if(!active||riskState.tpTriggered||riskState.slTriggered)return;
-  const maxProfit=kalshiPotentialProfit(active.amount,active.entryYESPrice);
-  const tp=maxProfit*RISK_TP_ROI;
-  const sl=-active.amount*Math.abs(RISK_SL_ROI);
+  if(!active || riskState.tpTriggered || riskState.slTriggered) return;
 
-  // ── Simulation vs Live mode ──
+  const maxProfit  = kalshiPotentialProfit(active.amount, active.entryYESPrice);
+  const sl         = -active.amount * 0.25; // tightened: -25% of stake
+  const tp         = maxProfit * RISK_TP_ROI; // safety net TP unchanged
+
   const simMode    = !authConnected || !kalshiOrderId || !kalshiIsLive();
   const hasLiveYES = kalshiYESPrice !== null;
+  const clock      = getClock();
 
-  const clock = getClock();
-  const sm = (prices.length >= 15)
-    ? computeStrikeModel(prices, parseFloat(active.strike||0))
+  // ── pctCaptured: fraction of max profit currently unrealized ──
+  const pctCaptured = maxProfit > 0 ? unrealizedPnL / maxProfit : 0;
+  if(pctCaptured > (peakCapture || 0)) peakCapture = pctCaptured;
+
+  // ── YES price oriented toward bet direction (0–1 scale) ──
+  // Rising = moving in your favor, Falling = moving against you
+  const rawYES    = kalshiYESPrice !== null ? kalshiYESPrice : null;
+  const yesForBet = rawYES !== null
+    ? (active.bet === 'UP' ? rawYES : 1 - rawYES)
     : null;
 
-  // ── Current capture % ──
-  const pctCaptured = maxProfit>0 ? unrealizedPnL/maxProfit : 0;
+  // Track peak YES-for-bet (in cents, 0–100) for the trail
+  const yesC = yesForBet !== null ? yesForBet * 100 : null; // cents scale
+  if(yesC !== null){
+    // Only update peak when YES actually moves higher (not unconditionally at start)
+    if(yesC > (active._peakYesC || 0))
+      active._peakYesC = yesC;
+  }
+  const peakYesC = active._peakYesC || yesC || 0;
 
-  // ── Always update peak capture ──
-  if(pctCaptured > (peakCapture||0)) peakCapture = pctCaptured;
+  // ── COMPONENT 1: Dynamic YES-cent trail ──
+  // Trail allowance depends on how deep in profit we are (YES price level)
+  // Deeper in profit = tighter trail = protect more of what we have
+  let trailCents = null; // null = trail not yet active
+  if(yesC !== null && yesC > 50){ // only trail when we're winning (YES > 50¢ for our bet)
+    if     (yesC >= 75) trailCents = 3.0; // deep profit → very tight: 3¢ pullback
+    else if(yesC >= 65) trailCents = 4.0; // solid profit → 4¢ pullback
+    else if(yesC >= 55) trailCents = 6.0; // marginal profit → 6¢ pullback
+    // below 55¢ → don't trail yet, let SL handle if it deteriorates
+  }
 
-  // ── Hold extension: raises effectiveCapture before trail arms ──
-  // Velocity + consensus + time checks. If all 3 strong → hold to 88%.
-  // This means the trail only arms at a higher peak — more profit locked in.
-  let effectiveCapture = sellCaptureThresh;
-  let holdReason = '';
+  // Time tightening — as window closes, trail gets tighter
+  if(trailCents !== null && clock){
+    if(clock.secsLeft < 180)      trailCents = Math.min(trailCents, 1.5); // < 3 min: very tight
+    else if(clock.secsLeft < 360) trailCents = Math.min(trailCents, 2.5); // < 6 min: tighter
+  }
 
-  if(sm && clock){
-    const secsLeft   = clock.secsLeft;
-    const velAligned = (active.bet==='UP' && sm.velPerSec > 0) ||
-                       (active.bet==='DOWN' && sm.velPerSec < 0);
-    const velStrong  = Math.abs(sm.velPerSec) > 0.30;
-    const velReverse = !velAligned && Math.abs(sm.velPerSec) > 0.30;
-    const agreeCount = sm.indis ? sm.indis.filter(i=>
-      (active.bet==='UP' && i.dir==='BULL') ||
-      (active.bet==='DOWN' && i.dir==='BEAR')
-    ).length : 3;
-    const consensus  = agreeCount / (sm.indis?.length || 6);
-    const timeOk     = secsLeft > 240;
+  // Trail fires when YES has pulled back more than trailCents from peak
+  const trailFire = trailCents !== null
+    && yesC !== null
+    && peakYesC > 0
+    && (peakYesC - yesC) >= trailCents
+    && (simMode || hasLiveYES);
 
-    let holdScore = 0;
-    if(velAligned && velStrong) holdScore++;
-    if(consensus >= 0.67)       holdScore++;
-    if(timeOk)                  holdScore++;
-
-    if(velReverse){
-      effectiveCapture = 0;
-      holdReason = `⚡ Reversal (${sm.velPerSec.toFixed(2)}/s)`;
-    } else if(holdScore === 3){
-      effectiveCapture = Math.min(0.88, sellCaptureThresh + 0.16);
-      holdReason = `🔒 Hold → ${Math.round(effectiveCapture*100)}%`;
-    } else if(holdScore === 2){
-      effectiveCapture = Math.min(0.80, sellCaptureThresh + 0.08);
-      holdReason = `🔒 Hold → ${Math.round(effectiveCapture*100)}%`;
+  // ── COMPONENT 2: YES velocity reversal exit ──
+  // Exit if YES is moving hard and sustained AGAINST our bet direction
+  // Velocity is in cents/sec, positive = YES price rising
+  // For UP bet: bad velocity is negative (YES falling)
+  // For DOWN bet: bad velocity is positive (YES rising)
+  let velExit = false;
+  let velReason = '';
+  // vel exit guard: need history, must have some profit, must have live YES
+  const velOk = yesVelHistory.length >= 3 && pctCaptured > 0.05 && (simMode || hasLiveYES);
+  if(velOk){
+    // yesVel is always in kalshiYESPrice direction (UP perspective, 0-100 cents scale)
+    // For DOWN bet, invert: rising YES is BAD for us
+    const velForBet = active.bet === 'UP' ? yesVel : -yesVel;
+    // Velocity must be against us (negative) AND sustained
+    const isAgainst = velForBet < -0.8;
+    const hist = yesVelHistory.slice(-3);
+    const sustained = hist.every(v =>
+      (active.bet === 'UP' ? v : -v) < -0.5
+    );
+    if(isAgainst && sustained){
+      velExit = true;
+      velReason = `YES vel ${velForBet.toFixed(1)}¢/s sustained`;
     }
   }
 
-  // ── Arm trail once peak crosses effectiveCapture ──
-  if(!trailArmed && peakCapture !== null && peakCapture >= effectiveCapture && maxProfit > 0){
-    trailArmed = true;
-    console.log(`[Trail] ARMED at peak ${Math.round(peakCapture*100)}% — effectiveCapture was ${Math.round(effectiveCapture*100)}%`);
+  // ── COMPONENT 3: Time floor ──
+  // Late in window → lock in any meaningful profit, don't risk reversal
+  let timeFloorExit = false;
+  let timeFloorReason = '';
+  if(clock && (simMode || hasLiveYES)){
+    const secsLeft = clock.secsLeft;
+    if(secsLeft <= 90 && pctCaptured > 0.05){
+      // Final 90 seconds: exit if any real profit showing
+      timeFloorExit = true;
+      timeFloorReason = `${secsLeft}s left — locking in`;
+    } else if(secsLeft <= 180 && pctCaptured >= 0.10){
+      // 3 minutes left: exit at 10%+ capture
+      timeFloorExit = true;
+      timeFloorReason = `${secsLeft}s left — floor 10%`;
+    } else if(secsLeft <= 360 && pctCaptured >= 0.25){
+      // 6 minutes left: exit at 25%+ capture
+      timeFloorExit = true;
+      timeFloorReason = `${secsLeft}s left — floor 25%`;
+    } else if(secsLeft <= 600 && pctCaptured >= 0.40){
+      // 10 minutes left: exit at 40%+ capture
+      timeFloorExit = true;
+      timeFloorReason = `${secsLeft}s left — floor 40%`;
+    }
   }
 
-  // ── Trailing pullback allowance (dynamic by time remaining) ──
-  // More time = more pullback allowed; less time = tighter trail
-  let trailPullback = 0.12; // default: 12% pullback allowed
-  if(clock){
-    if(clock.secsLeft < 240)       trailPullback = 0.05; // < 4 min: tight
-    else if(clock.secsLeft < 480)  trailPullback = 0.08; // 4–8 min: medium
-    // > 8 min: 12% — lots of room to run
+  // ── Standard safety net exits ──
+  const tpHit = unrealizedPnL >= tp && (simMode || hasLiveYES);
+  const slHit = unrealizedPnL <= sl; // -25% — fires regardless of live YES
+
+  // ── Debug log ──
+  if(active && yesC !== null){
+    const pct   = Math.round(pctCaptured * 100);
+    const pkPct = Math.round((peakCapture || 0) * 100);
+    const yStr  = yesC.toFixed(1);
+    const pkY   = peakYesC.toFixed(1);
+    const tcStr = trailCents ? `trail:${trailCents}¢` : 'trail:off';
+    console.log(`[Exit] ${simMode?'SIM':'LIVE'} | cap:${pct}% peak:${pkPct}% | YES:${yStr}¢ peak:${pkY}¢ ${tcStr} vel:${yesVel.toFixed(2)}¢/s | fire:${trailFire||velExit||timeFloorExit||tpHit||slHit}`);
   }
 
-  // ── Trail exit: armed + pulled back more than allowance ──
-  const trailExit = trailArmed
-    && peakCapture !== null
-    && maxProfit > 0
-    && (peakCapture - pctCaptured) >= trailPullback
-    && (simMode || hasLiveYES);
+  // ── Fire exits in priority order ──
+  if(tpHit){
+    riskState.tpTriggered = true;
+    showToast(`${simMode?'📋 SIM':'🎯'} Take profit +$${unrealizedPnL.toFixed(2)}`, '#00e5a0');
+    setTimeout(()=>closeTradeWithSell('take_profit'), 800);
 
-  // ── Standard exits (fallback if trail not yet armed) ──
-  const sellCapture = !trailArmed && maxProfit>0 && pctCaptured >= effectiveCapture
-                      && (simMode || hasLiveYES);
-  const tpHit       = unrealizedPnL >= tp && (simMode || hasLiveYES);
-  const slHit       = unrealizedPnL <= sl;
-
-  // Debug log — visible in DevTools console
-  if(active){
-    const pct  = Math.round(pctCaptured*100);
-    const pkPct= Math.round((peakCapture||0)*100);
-    const pull = peakCapture ? Math.round((peakCapture-pctCaptured)*100) : 0;
-    console.log(`[AutoExit] ${simMode?'SIM':'LIVE'} | now:${pct}% peak:${pkPct}% pull:${pull}% trail:${trailArmed?'ARMED':'waiting'} | fire:${trailExit||sellCapture||tpHit||slHit}`);
-  }
-
-  if(trailExit){
-    riskState.tpTriggered=true;
-    const pct    = Math.round(pctCaptured*100);
-    const pkPct  = Math.round((peakCapture||0)*100);
-    const tag    = simMode?'📋 SIM':'📉';
-    showToast(`${tag} Trail exit — peak ${pkPct}% → now ${pct}% (+$${unrealizedPnL.toFixed(2)})`,'#00e5a0');
-    setTimeout(()=>closeTradeWithSell('profit_capture'),800);
-  } else if(sellCapture){
-    riskState.tpTriggered=true;
-    const pct=Math.round(pctCaptured*100);
-    const tag=simMode?'📋 SIM':'💰';
-    const detail=holdReason?` · ${holdReason}`:'';
-    showToast(`${tag} ${pct}% captured (+$${unrealizedPnL.toFixed(2)})${detail}`,'#00e5a0');
-    setTimeout(()=>closeTradeWithSell('profit_capture'),800);
-  } else if(tpHit){
-    riskState.tpTriggered=true;
-    const tag=simMode?'📋 SIM':'🎯';
-    showToast(`${tag} Take profit +$${unrealizedPnL.toFixed(2)}`,'#00e5a0');
-    setTimeout(()=>closeTradeWithSell('take_profit'),800);
   } else if(slHit){
-    riskState.slTriggered=true;
-    const tag=simMode?'📋 SIM':'🛑';
-    showToast(`${tag} Stop loss -$${Math.abs(unrealizedPnL).toFixed(2)}`,'#ff4566');
-    setTimeout(()=>closeTradeWithSell('stop_loss'),800);
+    riskState.slTriggered = true;
+    showToast(`${simMode?'📋 SIM':'🛑'} Stop loss -$${Math.abs(unrealizedPnL).toFixed(2)}`, '#ff4566');
+    setTimeout(()=>closeTradeWithSell('stop_loss'), 800);
+
+  } else if(velExit){
+    riskState.tpTriggered = true;
+    const yStr = yesC !== null ? ` · YES ${yesC.toFixed(1)}¢` : '';
+    showToast(`${simMode?'📋 SIM':'⚡'} YES reversal exit${yStr} (+$${unrealizedPnL.toFixed(2)})`, '#f7c948');
+    setTimeout(()=>closeTradeWithSell('profit_capture'), 800);
+
+  } else if(trailFire){
+    riskState.tpTriggered = true;
+    const pct  = Math.round(pctCaptured * 100);
+    const pkPct= Math.round((peakCapture || 0) * 100);
+    const yStr = yesC !== null ? ` · YES ${yesC.toFixed(1)}¢ (peak ${peakYesC.toFixed(1)}¢)` : '';
+    showToast(`${simMode?'📋 SIM':'📉'} Trail exit — ${pkPct}%→${pct}%${yStr} (+$${unrealizedPnL.toFixed(2)})`, '#00e5a0');
+    setTimeout(()=>closeTradeWithSell('profit_capture'), 800);
+
+  } else if(timeFloorExit){
+    riskState.tpTriggered = true;
+    const pct = Math.round(pctCaptured * 100);
+    showToast(`${simMode?'📋 SIM':'⏱'} Time floor — ${timeFloorReason} ${pct}% (+$${unrealizedPnL.toFixed(2)})`, '#7b9fff');
+    setTimeout(()=>closeTradeWithSell('profit_capture'), 800);
   }
 }
 
@@ -3288,17 +3390,50 @@ function renderActiveTrade(clock){
     const sellPct=Math.round(sellScore*100);
     sellMeter.style.display=unrealizedPnL>0.05?'block':'none';
 
-    // Trail status in label
+    // Trail status label — shows YES price trail info (v2 system)
+    const yesForBetDisplay = kalshiYESPrice !== null
+      ? (active.bet === 'UP' ? kalshiYESPrice * 100 : (1 - kalshiYESPrice) * 100)
+      : null;
+    const peakYesCDisplay = active._peakYesC || yesForBetDisplay || 0;
+
     let captureLabel = `${sellPct}% captured`;
-    if(trailArmed && peakCapture!==null){
-      const pkPct=Math.round(peakCapture*100);
-      const pullPct=Math.round((peakCapture-sellScore)*100);
-      captureLabel=`${sellPct}% · peak ${pkPct}% · pull ${pullPct}%`;
+    if(yesForBetDisplay !== null){
+      const yStr = yesForBetDisplay.toFixed(1);
+      const pkStr = peakYesCDisplay.toFixed(1);
+      // Determine active trail cents
+      let tc = null;
+      if(yesForBetDisplay >= 75) tc = 3.0;
+      else if(yesForBetDisplay >= 65) tc = 4.0;
+      else if(yesForBetDisplay >= 55) tc = 6.0;
+      if(tc && clock){
+        if(clock.secsLeft < 180) tc = Math.min(tc, 1.5);
+        else if(clock.secsLeft < 360) tc = Math.min(tc, 2.5);
+      }
+      const velForBetDisplay = active.bet === 'UP' ? yesVel : -yesVel;
+      const velStr = `${velForBetDisplay >= 0 ? '+' : ''}${velForBetDisplay.toFixed(1)}¢/s`;
+      if(tc !== null){
+        const pullCents = (peakYesCDisplay - yesForBetDisplay).toFixed(1);
+        captureLabel = `${sellPct}% · YES ${yStr}¢ (pk ${pkStr}¢ −${pullCents}¢/${tc}¢) · vel ${velStr}`;
+      } else {
+        captureLabel = `${sellPct}% · YES ${yStr}¢ · vel ${velStr}`;
+      }
+    } else if(peakCapture !== null){
+      const pkPct = Math.round(peakCapture * 100);
+      captureLabel = `${sellPct}% captured · peak ${pkPct}%`;
     }
     document.getElementById('sell-pct').textContent=captureLabel;
+    // Color: yellow if trail is close to firing, green if good, amber if marginal
+    const trailClose = yesForBetDisplay !== null && peakYesCDisplay > 0 && (() => {
+      let tc = null;
+      if(yesForBetDisplay >= 75) tc = 3.0;
+      else if(yesForBetDisplay >= 65) tc = 4.0;
+      else if(yesForBetDisplay >= 55) tc = 6.0;
+      return tc !== null && (peakYesCDisplay - yesForBetDisplay) >= tc * 0.7;
+    })();
     document.getElementById('sell-pct').style.color=
-      (trailArmed && peakCapture!==null && (peakCapture-sellScore)>=0.05) ? '#f7c948' :
-      sellScore>=sellCaptureThresh?'#00e5a0':sellScore>=sellSignalThresh?'#f7c948':'#888';
+      trailClose ? '#f7c948' :
+      sellScore >= sellCaptureThresh ? '#00e5a0' :
+      sellScore >= sellSignalThresh ? '#f7c948' : '#888';
 
     const bar=document.getElementById('sell-meter-bar');
     bar.style.width=`${Math.min(99,sellPct)}%`;
@@ -3449,9 +3584,22 @@ function renderLog(){
       const pnl=t.finalPnL!=null?t.finalPnL:null;
       const rc=t.result==='WIN'?'#00e5a0':t.result==='LOSS'?'#ff4566':'#f7c948', res=t.result||(active&&t.id===active.id?'OPEN':'—');
       const yesStr=t.entryYESPrice?` · YES $${t.entryYESPrice.toFixed(2)}`:'';
-      return `<div class="tr"><div class="trt"><span style="color:#2a2a40;font-size:8px">${t.time}</span><span style="font-weight:700;color:${t.bet==='UP'?'#00e5a0':'#ff4566'}">${t.bet}</span><span style="color:#444;font-size:9px">${fmtK(parseFloat(t.strike))}</span><span style="font-weight:900;color:${rc}">${res}</span></div>${pnl!==null?`<div class="trb"><span style="color:${pnl>=0?'#00e5a0':'#ff4566'}">${pnl>=0?'+':''}${fmtUSD(pnl)}</span><span style="color:#333">${yesStr}</span>${t.earlyExit?'<span style="color:#f7c94840">early exit</span>':''}</div>`:''}</div>`;
+      // Exit type badge
+      const exitBadge=(()=>{
+        if(!t.exitReason&&!t.earlyExit) return ''; // expired at close
+        const r=t.exitReason;
+        if(r==='profit_capture') return '<span style="background:#00e5a012;border:1px solid #00e5a030;color:#00e5a080;padding:1px 5px;border-radius:3px;font-size:7px;letter-spacing:1px">⚡ AUTO-SOLD</span>';
+        if(r==='take_profit')    return '<span style="background:#00e5a012;border:1px solid #00e5a030;color:#00e5a080;padding:1px 5px;border-radius:3px;font-size:7px;letter-spacing:1px">🎯 AUTO-TP</span>';
+        if(r==='stop_loss')      return '<span style="background:#ff456612;border:1px solid #ff456630;color:#ff456680;padding:1px 5px;border-radius:3px;font-size:7px;letter-spacing:1px">🛑 AUTO-SL</span>';
+        if(r==='manual_sell')    return '<span style="background:#7b9fff12;border:1px solid #7b9fff30;color:#7b9fff80;padding:1px 5px;border-radius:3px;font-size:7px;letter-spacing:1px">✋ MANUAL</span>';
+        if(t.earlyExit)          return '<span style="background:#f7c94812;border:1px solid #f7c94830;color:#f7c94870;padding:1px 5px;border-radius:3px;font-size:7px;letter-spacing:1px">⚡ EARLY</span>';
+        return '';
+      })();
+      return `<div class="tr"><div class="trt"><span style="color:#2a2a40;font-size:8px">${t.time}</span><span style="font-weight:700;color:${t.bet==='UP'?'#00e5a0':'#ff4566'}">${t.bet}</span><span style="color:#444;font-size:9px">${fmtK(parseFloat(t.strike))}</span><span style="font-weight:900;color:${rc}">${res}</span></div>${pnl!==null?`<div class="trb"><span style="color:${pnl>=0?'#00e5a0':'#ff4566'}">${pnl>=0?'+':''}${fmtUSD(pnl)}</span><span style="color:#333">${yesStr}</span>${exitBadge}</div>`:''}</div>`;
     }).join('');}
-  pnlChartDirty=true; drawPnLCharts();
+  pnlChartDirty=true;
+  // Use rAF so the DOM has laid out the canvas before we read offsetWidth
+  requestAnimationFrame(()=>{ pnlChartDirty=true; drawPnLCharts(); });
 }
 
 function updateBrainPanel(){
@@ -3488,7 +3636,7 @@ function placeTrade(bet){
     entryYESPrice,contracts,ep:[...prices],
     time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}),
     result:null,exit:null,finalPnL:null};
-  trades.push(t); active=t; peakROI=null; peakCapture=null; trailArmed=false; exitIdx=null; priceChartDirty=true; projChartDirty=true;
+  trades.push(t); active=t; peakROI=null; peakCapture=null; trailArmed=false; exitIdx=null; active._peakYesC=0; priceChartDirty=true; projChartDirty=true;
   riskState.tpTriggered=false; riskState.slTriggered=false;
   showActive(); renderLog(); renderDualBar();
 
@@ -3515,7 +3663,18 @@ async function closeTradeWithSell(exitReason='manual_sell'){
   if(!active||!livePrice)return;
   const sv=parseFloat(active.strike);
   const sm=computeStrikeModel(prices,sv);
-  const currentYES=sm?estimateYESPrice(sm,active.bet):active.entryYESPrice;
+  // Always use live Kalshi price for PnL — never the model estimate.
+  // The model's belowProb can say 35% while the actual market YES is $0.45 (55% DOWN = winning).
+  // Using the model estimate here caused trades to record as LOSS when they were in-the-money.
+  const currentYES = (() => {
+    if(kalshiYESPrice !== null){
+      return active.bet === 'UP'
+        ? kalshiYESPrice
+        : Math.max(0.05, Math.min(0.95, 1 - kalshiYESPrice));
+    }
+    // No live price — fall back to model estimate
+    return sm ? estimateYESPrice(sm, active.bet) : active.entryYESPrice;
+  })();
   const winNow=(active.bet==='UP'&&livePrice>sv)||(active.bet==='DOWN'&&livePrice<sv);
   const unrealizedPnL=kalshiUnrealizedPnL(active.contracts,active.entryYESPrice,currentYES);
   const isSell=exitReason==='profit_capture'||exitReason==='manual_sell'||exitReason==='take_profit';
@@ -3610,81 +3769,243 @@ function clearLog(){trades=[];exitIdx=null;renderLog();}
 // ═══════════════════════════════════════════════════
 let clockFull=0;
 // ═══════════════════════════════════════════════════
-// AUTO-BUY ENGINE
+// AUTO-BUY ENGINE — EV + Edge + Regime Filter
 // ═══════════════════════════════════════════════════
-// Per-asset auto-buy state
 const autoBuyState = {
-  BTC: { armed: false, confThresh: 72, cooldownUntil: 0, countdown: 0, countdownBet: null },
-  ETH: { armed: false, confThresh: 72, cooldownUntil: 0, countdown: 0, countdownBet: null },
+  BTC: { armed: false, cooldownUntil: 0, countdown: 0, countdownBet: null, lastEdge: null },
+  ETH: { armed: false, cooldownUntil: 0, countdown: 0, countdownBet: null, lastEdge: null },
 };
 
-function armAutoBuy(asset){
-  const ab = autoBuyState[asset || activeAsset];
-  if(ab.armed){ ab.armed=false; ab.countdown=0; ab.countdownBet=null; renderAutoBuyBtn(); showToast('🔒 Auto-buy disarmed','#f7c948'); return; }
-  ab.armed=true; ab.countdown=0; ab.countdownBet=null;
-  renderAutoBuyBtn();
-  showToast(`🎯 Auto-buy ARMED (≥${ab.confThresh}% confidence will fire)`,'#00e5a0');
+// ── Step 1: computeEdge ──────────────────────────────────────────────────────
+// The core insight: raw model confidence is not edge.
+// Edge = how much your model DISAGREES with the market price, in the RIGHT direction.
+// A 75% UP signal vs YES at $0.74 = near-zero edge (market already knows).
+// A 68% UP signal vs YES at $0.52 = strong edge (market underpricing the move).
+//
+// Returns null if no Kalshi price available (no edge computable without market price).
+function computeEdge(sm){
+  if(!sm || !kalshiMarket) return null;
+
+  // Best direction and model probability (0-100 scale → 0-1)
+  const bestBet   = sm.aboveProb >= sm.belowProb ? 'UP' : 'DOWN';
+  const modelProb = Math.max(sm.aboveProb, sm.belowProb) / 100; // 0–1
+
+  // Market-implied probability from live YES price
+  // YES price IS the market's probability of the event (UP)
+  const yesPrice  = estimateYESPriceLive(sm, 'UP'); // always the UP side price
+  const marketProb = bestBet === 'UP' ? yesPrice : (1 - yesPrice);
+
+  // Raw edge: how much our model exceeds the market's belief
+  const rawEdge = modelProb - marketProb;
+
+  // Expected Value per dollar risked
+  // EV = (prob_win × profit_per_dollar) - (prob_lose × 1)
+  // profit_per_dollar = (1 - cost) / cost  where cost = yesPrice for UP, (1-yesPrice) for DOWN
+  const cost = bestBet === 'UP' ? yesPrice : (1 - yesPrice);
+  const profitPerDollar = cost > 0 ? (1 - cost) / cost : 0;
+  const ev = (modelProb * profitPerDollar) - (1 - modelProb);
+
+  // Dynamic confidence threshold based on spread
+  // Tight spread = reliable fill = lower bar. Wide spread = raise bar.
+  const bid = parseFloat(kalshiMarket.yes_bid_dollars) || 0;
+  const ask = parseFloat(kalshiMarket.yes_ask_dollars) || 0;
+  const spread = (bid > 0 && ask > 0) ? (ask - bid) : 0.20; // default wide if unknown
+  let dynThresh;
+  if     (spread < 0.04) dynThresh = 0.06;  // very liquid  → edge ≥ 6%
+  else if(spread < 0.08) dynThresh = 0.08;  // normal       → edge ≥ 8%
+  else if(spread < 0.12) dynThresh = 0.10;  // thinning     → edge ≥ 10%
+  else if(spread < 0.18) dynThresh = 0.13;  // thin         → edge ≥ 13%
+  else                   dynThresh = 0.17;  // very thin    → edge ≥ 17%
+
+  // Minimum EV gate: must be positive after accounting for spread cost
+  const minEV = spread * 0.5; // at minimum, EV must cover half the spread
+
+  const edgeOk = rawEdge >= dynThresh;
+  const evOk   = ev >= minEV;
+
+  return {
+    bestBet, modelProb, marketProb, rawEdge, ev,
+    spread, dynThresh, minEV, edgeOk, evOk,
+    approved: edgeOk && evOk,
+    // human-readable reason if rejected
+    reason: !edgeOk
+      ? `edge ${(rawEdge*100).toFixed(1)}% < ${(dynThresh*100).toFixed(0)}% min`
+      : !evOk
+      ? `EV ${ev.toFixed(3)} < ${minEV.toFixed(3)} min`
+      : null,
+  };
 }
 
+// ── Step 2: computeRegimeFilter ──────────────────────────────────────────────
+// Hard gates that block trading regardless of edge.
+// These represent conditions where the model's signal is structurally unreliable.
+function computeRegimeFilter(sm, clock){
+  const gates = [];
+
+  // Gate 1: Kalshi spread too wide — fill quality degrades severely
+  if(kalshiMarket){
+    const bid = parseFloat(kalshiMarket.yes_bid_dollars) || 0;
+    const ask = parseFloat(kalshiMarket.yes_ask_dollars) || 0;
+    const spread = (bid > 0 && ask > 0) ? (ask - bid) : null;
+    if(spread !== null && spread > 0.20)
+      gates.push({ code:'SPREAD', msg:`spread $${spread.toFixed(2)} too wide`, block:true });
+  }
+
+  // Gate 2: YES price in dead zone ($0.44–$0.56) — market genuinely uncertain, no fill edge
+  const yesP = kalshiYESPrice;
+  if(yesP !== null && yesP >= 0.44 && yesP <= 0.56)
+    gates.push({ code:'DEADZONE', msg:`YES $${yesP.toFixed(2)} in 44–56¢ dead zone`, block:true });
+
+  // Gate 3: Too early in window — not enough price history for reliable signal
+  if(clock){
+    const elapsed = 900 - clock.secsLeft; // seconds into current window
+    if(elapsed < 120)
+      gates.push({ code:'EARLY', msg:`only ${elapsed}s into window (need 2min)`, block:true });
+
+    // Gate 4: Too late in window — not enough time remaining to capture profit
+    if(clock.secsLeft < 180)
+      gates.push({ code:'LATE', msg:`${clock.secsLeft}s remaining — too late`, block:true });
+  }
+
+  // Gate 5: Price velocity near zero (consolidation) — breakout direction unknowable
+  if(sm){
+    const absVel = Math.abs(sm.velPerSec || 0);
+    const cfg = ASSET_CFG[activeAsset];
+    const velFloor = cfg.priceMin * 0.000005; // ~$0.42/s for BTC, ~$0.01/s for ETH
+    if(absVel < velFloor && clock && (900 - clock.secsLeft) > 180)
+      gates.push({ code:'FLATLINE', msg:'price velocity near zero — no momentum', block:true });
+  }
+
+  // Gate 6: Risk gates — daily cap, cooldown, consecutive losses
+  resetDailyIfNeeded();
+  const balance = getRiskAccountBalance();
+  if(balance > 0){
+    const dailyCap = balance * RISK_DAILY_CAP;
+    if(riskState.dailyLoss >= dailyCap)
+      gates.push({ code:'DAILYCAP', msg:'daily loss cap reached', block:true });
+  }
+  if((Date.now() - riskState.lastLossTime) < RISK_COOLDOWN_MS)
+    gates.push({ code:'COOLDOWN', msg:'in loss cooldown', block:true });
+  if(riskState.consecutiveLosses >= RISK_CONSEC_BRAKE)
+    gates.push({ code:'STREAK', msg:`${riskState.consecutiveLosses} loss streak`, block:true });
+
+  const blocked = gates.some(g => g.block);
+  const blockReason = gates.find(g => g.block)?.msg || null;
+  return { gates, blocked, blockReason };
+}
+
+// ── Arm / disarm ─────────────────────────────────────────────────────────────
+function armAutoBuy(asset){
+  const ab = autoBuyState[asset || activeAsset];
+  if(ab.armed){
+    ab.armed=false; ab.countdown=0; ab.countdownBet=null; ab.lastEdge=null;
+    renderAutoBuyBtn();
+    showToast('🔒 Auto-buy disarmed','#f7c948');
+    return;
+  }
+  ab.armed=true; ab.countdown=0; ab.countdownBet=null;
+  renderAutoBuyBtn();
+  showToast('🎯 Auto-buy ARMED — watching for edge + regime alignment','#00e5a0');
+}
+
+// ── Render button — shows live edge, threshold, regime status ─────────────────
 function renderAutoBuyBtn(){
   const ab = autoBuyState[activeAsset];
   const btn = document.getElementById('auto-buy-btn');
   if(!btn) return;
-  if(ab.countdown>0){
-    btn.textContent=`⚡ FIRING IN ${ab.countdown}s… (tap to cancel)`;
-    btn.style.background='#ff456820'; btn.style.borderColor='#ff456860'; btn.style.color='#ff4566';
-  } else if(ab.armed){
-    btn.textContent=`🎯 AUTO-BUY ARMED ≥${ab.confThresh}% — tap to disarm`;
-    btn.style.background='#00e5a015'; btn.style.borderColor='#00e5a040'; btn.style.color='#00e5a0';
+
+  if(ab.countdown > 0){
+    const e = ab.lastEdge;
+    const edgeStr = e ? ` · edge ${(e.rawEdge*100).toFixed(1)}% · EV ${e.ev.toFixed(2)}` : '';
+    btn.textContent = `⚡ FIRING IN ${ab.countdown}s — ${ab.countdownBet}${edgeStr}`;
+    btn.style.cssText = 'width:100%;margin-top:7px;padding:7px;border-radius:9px;font-family:inherit;font-size:8px;letter-spacing:1px;font-weight:700;cursor:pointer;background:#ff456820;border:1px solid #ff456860;color:#ff4566';
+    return;
+  }
+
+  if(!ab.armed){
+    btn.textContent = '⚡ ARM AUTO-BUY';
+    btn.style.cssText = 'width:100%;margin-top:7px;padding:7px;border-radius:9px;font-family:inherit;font-size:8px;letter-spacing:2px;font-weight:700;cursor:pointer;background:#1a1a35;border:1px solid #2a2a50;color:#7b9fff';
+    return;
+  }
+
+  // Armed — show live status
+  const e = ab.lastEdge;
+  if(!e){
+    btn.textContent = '🎯 ARMED — waiting for Kalshi price…';
+    btn.style.cssText = 'width:100%;margin-top:7px;padding:7px;border-radius:9px;font-family:inherit;font-size:8px;letter-spacing:1px;font-weight:700;cursor:pointer;background:#00e5a010;border:1px solid #00e5a030;color:#00e5a070';
+    return;
+  }
+  if(e.approved){
+    btn.textContent = `🎯 ARMED ✓ edge ${(e.rawEdge*100).toFixed(1)}% · EV ${e.ev.toFixed(2)} · spread $${e.spread.toFixed(2)} — tap to disarm`;
+    btn.style.cssText = 'width:100%;margin-top:7px;padding:7px;border-radius:9px;font-family:inherit;font-size:8px;letter-spacing:1px;font-weight:700;cursor:pointer;background:#00e5a020;border:1px solid #00e5a060;color:#00e5a0';
   } else {
-    btn.textContent='⚡ ARM AUTO-BUY';
-    btn.style.background='#1a1a35'; btn.style.borderColor='#2a2a50'; btn.style.color='#7b9fff';
+    const regime = ab.lastRegime;
+    const reason = regime?.blocked ? regime.blockReason : (e.reason || 'no edge');
+    btn.textContent = `🎯 ARMED · waiting — ${reason}`;
+    btn.style.cssText = 'width:100%;margin-top:7px;padding:7px;border-radius:9px;font-family:inherit;font-size:8px;letter-spacing:1px;font-weight:700;cursor:pointer;background:#f7c94810;border:1px solid #f7c94830;color:#f7c94880';
   }
 }
 
-// Called every second in clockTick — checks if armed + signal strong enough
+// ── Main check — runs every second from clockTick ─────────────────────────────
 function checkAutoBuy(){
   const ab = autoBuyState[activeAsset];
-  if(!ab.armed || active || !livePrice || !strikeInput || strikeInput<=0) return;
+  if(!ab.armed || active || !livePrice || !strikeInput || strikeInput <= 0) return;
   if(Date.now() < ab.cooldownUntil) return;
 
   const sm = computeStrikeModel(prices, strikeInput);
   if(!sm) return;
-  const ra = computeRiskAssessment();
-  if(!ra) return;
 
-  const upConf = sm.aboveProb;
-  const dnConf = sm.belowProb;
-  const bestBet = upConf >= dnConf ? 'UP' : 'DOWN';
-  const bestConf = Math.max(upConf, dnConf);
+  const clock = getClock();
+  const edge   = computeEdge(sm);
+  const regime = computeRegimeFilter(sm, clock);
 
-  // Check minimum confidence threshold and risk gate
-  if(bestConf < ab.confThresh || !ra.approved) {
-    // Confidence dropped — cancel any pending countdown
-    if(ab.countdown > 0){ ab.countdown=0; ab.countdownBet=null; renderAutoBuyBtn(); }
+  // Always store latest assessment so button can display it
+  ab.lastEdge   = edge;
+  ab.lastRegime = regime;
+  renderAutoBuyBtn();
+
+  // Hard block — regime filter says no
+  if(regime.blocked){
+    if(ab.countdown > 0){ ab.countdown=0; ab.countdownBet=null; }
     return;
   }
 
-  // Confidence met — start or continue countdown (3 second review window)
+  // Edge check — model must have meaningful disagreement with market
+  if(!edge || !edge.approved){
+    if(ab.countdown > 0){ ab.countdown=0; ab.countdownBet=null; }
+    return;
+  }
+
+  const bestBet = edge.bestBet;
+
+  // Start 3-second countdown on first qualifying tick
   if(ab.countdown === 0){
-    ab.countdown=3; ab.countdownBet=bestBet;
+    ab.countdown = 3; ab.countdownBet = bestBet;
     renderAutoBuyBtn();
-    showToast(`⚡ Auto-buy ${bestBet} in 3s… (${bestConf.toFixed(0)}% conf)`, '#f7c948');
+    showToast(
+      `⚡ Auto-buy ${bestBet} in 3s — edge ${(edge.rawEdge*100).toFixed(1)}% · EV ${edge.ev.toFixed(2)}`,
+      '#f7c948'
+    );
     return;
   }
 
-  // Make sure bet direction hasn't flipped during countdown
-  if(ab.countdownBet !== bestBet){ ab.countdown=0; ab.countdownBet=null; renderAutoBuyBtn(); return; }
+  // Direction flip or edge lost during countdown → cancel
+  if(ab.countdownBet !== bestBet){
+    ab.countdown=0; ab.countdownBet=null; renderAutoBuyBtn(); return;
+  }
 
   ab.countdown--;
   renderAutoBuyBtn();
 
   if(ab.countdown === 0){
-    // Fire!
-    ab.cooldownUntil = Date.now() + 90000; // 90s cooldown after auto-trade
-    ab.countdownBet = null;
+    // ── FIRE ──
+    ab.cooldownUntil = Date.now() + 90000;
+    ab.countdownBet  = null;
     placeTrade(bestBet);
-    showToast(`⚡ Auto-buy fired — ${bestBet} @ ${bestConf.toFixed(0)}% confidence`, ASSET_CFG[activeAsset].color);
+    showToast(
+      `⚡ Fired ${bestBet} · edge ${(edge.rawEdge*100).toFixed(1)}% · EV ${edge.ev.toFixed(2)} · spread $${edge.spread.toFixed(2)}`,
+      ASSET_CFG[activeAsset].color
+    );
     renderAutoBuyBtn();
   }
 }
@@ -3788,7 +4109,7 @@ document.querySelectorAll('.tb').forEach(btn=>{
     document.querySelectorAll('.pnl').forEach(p=>p.classList.remove('on'));
     btn.classList.add('on'); document.getElementById(`p-${btn.dataset.p}`).classList.add('on');
     if(btn.dataset.p==='trade'){renderSignalPanel();renderTradeSetup();}
-    if(btn.dataset.p==='log'){pnlChartDirty=true;drawPnLCharts();}
+    if(btn.dataset.p==='log'){pnlChartDirty=true; setTimeout(()=>{pnlChartDirty=true;drawPnLCharts();},30);}
     if(btn.dataset.p==='brain')updateBrainPanel();
     if(btn.dataset.p==='portfolio'&&authConnected)refreshPortfolio();
   });
