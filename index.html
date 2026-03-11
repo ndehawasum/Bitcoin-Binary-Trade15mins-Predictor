@@ -1253,6 +1253,12 @@ async function switchAsset(asset){
     setKalshiStatus(A().kalshiYESLastWS>0?'ws':'partial', A().kalshiYESLastWS>0?'KALSHI LIVE':'KALSHI REST');
   }
 
+  // Reset chart spring state so it anchors to new asset's price immediately
+  // (prevents velocity bleed from previous asset's spring state)
+  A().chartDisplayPrice = null;
+  A().chartPriceVel = 0;
+  A().chartTickVel  = 0;
+
   // Inject background price immediately if available
   if(A().livePrice) onNewPrice(A().livePrice,'SWITCH');
 
@@ -2137,6 +2143,13 @@ function chartLoop(ts){
   const dp = chartDisplayPrice || chartData[chartData.length-1].p;
   chartData = [...chartData.slice(0,-1), {t: now, p: dp}];
 
+  // Filter out any cross-asset ticks (safety: drop prices outside asset's valid range)
+  const _cfg  = window.ASSET_CFG ? ASSET_CFG[activeAsset] : null;
+  const _pMin = _cfg ? _cfg.priceMin : 1;
+  const _pMax = _cfg ? (_cfg.priceMin < 500 ? 50000 : 500000) : 500000;
+  chartData = chartData.filter(x => x.p >= _pMin && x.p <= _pMax);
+  if(chartData.length < 2){ ctx.restore(); return; }
+
   const pts  = chartData.map(x => x.p);
   const sv   = strikeInput > 0 ? strikeInput : 0;
 
@@ -2149,7 +2162,8 @@ function chartLoop(ts){
 
   // Step 2: if strike exists, expand range to include it with breathing room
   if(sv > 0){
-    const minSep = Math.max((mx - mn) * 0.12, 2.00); // strike needs at least 12% from edge
+    // Strike needs at least 20% of total range as breathing room from each edge
+    const minSep = Math.max((mx - mn) * 0.20, sv * 0.003); // at least 0.3% of price
     if(sv < mn + minSep) mn = sv - minSep;
     if(sv > mx - minSep) mx = sv + minSep;
   }
