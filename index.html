@@ -1783,9 +1783,12 @@ function chartLoop(ts){
   // ── Y range: tight zoom with padding ──
   let mn = Math.min(...pts), mx = Math.max(...pts);
   if(sv>0){ mn=Math.min(mn,sv); mx=Math.max(mx,sv); }
-  const pad = Math.max((mx-mn)*0.28, mx*0.00035);
+  // Tight zoom: pad by 20% of the visible range only — no absolute floor.
+  // This means a $5 move fills most of the canvas height, making slopes visible.
+  // Minimum pad of $0.50 each side so the line never touches the very edge.
+  const pad = Math.max((mx - mn) * 0.20, 0.50);
   mn -= pad; mx += pad;
-  const rng = mx-mn || 1;
+  const rng = mx - mn || 1;
 
   // ── Coordinate helpers ──
   const tStart = now - WINDOW_MS;
@@ -1991,36 +1994,20 @@ function chartLoop(ts){
   }
   ctx.textAlign='left';
 
-  // ── Y axis: $1 increment grid lines + labels ──
-  // Find the first whole dollar at or above mn, step by $1
-  const dollarStart = Math.ceil(mn);   // first whole $ in view
-  const dollarEnd   = Math.floor(mx);  // last whole $ in view
-  ctx.font=`${7*dpr}px 'Courier New'`;
+  // ── Y axis: no labels, faint horizontal grid lines only ──
+  // Labels removed — the moving price pill on the right is the reference.
+  // Grid lines help the eye track slope without cluttering the chart.
+  const dollarStart = Math.ceil(mn);
+  const dollarEnd   = Math.floor(mx);
   for(let v = dollarStart; v <= dollarEnd; v++){
     const y = ty(v);
-    if(y < PT || y > H - PB) continue; // clip to chart area
-
-    // Determine label prominence:
-    // multiples of $10 → brighter line + label
-    // multiples of $5  → medium line + label
-    // every $1         → faint tick line, no label (would be too dense)
-    const isTen  = v % 10 === 0;
-    const isFive = v % 5  === 0;
-    const showLabel = isTen || isFive;
-
-    // Grid line
+    if(y < PT || y > H - PB) continue;
+    const isFive = v % 5 === 0;
     ctx.beginPath();
     ctx.moveTo(PL, y); ctx.lineTo(PL + CW, y);
-    ctx.strokeStyle = isTen ? '#ffffff0e' : isFive ? '#ffffff07' : '#ffffff03';
+    ctx.strokeStyle = isFive ? '#ffffff06' : '#ffffff02';
     ctx.lineWidth = dpr;
     ctx.stroke();
-
-    // Label — only on $5 and $10 multiples to avoid clutter
-    if(showLabel){
-      const label = '$' + v.toLocaleString();
-      ctx.fillStyle = isTen ? '#3a3a55' : '#2a2a40';
-      ctx.fillText(label, PL + 2*dpr, y - 3*dpr);
-    }
   }
 
   // ── Exit marker ──
