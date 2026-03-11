@@ -310,9 +310,24 @@ input[type=number]{-moz-appearance:textfield}
       </div>
       <div class="risk-block" style="margin-bottom:0">
         <div class="risk-block-title">AUTO-EXIT RULES</div>
-        <div class="risk-check-row"><div class="risk-dot" style="background:#00e5a0"></div><span class="risk-check-lbl">Take profit</span><span class="risk-check-val" id="risk-tp" style="color:#00e5a0">—</span></div>
+        <div class="risk-check-row"><div class="risk-dot" style="background:#00e5a0"></div><span class="risk-check-lbl">Sell capture</span><span class="risk-check-val" id="risk-tp" style="color:#00e5a0">—</span></div>
         <div class="risk-check-row"><div class="risk-dot" style="background:#ff4566"></div><span class="risk-check-lbl">Stop loss</span><span class="risk-check-val" id="risk-sl" style="color:#ff4566">—</span></div>
         <div class="risk-check-row"><div class="risk-dot" style="background:#f7c948"></div><span class="risk-check-lbl">Peak P&amp;L</span><span class="risk-check-val" id="risk-peak" style="color:#f7c948">—</span></div>
+        <div style="margin-top:10px;padding-top:9px;border-top:1px solid #0a0a1e">
+          <div style="font-size:7px;letter-spacing:3px;color:#444;margin-bottom:7px">MODEL-DRIVEN SELL THRESHOLDS</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <span style="font-size:9px;color:#555">Auto-sell</span>
+            <span id="capture-thresh-val" style="font-size:11px;font-weight:900;color:#00e5a0">72%</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
+            <span style="font-size:9px;color:#555">Advisory</span>
+            <span id="signal-thresh-val" style="font-size:11px;font-weight:900;color:#f7c948">55%</span>
+          </div>
+          <div id="thresh-reason" style="font-size:8px;color:#555;line-height:1.5;min-height:14px"></div>
+          <div id="thresh-live-guard" style="font-size:7px;color:#2a2a40;margin-top:5px">
+            ⚡ Auto-sell requires live Kalshi YES price
+          </div>
+        </div>
       </div>
       <button id="risk-block-btn" onclick="applyRiskSizing()">USE RECOMMENDED SIZE ▶</button>
     </div>
@@ -390,7 +405,7 @@ input[type=number]{-moz-appearance:textfield}
       <div id="adv">
         <div class="adv-top"><span class="adv-action" id="aa">WATCHING</span><span class="adv-roi" id="ar">—</span></div>
         <div class="adv-msg" id="am"></div>
-        <button id="aeb" onclick="closeTrade()"></button>
+        <button id="aeb" onclick="closeTradeWithSell('manual_sell')"></button>
       </div>
       <div class="card" id="ac">
         <div style="display:flex;justify-content:space-between;margin-bottom:10px">
@@ -400,9 +415,25 @@ input[type=number]{-moz-appearance:textfield}
         </div>
         <div class="sg">
           <div class="sb2"><div class="sl3">UNRLZD P&amp;L</div><div class="sv2" id="sroi">—</div></div>
-          <div class="sb2"><div class="sl3">IF WIN</div><div class="sv2" id="spnl" style="color:#00e5a0">—</div></div>
+          <div class="sb2"><div class="sl3">MAX PROFIT</div><div class="sv2" id="spnl" style="color:#00e5a0">—</div></div>
           <div class="sb2"><div class="sl3">PEAK P&amp;L</div><div class="sv2" id="spk" style="color:#f7c948">—</div></div>
           <div class="sb2"><div class="sl3">WIN NOW?</div><div class="sv2" id="swin">—</div></div>
+        </div>
+        <!-- Sell opportunity meter -->
+        <div id="sell-meter" style="background:#07070f;border-radius:9px;padding:9px 11px;margin-bottom:10px;display:none">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+            <span style="font-size:7px;letter-spacing:3px;color:#f7c948">SELL OPPORTUNITY</span>
+            <span id="sell-pct" style="font-size:10px;font-weight:900;color:#f7c948">0%</span>
+          </div>
+          <div style="height:6px;background:#141428;border-radius:3px;overflow:hidden;position:relative">
+            <div id="sell-meter-thresh" style="position:absolute;left:55%;top:0;width:2px;height:100%;background:#f7c94850"></div>
+            <div id="sell-meter-tp" style="position:absolute;left:72%;top:0;width:2px;height:100%;background:#00e5a050"></div>
+            <div id="sell-meter-bar" style="height:100%;border-radius:3px;transition:width .4s ease,background .4s ease;width:0%;background:#f7c948"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:7px;color:#1a1a35;margin-top:2px">
+            <span>0%</span><span style="color:#f7c94840">consider 55%</span><span style="color:#00e5a040">sell 72%</span><span>100%</span>
+          </div>
+          <div id="sell-vs-hold" style="font-size:8px;color:#555;margin-top:5px;text-align:center"></div>
         </div>
         <div style="background:#07070f;border-radius:8px;padding:8px 10px;margin-bottom:10px">
           <div style="display:flex;justify-content:space-between;font-size:9px;margin-bottom:4px">
@@ -437,7 +468,7 @@ input[type=number]{-moz-appearance:textfield}
       <div style="height:3px;background:#0c0c1c;border-radius:2px;margin:6px 0 4px;overflow:hidden">
         <div id="wbf" class="wbf"></div>
       </div>
-      <button id="mc" onclick="closeTrade()">CLOSE TRADE MANUALLY</button>
+      <button id="mc" onclick="closeTradeWithSell('manual_sell')">CLOSE TRADE MANUALLY</button>
     </div>
 
     <!-- Market analysis -->
@@ -638,12 +669,17 @@ let riskState={
 };
 const RISK_CONF_MIN    = 58;   // % min model confidence to trade
 const RISK_EV_MIN      = 0.05; // minimum expected value edge
-const RISK_MAX_ACCT_PCT= 0.02; // 2% max account risk per trade
+const RISK_MAX_ACCT_PCT= 0.20; // 20% max account risk per trade
 const RISK_DAILY_CAP   = 0.05; // 5% daily loss cap
 const RISK_CONSEC_BRAKE= 3;    // halve bet after N consecutive losses
 const RISK_TP_ROI      = 0.60; // take profit at 60% of max potential profit
 const RISK_SL_ROI      =-0.50; // stop loss at 50% of bet (unrealized -50%)
 const RISK_COOLDOWN_MS = 60000;// 1-minute cooldown after loss
+const SELL_CAPTURE_THRESH_DEFAULT = 0.72;
+const SELL_SIGNAL_THRESH_DEFAULT  = 0.55;
+// Runtime-tunable — user can adjust via the risk panel sliders
+let sellCaptureThresh = SELL_CAPTURE_THRESH_DEFAULT;
+let sellSignalThresh  = SELL_SIGNAL_THRESH_DEFAULT;
 
 // ═══════════════════════════════════════════════════
 // NEURAL NETWORK (8→6→1)
@@ -1257,6 +1293,14 @@ function projectKalshiROI(arr, strike, bet, sm, secsLeft){
 
 
 // FAST advisory — pnl is now a dollar amount, peakPnL is dollar amount
+function computeSellScore(entryYES, currentYES, maxProfit, unrealizedPnL){
+  // How much of the maximum possible profit have we already captured via YES price move?
+  if(!maxProfit||maxProfit<=0) return 0;
+  // Profit captured = (currentYES - entryYES) * contracts = unrealizedPnL
+  // As a fraction of max possible profit (entryYES→$1.00)
+  return Math.max(0, unrealizedPnL / maxProfit);
+}
+
 function computeAdvisory(arr,strike,bet,pnl,strikeModel,clock,peakPnL){
   if(!arr||arr.length<3||pnl===null)return null;
   const last=arr[arr.length-1];
@@ -1264,31 +1308,70 @@ function computeAdvisory(arr,strike,bet,pnl,strikeModel,clock,peakPnL){
   const sl=clock.secsLeft, pd=clock.pct;
   const inProfit=pnl>0;
   const d2=n=>`$${Math.abs(n).toFixed(2)}`;
+
+  // Sell score: fraction of max profit already locked in as unrealized gain
+  const entryYES = active ? active.entryYESPrice : 0.5;
+  const maxProfit = active ? kalshiPotentialProfit(active.amount, entryYES) : 0;
+  const sellScore = computeSellScore(entryYES, null, maxProfit, pnl);
+  const captureCapture = sellScore >= sellCaptureThresh; // e.g. ≥72% captured — SELL
+  const captureSignal  = sellScore >= sellSignalThresh;  // e.g. ≥55% captured — CONSIDER
+
+  // What would we earn holding vs selling now?
+  const holdUpside = maxProfit - pnl; // remaining upside if we win at expiry
+  // Selling now is smarter when: captured profit ≥ threshold OR hold upside is small vs risk
+  const sellBetterThanHold = inProfit && (holdUpside < pnl * 0.4); // selling gives >71% of hold value
+  const almostMaxProfit = inProfit && holdUpside < 0.20 && pnl > 0.10; // within $0.20 of max
+
   const profitFading=peakPnL!==null&&peakPnL>0.5&&pnl<peakPnL*.5;
   const against=(bet==='UP'&&vel5<-.012)||(bet==='DOWN'&&vel5>.012);
   const withUs=(bet==='UP'&&vel5>.012)||(bet==='DOWN'&&vel5<-.012);
   const profitDroppingFast=peakPnL!==null&&peakPnL>1&&pnl<peakPnL*.65&&against;
 
-  // Strike model signals
   const smAgainst=strikeModel&&((bet==='UP'&&strikeModel.aboveProb<35)||(bet==='DOWN'&&strikeModel.belowProb<35));
   const smWith=strikeModel&&((bet==='UP'&&strikeModel.aboveProb>65)||(bet==='DOWN'&&strikeModel.belowProb>65));
   const smStrong=strikeModel&&((bet==='UP'&&strikeModel.aboveProb<25)||(bet==='DOWN'&&strikeModel.belowProb<25));
+  const pctCaptured = Math.round(sellScore*100);
 
-  // SELL NOW — priority order
-  if(smStrong&&pd>.3) return{action:'SELL_NOW',urgency:'high',msg:`Model ${bet==='UP'?strikeModel.belowProb:strikeModel.aboveProb}% confident BTC finishes ${bet==='UP'?'BELOW':'ABOVE'} strike — exit now`,color:'#ff4566'};
-  if(profitDroppingFast) return{action:'SELL_NOW',urgency:'high',msg:`Peak was +${d2(peakPnL)} — dropping fast. Lock in remaining ${d2(pnl)} profit`,color:'#ff4566'};
-  if(profitFading&&sl<200) return{action:'SELL_NOW',urgency:'high',msg:`Profit fading with only ${Math.floor(sl/60)}m left — lock in +${d2(pnl)} now`,color:'#ff4566'};
-  if(smAgainst&&inProfit&&pd>.45) return{action:'SELL_NOW',urgency:'high',msg:`Strike model turned against your ${bet} — exit while up +${d2(pnl)}`,color:'#ff4566'};
-  if(against&&pnl<-2&&pd>.3) return{action:'SELL_NOW',urgency:'high',msg:`Price moving hard against ${bet}. Cut losses — ${d2(pnl)} down`,color:'#ff4566'};
-  if(inProfit&&sl<100&&against) return{action:'SELL_NOW',urgency:'medium',msg:`Under 2 min and reversing. Take +${d2(pnl)} now`,color:'#f7c948'};
-  if(inProfit&&sl<80) return{action:'CONSIDER_EXIT',urgency:'medium',msg:`80s left with +${d2(pnl)} — consider locking in`,color:'#f7c948'};
+  // ── SELL NOW — priority order ──
+  if(captureCapture&&almostMaxProfit)
+    return{action:'SELL_NOW',urgency:'high',msg:`Captured ${pctCaptured}% of max profit (+${d2(pnl)}) — only ${d2(holdUpside)} more upside left. Sell now.`,color:'#00e5a0',sellScore};
+  if(captureCapture&&smAgainst)
+    return{action:'SELL_NOW',urgency:'high',msg:`${pctCaptured}% captured & model turning against ${bet}. Lock in +${d2(pnl)} before reversal.`,color:'#ff4566',sellScore};
+  if(captureCapture&&against)
+    return{action:'SELL_NOW',urgency:'high',msg:`${pctCaptured}% of max profit secured. Price reversing — sell +${d2(pnl)} now.`,color:'#ff4566',sellScore};
+  if(captureCapture)
+    return{action:'SELL_NOW',urgency:'high',msg:`Captured ${pctCaptured}% of max profit (+${d2(pnl)}). Selling now beats waiting for expiry.`,color:'#00e5a0',sellScore};
+  if(sellBetterThanHold&&inProfit)
+    return{action:'SELL_NOW',urgency:'high',msg:`Sell profit +${d2(pnl)} > remaining hold upside +${d2(holdUpside)}. Take the guaranteed gain.`,color:'#00e5a0',sellScore};
+  if(smStrong&&pd>.3)
+    return{action:'SELL_NOW',urgency:'high',msg:`Model ${bet==='UP'?strikeModel.belowProb:strikeModel.aboveProb}% confident BTC finishes ${bet==='UP'?'BELOW':'ABOVE'} strike — exit now`,color:'#ff4566',sellScore};
+  if(profitDroppingFast)
+    return{action:'SELL_NOW',urgency:'high',msg:`Peak was +${d2(peakPnL)} — dropping fast. Lock in remaining ${d2(pnl)} profit`,color:'#ff4566',sellScore};
+  if(profitFading&&sl<200)
+    return{action:'SELL_NOW',urgency:'high',msg:`Profit fading with only ${Math.floor(sl/60)}m left — lock in +${d2(pnl)} now`,color:'#ff4566',sellScore};
+  if(smAgainst&&inProfit&&pd>.45)
+    return{action:'SELL_NOW',urgency:'high',msg:`Strike model turned against your ${bet} — exit while up +${d2(pnl)}`,color:'#ff4566',sellScore};
+  if(against&&pnl<-2&&pd>.3)
+    return{action:'SELL_NOW',urgency:'high',msg:`Price moving hard against ${bet}. Cut losses — ${d2(pnl)} down`,color:'#ff4566',sellScore};
+  if(inProfit&&sl<100&&against)
+    return{action:'SELL_NOW',urgency:'medium',msg:`Under 2 min and reversing. Take +${d2(pnl)} now`,color:'#f7c948',sellScore};
 
-  // HOLD
-  if(smWith&&withUs&&inProfit) return{action:'HOLD',urgency:'low',msg:`Model ${bet==='UP'?strikeModel.aboveProb:strikeModel.belowProb}% confident. Momentum aligned. Unrealized: +${d2(pnl)}`,color:'#00e5a0'};
-  if(withUs&&inProfit&&sl>200) return{action:'HOLD',urgency:'low',msg:`Momentum with you. +${d2(pnl)} unrealized — ${Math.floor(sl/60)}m remaining`,color:'#00e5a0'};
-  if(smWith&&!inProfit&&sl>300) return{action:'HOLD',urgency:'low',msg:`Model still favors ${bet} — recovery window open (${Math.floor(sl/60)}m left)`,color:'#00e5a0'};
-  if(inProfit) return{action:'HOLD',urgency:'low',msg:`+${d2(pnl)} unrealized — holding. Watching for reversal signals`,color:'#00e5a0'};
-  return{action:'WATCH',urgency:'low',msg:`${d2(pnl)} ${pnl<0?'down':'up'} vs entry price. Monitoring price and model`,color:'#666'};
+  // ── CONSIDER SELLING ──
+  if(captureSignal&&inProfit)
+    return{action:'CONSIDER_EXIT',urgency:'medium',msg:`${pctCaptured}% of max profit captured (+${d2(pnl)}). Consider selling — ${d2(holdUpside)} upside remaining vs full reversal risk.`,color:'#f7c948',sellScore};
+  if(inProfit&&sl<80)
+    return{action:'CONSIDER_EXIT',urgency:'medium',msg:`80s left with +${d2(pnl)} — consider locking in`,color:'#f7c948',sellScore};
+
+  // ── HOLD ──
+  if(smWith&&withUs&&inProfit)
+    return{action:'HOLD',urgency:'low',msg:`Model ${bet==='UP'?strikeModel.aboveProb:strikeModel.belowProb}% confident. Momentum aligned. Unrealized: +${d2(pnl)} (${pctCaptured}% of max)`,color:'#00e5a0',sellScore};
+  if(withUs&&inProfit&&sl>200)
+    return{action:'HOLD',urgency:'low',msg:`Momentum with you. +${d2(pnl)} unrealized (${pctCaptured}% captured) — ${Math.floor(sl/60)}m remaining`,color:'#00e5a0',sellScore};
+  if(smWith&&!inProfit&&sl>300)
+    return{action:'HOLD',urgency:'low',msg:`Model still favors ${bet} — recovery window open (${Math.floor(sl/60)}m left)`,color:'#00e5a0',sellScore};
+  if(inProfit)
+    return{action:'HOLD',urgency:'low',msg:`+${d2(pnl)} unrealized (${pctCaptured}% of max profit) — watching for reversal signals`,color:'#00e5a0',sellScore};
+  return{action:'WATCH',urgency:'low',msg:`${d2(pnl)} ${pnl<0?'down':'up'} vs entry. Monitoring price and model`,color:'#666',sellScore:0};
 }
 
 // ═══════════════════════════════════════════════════
@@ -1341,6 +1424,16 @@ function drawPriceChart(){
   const sy=hasStrike?ty(sv):null;
   const curAbove=hasStrike&&pts[pts.length-1]>=sv;
   const GREEN='#00e5a0', RED='#ff4566', ORANGE='#f97316';
+
+  // ── Strike line drawn FIRST (behind everything else) ──
+  if(hasStrike){
+    const strikeCol=curAbove?GREEN:RED;
+    ctx.save();
+    ctx.beginPath(); ctx.moveTo(PL,sy); ctx.lineTo(PL+CW,sy);
+    ctx.strokeStyle=strikeCol+'80'; ctx.lineWidth=1*dpr;
+    ctx.setLineDash([5*dpr,3*dpr]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.restore();
+  }
 
   // ── Color-coded area fill — green above strike, red below, orange if no strike ──
   if(hasStrike){
@@ -1409,25 +1502,30 @@ function drawPriceChart(){
     ctx.strokeStyle=ORANGE; ctx.lineWidth=2*dpr; ctx.lineJoin='round'; ctx.lineCap='round'; ctx.stroke();
   }
 
-  // ── Strike line — solid, bright, with price label ──
+  // ── Strike label — pinned to right margin, never overlaps price line ──
   if(hasStrike){
     const strikeCol=curAbove?GREEN:RED;
-    // Full-width solid line
-    ctx.beginPath(); ctx.moveTo(PL,sy); ctx.lineTo(PL+CW,sy);
-    ctx.strokeStyle=strikeCol; ctx.lineWidth=1.5*dpr;
-    ctx.setLineDash([5*dpr,3*dpr]); ctx.stroke(); ctx.setLineDash([]);
-
-    // Price pill on left edge
     const strikeLabel='$'+sv.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
     ctx.font=`bold ${8.5*dpr}px -apple-system,sans-serif`;
     const slw=ctx.measureText(strikeLabel).width;
-    const sPad=4*dpr, sH=14*dpr, sR=3*dpr;
-    const spx=PL+4*dpr, spy=sy-sH/2;
+    const sPad=5*dpr, sH=15*dpr, sR=3*dpr;
+    // Position in the right-padding zone, centred on strike Y
+    const spx=W-PR+6*dpr;
+    const spy_raw=sy-sH/2;
+    // Clamp so pill never clips top/bottom
+    const spy=Math.max(PT, Math.min(H-PB-sH, spy_raw));
+    // Solid filled pill
     ctx.beginPath();
-    ctx.roundRect?ctx.roundRect(spx,spy,slw+sPad*2,sH,sR):ctx.rect(spx,spy,slw+sPad*2,sH);
-    ctx.fillStyle=strikeCol+'25'; ctx.fill();
+    if(ctx.roundRect) ctx.roundRect(spx,spy,slw+sPad*2,sH,sR);
+    else ctx.rect(spx,spy,slw+sPad*2,sH);
+    ctx.fillStyle='#0c0c1c'; ctx.fill();          // solid dark bg — never see-through
     ctx.strokeStyle=strikeCol; ctx.lineWidth=dpr; ctx.stroke();
-    ctx.fillStyle=strikeCol; ctx.fillText(strikeLabel,spx+sPad,spy+sH*0.73);
+    ctx.fillStyle=strikeCol;
+    ctx.fillText(strikeLabel, spx+sPad, spy+sH*0.73);
+    // Short horizontal tick from chart edge to pill
+    ctx.beginPath(); ctx.moveTo(PL+CW,sy); ctx.lineTo(spx-2*dpr,sy);
+    ctx.strokeStyle=strikeCol+'60'; ctx.lineWidth=dpr;
+    ctx.setLineDash([3*dpr,2*dpr]); ctx.stroke(); ctx.setLineDash([]);
   }
 
   // ── Current price dot + pill label ──
@@ -1437,21 +1535,32 @@ function drawPriceChart(){
   const aboveNow=sv>0&&curPrice>=sv;
   const pillCol=sv>0?(aboveNow?'#00e5a0':'#ff4566'):'#f97316';
 
-  // Dot
-  ctx.beginPath(); ctx.arc(lastX,lastY,4*dpr,0,Math.PI*2);
-  ctx.fillStyle=pillCol; ctx.fill();
-
-  // Pill label on right
+  // Current price pill — also pinned to right margin, stacked away from strike pill
   const priceLabel='$'+curPrice.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
   ctx.font=`bold ${9*dpr}px -apple-system,sans-serif`;
   const plw=ctx.measureText(priceLabel).width;
   const pillPad=5*dpr, pillH=16*dpr, pillR=4*dpr;
-  const px=lastX+8*dpr, py=lastY-pillH/2;
   const pillW=plw+pillPad*2;
+  const px=W-PR+6*dpr;
+  let py=lastY-pillH/2;
+  // Clamp to chart bounds
+  py=Math.max(PT, Math.min(H-PB-pillH, py));
+  // If strike exists and pills overlap, push current price pill away
+  if(hasStrike){
+    const strikePillY=Math.max(PT, Math.min(H-PB-15*dpr, sy-15*dpr/2));
+    if(Math.abs(py-strikePillY)<(pillH+2*dpr)){
+      py=curAbove ? strikePillY-pillH-2*dpr : strikePillY+15*dpr+2*dpr;
+      py=Math.max(PT, Math.min(H-PB-pillH, py));
+    }
+  }
+  // Solid filled pill
   ctx.beginPath();
   ctx.roundRect?ctx.roundRect(px,py,pillW,pillH,pillR):ctx.rect(px,py,pillW,pillH);
   ctx.fillStyle=pillCol; ctx.fill();
-  ctx.fillStyle='#000'; ctx.fillText(priceLabel,px+pillPad,py+pillH*0.72);
+  ctx.fillStyle='#07070f'; ctx.fillText(priceLabel,px+pillPad,py+pillH*0.72);
+  // Connector dot on chart at actual price position
+  ctx.beginPath(); ctx.arc(lastX,lastY,3.5*dpr,0,Math.PI*2);
+  ctx.fillStyle=pillCol; ctx.fill();
 
   // ── Time axis: rolling seconds every 5s ──
   ctx.font=`${7*dpr}px 'Courier New'`;
@@ -1645,6 +1754,8 @@ function renderSignalPanel(){
     document.getElementById('vrd-strike').textContent='Enter strike in Trade tab to activate verdict';
     document.getElementById('vrd-conf').textContent=''; return;
   }
+  // Update dynamic thresholds from current model (pre-trade or active)
+  if(!active) applyDynamicThresholds(sm, sm.aboveProb>=50?'UP':'DOWN', getClock());
   // Verdict
   const vrd=document.getElementById('verdict');
   const willAbove=sm.aboveProb>50;
@@ -1894,16 +2005,179 @@ function renderRiskPanel(){
 
   // Auto-exit rules
   if(active){
-    document.getElementById('risk-tp').textContent=`+$${(active.amount*(1/active.entryYESPrice-1)*RISK_TP_ROI).toFixed(2)} unrealized`;
+    const maxP=kalshiPotentialProfit(active.amount,active.entryYESPrice);
+    document.getElementById('risk-tp').textContent=`+${fmtUSD(maxP*sellCaptureThresh)} sell (${Math.round(sellCaptureThresh*100)}% captured) or +${fmtUSD(maxP*RISK_TP_ROI)} TP`;
     document.getElementById('risk-sl').textContent=`-$${(active.amount*Math.abs(RISK_SL_ROI)).toFixed(2)} unrealized`;
     document.getElementById('risk-peak').textContent=peakROI!==null?`+$${peakROI.toFixed(2)} so far`:'watching...';
   } else {
-    document.getElementById('risk-tp').textContent='set at trade open';
+    // Pre-trade: thresholds updated by renderSignalPanel → applyDynamicThresholds
+    // Just show the current values (already set by applyDynamicThresholds)
+    document.getElementById('risk-tp').textContent=`model will set at trade open`;
     document.getElementById('risk-sl').textContent='set at trade open';
     document.getElementById('risk-peak').textContent='no active trade';
   }
 
   return r;
+}
+
+// ══════════════════════════════════════════════════════
+// DYNAMIC SELL THRESHOLD ENGINE
+// Computes auto-sell and advisory thresholds from the
+// live model outputs (market analysis + indicators).
+// No manual sliders — the model sets them each tick.
+// ══════════════════════════════════════════════════════
+
+function computeDynamicSellThresholds(sm, bet, clock){
+  if(!sm||!clock) return {capture:SELL_CAPTURE_THRESH_DEFAULT, signal:SELL_SIGNAL_THRESH_DEFAULT, reason:'Waiting for model data', mode:'default'};
+
+  const secsLeft = clock.secsLeft;
+  const conviction = bet==='UP' ? sm.aboveProb : sm.belowProb;   // 0–100 model confidence
+  const opposing   = 100 - conviction;
+  const velAligned = (bet==='UP' && sm.velPerSec > 0) || (bet==='DOWN' && sm.velPerSec < 0);
+  const velStrong  = Math.abs(sm.velPerSec) > 0.5;               // >$0.50/sec = strong
+  const projWin    = (bet==='UP' && sm.projClose > parseFloat(active?.strike||0)) ||
+                     (bet==='DOWN' && sm.projClose < parseFloat(active?.strike||0));
+
+  // Indicator consensus: how many of the 6 indicators agree with the bet?
+  const agreeCount = sm.indis ? sm.indis.filter(i =>
+    (bet==='UP' && i.dir==='BULL') || (bet==='DOWN' && i.dir==='BEAR')
+  ).length : 3;
+  const indicatorConsensus = agreeCount / (sm.indis?.length || 6); // 0–1
+
+  // Cushion: how far above/below strike as a pct
+  const cushion = bet==='UP' ? sm.strikePct : -sm.strikePct;  // positive = safe side
+
+  // ── Base thresholds — start at defaults ──
+  let capture = SELL_CAPTURE_THRESH_DEFAULT; // 0.72
+  let signal  = SELL_SIGNAL_THRESH_DEFAULT;  // 0.55
+  let reasons = [];
+  let mode = 'normal';
+
+  // ── Time pressure: less time = sell sooner ──
+  if(secsLeft < 90){
+    capture = 0.45; signal = 0.30;
+    reasons.push('< 90s — sell fast');
+    mode = 'urgent';
+  } else if(secsLeft < 180){
+    capture = 0.55; signal = 0.40;
+    reasons.push('< 3min — tightening');
+    mode = 'tight';
+  } else if(secsLeft < 300){
+    capture = 0.62; signal = 0.48;
+    reasons.push('< 5min — watchful');
+    mode = 'watchful';
+  }
+
+  // ── Model conviction adjustments ──
+  if(conviction >= 75 && velAligned && projWin){
+    // Strong model + momentum aligned → let it ride longer
+    capture = Math.min(0.88, capture + 0.10);
+    signal  = Math.min(0.72, signal  + 0.10);
+    reasons.push(`${conviction}% conviction — hold longer`);
+    mode = mode==='normal'?'hold':'hold+'+mode;
+  } else if(conviction >= 65 && velAligned){
+    capture = Math.min(0.82, capture + 0.05);
+    signal  = Math.min(0.65, signal  + 0.05);
+    reasons.push(`${conviction}% conviction`);
+  } else if(conviction < 55){
+    // Weak model confidence → sell earlier
+    capture = Math.max(0.50, capture - 0.10);
+    signal  = Math.max(0.35, signal  - 0.08);
+    reasons.push(`Low confidence ${conviction}% — exit early`);
+    mode = 'cautious';
+  }
+
+  // ── Opposing model pressure: model turning against bet ──
+  if(opposing >= 65){
+    capture = Math.max(0.40, Math.min(capture, 0.50));
+    signal  = Math.max(0.25, Math.min(signal,  0.35));
+    reasons.push(`Model ${opposing}% against — sell soon`);
+    mode = 'exit';
+  }
+
+  // ── Indicator consensus ──
+  if(indicatorConsensus >= 0.8 && secsLeft > 200){
+    // 5–6 of 6 indicators aligned → strong signal, hold longer
+    capture = Math.min(0.88, capture + 0.06);
+    signal  = Math.min(0.70, signal  + 0.06);
+    reasons.push(`${agreeCount}/6 indicators aligned`);
+  } else if(indicatorConsensus <= 0.35){
+    // Only 0–2 of 6 aligned → weak, sell earlier
+    capture = Math.max(0.45, capture - 0.08);
+    signal  = Math.max(0.30, signal  - 0.06);
+    reasons.push(`Only ${agreeCount}/6 indicators agree`);
+  }
+
+  // ── Velocity: strong opposing move = sell now ──
+  if(!velAligned && velStrong){
+    capture = Math.max(0.40, capture - 0.15);
+    signal  = Math.max(0.25, signal  - 0.12);
+    reasons.push('Strong reversal velocity');
+    mode = mode==='normal'?'reversal':'reversal+'+mode;
+  } else if(!velAligned && !velStrong && secsLeft > 300){
+    capture = Math.max(0.55, capture - 0.05);
+    reasons.push('Velocity not aligned');
+  }
+
+  // ── Cushion: price already deep in winning territory ──
+  if(cushion > 0.5 && secsLeft > 300){
+    // Well above/below strike with time to go → hold for more
+    capture = Math.min(0.90, capture + 0.05);
+    reasons.push(`+${cushion.toFixed(2)}% cushion`);
+  } else if(cushion < -0.2){
+    // Price near or past strike against us
+    capture = Math.max(0.45, capture - 0.08);
+    signal  = Math.max(0.30, signal  - 0.06);
+    reasons.push('Near strike boundary');
+  }
+
+  // ── Hard floor: signal must always be below capture ──
+  signal = Math.min(signal, capture - 0.08);
+  // Round to nearest 5%
+  capture = Math.round(capture * 20) / 20;
+  signal  = Math.round(signal  * 20) / 20;
+  // Clamp to sane range
+  capture = Math.max(0.35, Math.min(0.92, capture));
+  signal  = Math.max(0.20, Math.min(0.85, signal));
+
+  const reason = reasons.slice(0,2).join(' · ') || 'Model nominal';
+  return {capture, signal, reason, mode,
+    conviction, agreeCount, velAligned, secsLeft};
+}
+
+// Apply dynamic thresholds from model — call this every render tick when active
+function applyDynamicThresholds(sm, bet, clock){
+  if(!active||!sm||!clock) return;
+  const t = computeDynamicSellThresholds(sm, bet, clock);
+  sellCaptureThresh = t.capture;
+  sellSignalThresh  = t.signal;
+  // Update UI display
+  const cv = document.getElementById('capture-thresh-val');
+  const sv = document.getElementById('signal-thresh-val');
+  const rv = document.getElementById('thresh-reason');
+  if(cv){ cv.textContent = Math.round(t.capture*100)+'%';
+    cv.style.color = t.mode==='exit'||t.mode.includes('reversal')?'#ff4566':t.mode==='hold'||t.mode.includes('hold')?'#00e5a0':'#f7c948'; }
+  if(sv){ sv.textContent = Math.round(t.signal*100)+'%';
+    sv.style.color = t.mode==='exit'||t.mode.includes('reversal')?'#ff456680':'#f7c94880'; }
+  if(rv){ rv.textContent = t.reason; }
+  // Update sell meter markers
+  const tp = document.getElementById('sell-meter-tp');
+  if(tp) tp.style.left = Math.round(t.capture*100)+'%';
+  const th = document.getElementById('sell-meter-thresh');
+  if(th) th.style.left = Math.round(t.signal*100)+'%';
+}
+
+// Update the live-guard notice based on whether we have a real YES price
+function updateThreshGuard(){
+  const guard = document.getElementById('thresh-live-guard');
+  if(!guard) return;
+  if(kalshiYESPrice !== null){
+    guard.textContent = '✅ Live YES price — auto-sell active';
+    guard.style.color = '#00e5a040';
+  } else {
+    guard.textContent = '⚡ Auto-sell requires live Kalshi YES price';
+    guard.style.color = '#2a2a40';
+  }
 }
 
 function applyRiskSizing(){
@@ -1933,14 +2207,33 @@ function checkRiskAutoExit(unrealizedPnL){
   const tp=maxProfit*RISK_TP_ROI;
   const sl=-active.amount*Math.abs(RISK_SL_ROI);
 
-  if(unrealizedPnL>=tp){
+  // ── LIVE PRICE GUARD ──
+  // Profit-capture and TP auto-sells only fire when we have a real
+  // Kalshi order-book YES price — never on model estimates.
+  // Without this, a noisy model spike could trigger a sell that fills
+  // at a much worse price (or not at all on FOK).
+  const hasLiveYES = kalshiYESPrice !== null;
+
+  // Sell-capture: ≥ SELL_CAPTURE_THRESH of max profit locked in (live price only)
+  const sellCapture = hasLiveYES && maxProfit>0 && unrealizedPnL>=maxProfit*sellCaptureThresh;
+  // Take-profit: legacy ROI-based exit (live price only)
+  const tpHit = hasLiveYES && unrealizedPnL>=tp;
+  // Stop-loss: allowed on estimated price too — we always want to cut losses
+  const slHit = unrealizedPnL<=sl;
+
+  if(sellCapture){
     riskState.tpTriggered=true;
-    showToast(`🎯 Take profit hit! +$${unrealizedPnL.toFixed(2)} — closing trade`,'#00e5a0');
-    setTimeout(()=>closeTrade(),800);
-  } else if(unrealizedPnL<=sl){
+    const pct=Math.round(unrealizedPnL/maxProfit*100);
+    showToast(`💰 ${pct}% of max profit captured (+$${unrealizedPnL.toFixed(2)}) — selling`,'#00e5a0');
+    setTimeout(()=>closeTradeWithSell('profit_capture'),800);
+  } else if(tpHit){
+    riskState.tpTriggered=true;
+    showToast(`🎯 Take profit hit! +$${unrealizedPnL.toFixed(2)} — selling`,'#00e5a0');
+    setTimeout(()=>closeTradeWithSell('take_profit'),800);
+  } else if(slHit){
     riskState.slTriggered=true;
-    showToast(`🛑 Stop loss hit! -$${Math.abs(unrealizedPnL).toFixed(2)} — closing trade`,'#ff4566');
-    setTimeout(()=>closeTrade(),800);
+    showToast(`🛑 Stop loss hit! -$${Math.abs(unrealizedPnL).toFixed(2)} — selling`,'#ff4566');
+    setTimeout(()=>closeTradeWithSell('stop_loss'),800);
   }
 }
 
@@ -2017,6 +2310,8 @@ function renderActiveTrade(clock){
   // Track peak unrealized P&L
   if(peakROI===null||unrealizedPnL>peakROI) peakROI=unrealizedPnL;
 
+  // ── Dynamic sell thresholds from model ──
+  applyDynamicThresholds(sm, active.bet, clock);
   // ── Risk: check take-profit / stop-loss auto-exit ──
   checkRiskAutoExit(unrealizedPnL);
   renderRiskPanel();
@@ -2048,6 +2343,32 @@ function renderActiveTrade(clock){
     const pkPct=Math.min(98,(pkMove/maxProfit)*98);
     rpm.style.display='block'; rpm.style.left=`${pkPct}%`;
   } else rpm.style.display='none';
+
+  // ── Sell opportunity meter ──
+  const sellMeter=document.getElementById('sell-meter');
+  if(sellMeter&&maxProfit>0){
+    const sellScore=Math.max(0,Math.min(1,unrealizedPnL/maxProfit));
+    const sellPct=Math.round(sellScore*100);
+    sellMeter.style.display=unrealizedPnL>0.05?'block':'none';
+    document.getElementById('sell-pct').textContent=`${sellPct}% captured`;
+    document.getElementById('sell-pct').style.color=sellScore>=sellCaptureThresh?'#00e5a0':sellScore>=sellSignalThresh?'#f7c948':'#888';
+    const bar=document.getElementById('sell-meter-bar');
+    bar.style.width=`${Math.min(99,sellPct)}%`;
+    bar.style.background=sellScore>=sellCaptureThresh?'#00e5a0':sellScore>=sellSignalThresh?'#f7c948':'#555';
+    // Show sell vs hold comparison
+    const holdUpside=maxProfit-unrealizedPnL;
+    const svh=document.getElementById('sell-vs-hold');
+    if(svh){
+      if(sellScore>=sellCaptureThresh){
+        svh.innerHTML=`<span style="color:#00e5a0">Sell now +${fmtUSD(unrealizedPnL)}</span> vs <span style="color:#555">hold for +${fmtUSD(maxProfit)} (needs expiry win)</span>`;
+      } else if(sellScore>=sellSignalThresh){
+        svh.innerHTML=`Sell now <span style="color:#f7c948">+${fmtUSD(unrealizedPnL)}</span> vs hold upside <span style="color:#555">+${fmtUSD(holdUpside)}</span> more`;
+      } else {
+        svh.innerHTML=`${fmtUSD(holdUpside)} more profit available if held to expiry`;
+        svh.style.color='#555';
+      }
+    }
+  }
 
   // Window bar
   const col=clock.secsLeft<120?'#ff4566':clock.secsLeft<300?'#f7c948':'#00e5a050';
@@ -2147,6 +2468,41 @@ function placeTrade(bet){
       showToast(`⚠️ Kalshi order failed: ${e.message}`,'#ff4566');
     });
   }
+}
+
+// closeTradeWithSell: attempt to sell the contract on Kalshi (preferred over holding to expiry)
+// exitReason: 'profit_capture' | 'take_profit' | 'stop_loss' | 'manual_sell'
+async function closeTradeWithSell(exitReason='manual_sell'){
+  if(!active||!livePrice)return;
+  const sv=parseFloat(active.strike);
+  const sm=computeStrikeModel(prices,sv);
+  const currentYES=sm?estimateYESPrice(sm,active.bet):active.entryYESPrice;
+  const winNow=(active.bet==='UP'&&livePrice>sv)||(active.bet==='DOWN'&&livePrice<sv);
+  const unrealizedPnL=kalshiUnrealizedPnL(active.contracts,active.entryYESPrice,currentYES);
+
+  // P&L: if selling early we use unrealized (contract sale proceeds) not binary win/loss
+  const isSell=exitReason==='profit_capture'||exitReason==='manual_sell'||exitReason==='take_profit';
+  const finalPnL=isSell?unrealizedPnL:(winNow?kalshiPotentialProfit(active.amount,active.entryYESPrice):unrealizedPnL);
+
+  exitIdx=prices.length-1;
+  const exitResult=finalPnL>=0?'WIN':'LOSS';
+  const exitLabel=exitReason==='profit_capture'?'sold (profit capture)':exitReason==='take_profit'?'sold (TP)':exitReason==='stop_loss'?'sold (SL)':'sold (manual)';
+  trades=trades.map(t=>t.id!==active.id?t:{...t,result:exitResult,exit:livePrice,finalPnL,earlyExit:true,exitReason});
+  recordTrade({...active,result:exitResult,exitReason});
+  updateRiskOnTradeClosed(exitResult,finalPnL);
+  active=null; peakROI=null; priceChartDirty=true; projChartDirty=true;
+
+  // Attempt Kalshi sell order — place limit sell at current YES price
+  if(authConnected&&kalshiOrderId){
+    try{
+      await kalshiSellPosition(currentYES);
+      showToast(`✅ Sold on Kalshi — ${exitLabel} +$${finalPnL>=0?'':'-'}${Math.abs(finalPnL).toFixed(2)}`,'#00e5a0');
+      refreshPortfolio();
+    } catch(e){
+      showToast(`⚠️ Kalshi sell failed: ${e.message} — trade closed locally`,'#f7c948');
+    }
+  }
+  showSetup(); renderLog(); renderRiskPanel(); renderTradeSetup();
 }
 
 function closeTrade(){
@@ -2357,6 +2713,17 @@ async function kalshiPlaceOrder(bet, amountDollars){
 }
 
 // Close position — sell back contracts at market
+// Sell our YES contracts at the current market price (limit order)
+// Kalshi: to sell YES contracts you place a NO buy order at (1 - sellPrice)
+// kalshiSellPosition — delegates to the proven kalshiClosePosition path
+// (action:'sell' on original side via the Vercel proxy, RSA-PSS signed server-side)
+async function kalshiSellPosition(currentYESPrice){
+  if(!kalshiOrderId||!active) throw new Error('No active order to sell');
+  // kalshiClosePosition already uses the correct ticker, side, action:'sell',
+  // fill_or_kill, and the Vercel proxy handles signing — no duplication needed
+  return kalshiClosePosition();
+}
+
 async function kalshiClosePosition(){
   if(!kalshiOrderId||!kalshiOrderSide||!kalshiOrderContracts) return;
   if(!authConnected) return;
@@ -2591,6 +2958,7 @@ async function init(){
   nnInit();
   setInterval(clockTick,1000);
   setInterval(priceTick,5000); // REST watchdog — only fires if WS dead
+
   clockTick(); renderHeader();
   // Load initial candle history
   const data=await loadInit();
