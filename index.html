@@ -22,7 +22,6 @@ input[type=number]{-moz-appearance:textfield}
 #hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
 .logo-k{font-size:9px;letter-spacing:5px;color:#f7c948}
 .logo-m{font-size:20px;font-weight:900;letter-spacing:-1px;background:linear-gradient(100deg,#f7c948,#ff7b00);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.logo-m.eth-mode{background:linear-gradient(100deg,#a78bfa,#7b9fff);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
 .hdr-r{text-align:right}
 .hdr-t{font-size:9px;color:#333;margin-bottom:2px}
 .dot-row{display:flex;align-items:center;gap:5px;justify-content:flex-end}
@@ -35,17 +34,19 @@ input[type=number]{-moz-appearance:textfield}
 /* asset toggle */
 #asset-toggle{display:flex;gap:6px;margin-bottom:9px}
 .at-btn{flex:1;padding:7px 0;border-radius:10px;border:1px solid #1a1a35;cursor:pointer;font-family:inherit;font-size:10px;letter-spacing:3px;font-weight:700;background:#0c0c1c;color:#444;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:5px}
-.at-btn.active{background:#0f1f2e;border-color:#7b9fff60;color:#7b9fff;box-shadow:0 0 10px #7b9fff20}
-.at-btn[data-asset="ETH"].active{background:#1a0f2e;border-color:#a78bfa60;color:#a78bfa;box-shadow:0 0 10px #a78bfa20}
-.at-icon{font-size:12px}
-.at-badge{font-size:7px;padding:1px 5px;border-radius:4px;margin-left:4px;font-weight:900;letter-spacing:1px}
+.at-btn.at-active{background:#0f1f2e;border-color:#f7c94860;color:#f7c948;box-shadow:0 0 10px #f7c94820}
+.at-btn.at-active.eth{background:#1a0f2e;border-color:#a78bfa60;color:#a78bfa;box-shadow:0 0 10px #a78bfa20}
+.at-icon{font-size:13px}
+.logo-m.eth{background:linear-gradient(100deg,#a78bfa,#7b9fff);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.at-live{font-size:7px;padding:1px 5px;border-radius:3px;font-weight:900;letter-spacing:1px;background:#00e5a020;color:#00e5a0;border:1px solid #00e5a040;margin-left:3px;display:none}
+.at-live.show{display:inline}
+.at-pnl{font-size:7px;font-weight:900;margin-left:2px}
 
-/* switch advisory banner */
-#switch-advisory{background:#0f1a0f;border:1px solid #00e5a040;border-radius:9px;padding:7px 11px;margin-bottom:9px;font-size:9px;color:#00e5a0;display:none;align-items:center;gap:7px;flex-wrap:wrap}
-#switch-adv-icon{font-size:13px;flex-shrink:0}
+/* switch advisory */
+#switch-adv{background:#0f1a0f;border:1px solid #00e5a040;border-radius:9px;padding:7px 11px;margin-bottom:9px;font-size:9px;color:#00e5a0;display:none;align-items:center;gap:7px;flex-wrap:wrap}
 #switch-adv-text{flex:1;min-width:0;line-height:1.4}
 #switch-adv-btn{background:#00e5a0;color:#07070f;border:none;border-radius:6px;padding:3px 9px;font-size:8px;font-weight:900;letter-spacing:2px;cursor:pointer;font-family:inherit;flex-shrink:0}
-#switch-adv-dismiss{background:none;border:none;color:#00e5a060;cursor:pointer;font-size:11px;padding:0 2px;flex-shrink:0}
+#switch-adv-x{background:none;border:none;color:#00e5a060;cursor:pointer;font-size:12px;padding:0 2px;flex-shrink:0}
 
 /* top row */
 #top-row{display:flex;gap:9px;margin-bottom:10px}
@@ -211,6 +212,22 @@ input[type=number]{-moz-appearance:textfield}
 /* toast */
 #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);padding:9px 18px;border-radius:10px;font-size:11px;font-family:'Courier New',monospace;font-weight:700;letter-spacing:1px;pointer-events:none;opacity:0;transition:opacity .3s;z-index:9999;max-width:340px;text-align:center}
 
+/* dual trade bar */
+#dual-bar{position:fixed;bottom:0;left:0;right:0;z-index:900;background:#07070f;border-top:1px solid #1a1a35;padding:0;max-width:440px;margin:0 auto}
+.dual-bar-inner{display:flex;align-items:stretch;height:58px}
+.dual-cell{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;padding:6px 8px;transition:background .1s}
+.dual-cell:active{background:#1a1a35}
+.dual-cell.active-asset{background:#0c0c1c}
+.dual-divider{width:1px;background:#1a1a35;margin:8px 0}
+.dual-asset{font-size:8px;letter-spacing:3px;color:#444;font-weight:700}
+.dual-bet{font-size:10px;font-weight:900;letter-spacing:2px}
+.dual-pnl{font-size:13px;font-weight:900;letter-spacing:-0.5px;line-height:1}
+.dual-cap{font-size:7px;color:#444;letter-spacing:1px}
+.dual-cell.no-trade .dual-bet{color:#2a2a40}
+.dual-cell.no-trade .dual-pnl{color:#2a2a40;font-size:10px}
+/* push app content up when dual bar is visible */
+body.dual-active #app{padding-bottom:74px}
+
 /* footnote */
 .fnote{font-size:7px;color:#0e0e1c;letter-spacing:2px;text-align:center;margin-top:14px}
 
@@ -224,7 +241,7 @@ input[type=number]{-moz-appearance:textfield}
 <div id="app">
 
   <div id="hdr">
-    <div><div class="logo-k">KALSHI</div><div class="logo-m" id="hdr-asset-label">BTC 15M EDGE</div></div>
+    <div><div class="logo-k">KALSHI</div><div class="logo-m" id="hdr-logo">BTC 15M EDGE</div></div>
     <div class="hdr-r">
       <div class="hdr-t" id="hdr-t">--:--:--</div>
       <div class="dot-row">
@@ -238,25 +255,21 @@ input[type=number]{-moz-appearance:textfield}
 
   <!-- ASSET TOGGLE -->
   <div id="asset-toggle">
-    <button class="at-btn active" id="at-btc" data-asset="BTC" onclick="switchAsset('BTC')">
-      <span class="at-icon">₿</span> BTC
-    </button>
-    <button class="at-btn" id="at-eth" data-asset="ETH" onclick="switchAsset('ETH')">
-      <span class="at-icon">Ξ</span> ETH
-    </button>
+    <button class="at-btn at-active" id="at-btc" onclick="switchAsset('BTC')"><span class="at-icon">₿</span> BTC<span class="at-live" id="at-btc-live">● LIVE</span><span class="at-pnl" id="at-btc-pnl"></span></button>
+    <button class="at-btn" id="at-eth" onclick="switchAsset('ETH')"><span class="at-icon">Ξ</span> ETH<span class="at-live" id="at-eth-live">● LIVE</span><span class="at-pnl" id="at-eth-pnl"></span></button>
   </div>
 
-  <!-- SWITCH ADVISORY BANNER -->
-  <div id="switch-advisory" style="display:none">
-    <span id="switch-adv-icon">⚡</span>
+  <!-- SWITCH ADVISORY -->
+  <div id="switch-adv">
+    <span>⚡</span>
     <span id="switch-adv-text"></span>
-    <button id="switch-adv-btn" onclick="acceptSwitchAdvisory()">SWITCH</button>
-    <button id="switch-adv-dismiss" onclick="dismissSwitchAdvisory()">✕</button>
+    <button id="switch-adv-btn" onclick="acceptAdvisory()">SWITCH</button>
+    <button id="switch-adv-x" onclick="dismissAdvisory()">✕</button>
   </div>
 
   <div id="top-row">
     <div id="pc">
-      <div style="font-size:8px;letter-spacing:4px;color:#333;margin-bottom:2px" id="price-asset-label">BTC/USD</div>
+      <div style="font-size:8px;letter-spacing:4px;color:#333;margin-bottom:2px" id="price-lbl">BTC/USD</div>
       <div id="lp">…</div>
       <div id="pd"></div>
       <div id="si"></div>
@@ -424,6 +437,7 @@ input[type=number]{-moz-appearance:textfield}
         <button class="bbtn" id="bup" disabled style="border-color:#00e5a0;color:#00e5a0;background:transparent">UP<div class="bh" id="uph"></div></button>
         <button class="bbtn" id="bdn" disabled style="border-color:#ff4566;color:#ff4566;background:transparent">DOWN<div class="bh" id="dnh"></div></button>
       </div>
+      <button id="auto-buy-btn" onclick="armAutoBuy()" style="width:100%;margin-top:7px;padding:7px;border-radius:9px;border:1px solid #2a2a50;background:#1a1a35;color:#7b9fff;font-family:inherit;font-size:8px;letter-spacing:2px;font-weight:700;cursor:pointer">⚡ ARM AUTO-BUY</button>
       <div id="contract-preview">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
           <div style="font-size:8px;color:#2a2a40;letter-spacing:3px">KALSHI CONTRACT</div>
@@ -696,52 +710,69 @@ input[type=number]{-moz-appearance:textfield}
   <div class="fnote">NOT FINANCIAL ADVICE · SIGNAL UPDATES EVERY 5S · PROBABILISTIC MODEL</div>
 
 </div><!-- /app -->
+
+<!-- DUAL TRADE BAR — fixed bottom, shows both BTC+ETH open trades simultaneously -->
+<div id="dual-bar" style="display:none">
+  <div class="dual-bar-inner">
+    <div class="dual-cell" id="dual-btc" onclick="switchAsset('BTC')">
+      <div class="dual-asset">₿ BTC</div>
+      <div class="dual-bet" id="dual-btc-bet">—</div>
+      <div class="dual-pnl" id="dual-btc-pnl">—</div>
+      <div class="dual-cap" id="dual-btc-cap"></div>
+    </div>
+    <div class="dual-divider"></div>
+    <div class="dual-cell" id="dual-eth" onclick="switchAsset('ETH')">
+      <div class="dual-asset">Ξ ETH</div>
+      <div class="dual-bet" id="dual-eth-bet">—</div>
+      <div class="dual-pnl" id="dual-eth-pnl">—</div>
+      <div class="dual-cap" id="dual-eth-cap"></div>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
 'use strict';
 // ═══════════════════════════════════════════════════
-// ASSET MANAGEMENT — BTC / ETH switchable
+// ASSET MANAGEMENT — BTC / ETH
 // ═══════════════════════════════════════════════════
-let activeAsset = 'BTC'; // 'BTC' or 'ETH'
-const ASSET_CONFIG = {
+let activeAsset = 'BTC';
+const ASSET_CFG = {
   BTC: {
-    label: 'BTC 15M EDGE',
-    priceLabel: 'BTC/USD',
+    label: 'BTC 15M EDGE', priceLabel: 'BTC/USD',
     series: 'KXBTC15M',
     binanceStream: 'btcusdt@aggTrade',
     krakenPair: 'XBT/USD',
-    krakenTopic: 'ticker',
     priceMin: 1000,
     color: '#f7c948',
-    colorDim: '#f7c94840',
-    accentClass: '',
+    logoClass: '',
+    btnClass: 'at-active',
   },
   ETH: {
-    label: 'ETH 15M EDGE',
-    priceLabel: 'ETH/USD',
+    label: 'ETH 15M EDGE', priceLabel: 'ETH/USD',
     series: 'KXETH15M',
     binanceStream: 'ethusdt@aggTrade',
     krakenPair: 'ETH/USD',
-    krakenTopic: 'ticker',
     priceMin: 50,
     color: '#a78bfa',
-    colorDim: '#a78bfa40',
-    accentClass: 'eth',
+    logoClass: 'eth',
+    btnClass: 'at-active eth',
   },
 };
 
-// Per-asset state factory
-function mkAssetState(){
+// Per-asset isolated state
+function mkAssetSt(){
   return {
-    prices: [], livePrice: null, pred: null, source: '', mode: 'loading',
+    prices: [], livePrice: null, source: '',
     active: null, trades: [], peakROI: null, exitIdx: null,
     peakCapture: null, trailArmed: false,
     strikeInput: 0,
     nnW: null, nnData: [],
     kalshiMarket: null, kalshiYESPrice: null, kalshiYESLastWS: 0,
     kalshiAutoStrike: null, kalshiWS: null, wsReconnectTimer: null,
-    kalshiOrderId: null,
+    kalshiOrderId: null, kalshiOrderSide: null, kalshiOrderContracts: 0,
+    kalshiOrderCost: 0, autoCloseArmed: false,
     riskState: {
       dailyLoss: 0, dailyStart: new Date().toDateString(),
       consecutiveLosses: 0, lastLossTime: 0, accountBalance: 0,
@@ -749,54 +780,63 @@ function mkAssetState(){
     },
     sellCaptureThresh: 0.60,
     sellSignalThresh: 0.45,
-    // price feed
-    binanceWS: null, binanceWSFailures: 0, binanceWSReconnect: null, binanceWSSource: '',
+    binanceWS: null, binanceWSFailures: 0, binanceWSReconnect: null,
+    binanceWSSource: '',
+    krakenWSInst: null,
     lastWSTime: 0,
+    tickBuffer: [], tickWindowStart: 0, lastTickPrice: null,
     priceChartDirty: true, projChartDirty: true, pnlChartDirty: true,
     advisoryDismissed: false,
+    pred: null,
   };
 }
-const assetState = { BTC: mkAssetState(), ETH: mkAssetState() };
+const AST = { BTC: mkAssetSt(), ETH: mkAssetSt() };
+function A(){ return AST[activeAsset]; }
 
-// ── Proxy accessors — read/write active asset state ──
-// (Kept as let variables so all existing code works without changes)
-function AS(){ return assetState[activeAsset]; }
-
-// ═══════════════════════════════════════════════════
-// STATE (proxied to active asset)
-// ═══════════════════════════════════════════════════
-// These getters/setters let existing code continue using bare variable names
-// by referencing the active asset's state object.
+// Proxy bare variable names → active asset state so all existing code works unchanged
 Object.defineProperties(window, {
-  prices:       { get(){ return AS().prices; },       set(v){ AS().prices=v; },       configurable:true },
-  livePrice:    { get(){ return AS().livePrice; },    set(v){ AS().livePrice=v; },    configurable:true },
-  pred:         { get(){ return AS().pred; },         set(v){ AS().pred=v; },         configurable:true },
-  source:       { get(){ return AS().source; },       set(v){ AS().source=v; },       configurable:true },
-  active:       { get(){ return AS().active; },       set(v){ AS().active=v; },       configurable:true },
-  trades:       { get(){ return AS().trades; },       set(v){ AS().trades=v; },       configurable:true },
-  peakROI:      { get(){ return AS().peakROI; },      set(v){ AS().peakROI=v; },      configurable:true },
-  exitIdx:      { get(){ return AS().exitIdx; },      set(v){ AS().exitIdx=v; },      configurable:true },
-  peakCapture:  { get(){ return AS().peakCapture; },  set(v){ AS().peakCapture=v; },  configurable:true },
-  trailArmed:   { get(){ return AS().trailArmed; },   set(v){ AS().trailArmed=v; },   configurable:true },
-  strikeInput:  { get(){ return AS().strikeInput; },  set(v){ AS().strikeInput=v; },  configurable:true },
-  nnW:          { get(){ return AS().nnW; },          set(v){ AS().nnW=v; },          configurable:true },
-  nnData:       { get(){ return AS().nnData; },       set(v){ AS().nnData=v; },       configurable:true },
-  kalshiMarket: { get(){ return AS().kalshiMarket; }, set(v){ AS().kalshiMarket=v; }, configurable:true },
-  kalshiYESPrice:  { get(){ return AS().kalshiYESPrice; },  set(v){ AS().kalshiYESPrice=v; },  configurable:true },
-  kalshiYESLastWS: { get(){ return AS().kalshiYESLastWS; }, set(v){ AS().kalshiYESLastWS=v; }, configurable:true },
-  kalshiAutoStrike:{ get(){ return AS().kalshiAutoStrike; },set(v){ AS().kalshiAutoStrike=v; },configurable:true },
-  kalshiWS:     { get(){ return AS().kalshiWS; },     set(v){ AS().kalshiWS=v; },     configurable:true },
-  wsReconnectTimer:{ get(){ return AS().wsReconnectTimer; },set(v){ AS().wsReconnectTimer=v; },configurable:true },
-  kalshiOrderId:{ get(){ return AS().kalshiOrderId; },set(v){ AS().kalshiOrderId=v; },configurable:true },
-  riskState:    { get(){ return AS().riskState; },    set(v){ AS().riskState=v; },    configurable:true },
-  sellCaptureThresh:{ get(){ return AS().sellCaptureThresh; },set(v){ AS().sellCaptureThresh=v; },configurable:true },
-  sellSignalThresh: { get(){ return AS().sellSignalThresh; }, set(v){ AS().sellSignalThresh=v; }, configurable:true },
-  priceChartDirty: { get(){ return AS().priceChartDirty; },set(v){ AS().priceChartDirty=v; },configurable:true },
-  projChartDirty:  { get(){ return AS().projChartDirty; }, set(v){ AS().projChartDirty=v; }, configurable:true },
-  pnlChartDirty:   { get(){ return AS().pnlChartDirty; },  set(v){ AS().pnlChartDirty=v; }, configurable:true },
+  prices:          {get(){return A().prices;},          set(v){A().prices=v;},          configurable:true},
+  livePrice:       {get(){return A().livePrice;},       set(v){A().livePrice=v;},       configurable:true},
+  pred:            {get(){return A().pred;},            set(v){A().pred=v;},            configurable:true},
+  source:          {get(){return A().source;},          set(v){A().source=v;},          configurable:true},
+  active:          {get(){return A().active;},          set(v){A().active=v;},          configurable:true},
+  trades:          {get(){return A().trades;},          set(v){A().trades=v;},          configurable:true},
+  peakROI:         {get(){return A().peakROI;},         set(v){A().peakROI=v;},         configurable:true},
+  exitIdx:         {get(){return A().exitIdx;},         set(v){A().exitIdx=v;},         configurable:true},
+  peakCapture:     {get(){return A().peakCapture;},     set(v){A().peakCapture=v;},     configurable:true},
+  trailArmed:      {get(){return A().trailArmed;},      set(v){A().trailArmed=v;},      configurable:true},
+  strikeInput:     {get(){return A().strikeInput;},     set(v){A().strikeInput=v;},     configurable:true},
+  nnW:             {get(){return A().nnW;},             set(v){A().nnW=v;},             configurable:true},
+  nnData:          {get(){return A().nnData;},          set(v){A().nnData=v;},          configurable:true},
+  kalshiMarket:    {get(){return A().kalshiMarket;},    set(v){A().kalshiMarket=v;},    configurable:true},
+  kalshiYESPrice:  {get(){return A().kalshiYESPrice;},  set(v){A().kalshiYESPrice=v;},  configurable:true},
+  kalshiYESLastWS: {get(){return A().kalshiYESLastWS;}, set(v){A().kalshiYESLastWS=v;}, configurable:true},
+  kalshiAutoStrike:{get(){return A().kalshiAutoStrike;},set(v){A().kalshiAutoStrike=v;},configurable:true},
+  kalshiWS:        {get(){return A().kalshiWS;},        set(v){A().kalshiWS=v;},        configurable:true},
+  wsReconnectTimer:{get(){return A().wsReconnectTimer;},set(v){A().wsReconnectTimer=v;},configurable:true},
+  kalshiOrderId:   {get(){return A().kalshiOrderId;},   set(v){A().kalshiOrderId=v;},   configurable:true},
+  kalshiOrderSide: {get(){return A().kalshiOrderSide;}, set(v){A().kalshiOrderSide=v;}, configurable:true},
+  kalshiOrderContracts:{get(){return A().kalshiOrderContracts;},set(v){A().kalshiOrderContracts=v;},configurable:true},
+  kalshiOrderCost: {get(){return A().kalshiOrderCost;}, set(v){A().kalshiOrderCost=v;}, configurable:true},
+  autoCloseArmed:  {get(){return A().autoCloseArmed;},  set(v){A().autoCloseArmed=v;},  configurable:true},
+  riskState:       {get(){return A().riskState;},       set(v){A().riskState=v;},       configurable:true},
+  sellCaptureThresh:{get(){return A().sellCaptureThresh;},set(v){A().sellCaptureThresh=v;},configurable:true},
+  sellSignalThresh: {get(){return A().sellSignalThresh;}, set(v){A().sellSignalThresh=v;}, configurable:true},
+  priceChartDirty: {get(){return A().priceChartDirty;}, set(v){A().priceChartDirty=v;}, configurable:true},
+  projChartDirty:  {get(){return A().projChartDirty;},  set(v){A().projChartDirty=v;},  configurable:true},
+  pnlChartDirty:   {get(){return A().pnlChartDirty;},   set(v){A().pnlChartDirty=v;},   configurable:true},
 });
 
-// dirty flags for chart redraws — now proxied per asset (see Object.defineProperties above)
+// ═══════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════
+// Note: prices, livePrice, pred, source, active, trades, peakROI, exitIdx,
+// peakCapture, trailArmed, strikeInput, nnW, nnData, kalshiMarket, kalshiYESPrice,
+// kalshiYESLastWS, kalshiAutoStrike, kalshiWS, wsReconnectTimer, kalshiOrderId,
+// kalshiOrderSide, kalshiOrderContracts, kalshiOrderCost, autoCloseArmed,
+// riskState, sellCaptureThresh, sellSignalThresh, priceChartDirty, projChartDirty,
+// pnlChartDirty — all proxied to active asset via Object.defineProperties above.
+let mode='loading';
 let prevSecsLeft=null, blinking=false;
 let amtInput=0;
 
@@ -817,22 +857,21 @@ const CHART_SPRING_DAMP  = 0.70; // slight undershoot gives organic feel
 let lastAdvisory=null;
 
 // ── RISK MANAGEMENT CONSTANTS ──
-const RISK_CONF_MIN    = 58;   // % min model confidence to trade
-const RISK_EV_MIN      = 0.05; // minimum expected value edge
-const RISK_MAX_ACCT_PCT= 0.20; // 20% max account risk per trade
-const RISK_DAILY_CAP   = 0.05; // 5% daily loss cap
-const RISK_CONSEC_BRAKE= 3;    // halve bet after N consecutive losses
-const RISK_TP_ROI      = 0.60; // take profit at 60% of max potential profit
-const RISK_SL_ROI      =-0.50; // stop loss at 50% of bet (unrealized -50%)
-const RISK_COOLDOWN_MS = 60000;// 1-minute cooldown after loss
-const SELL_CAPTURE_THRESH_DEFAULT = 0.60; // lowered from 0.72 — fires sooner, dynamic engine extends when conditions warrant
-const SELL_SIGNAL_THRESH_DEFAULT  = 0.45; // lowered from 0.55
-// Runtime-tunable — proxied per asset via Object.defineProperties
+const RISK_CONF_MIN    = 58;
+const RISK_EV_MIN      = 0.05;
+const RISK_MAX_ACCT_PCT= 0.20;
+const RISK_DAILY_CAP   = 0.05;
+const RISK_CONSEC_BRAKE= 3;
+const RISK_TP_ROI      = 0.60;
+const RISK_SL_ROI      =-0.50;
+const RISK_COOLDOWN_MS = 60000;
+const SELL_CAPTURE_THRESH_DEFAULT = 0.60;
+const SELL_SIGNAL_THRESH_DEFAULT  = 0.45;
+// riskState, sellCaptureThresh, sellSignalThresh, nnW, nnData — proxied per asset above
 
 // ═══════════════════════════════════════════════════
-// NEURAL NETWORK (8→6→1)
+// NEURAL NETWORK (8×9 arch) — weights proxied per asset
 // ═══════════════════════════════════════════════════
-// nnW and nnData are now proxied per asset (see Object.defineProperties above)
 // ═══════════════════════════════════════════════════
 // INDEXEDDB PERSISTENCE — survives page reload
 // Stores: nnData, nnW (weights), trades, riskState
@@ -874,61 +913,55 @@ function idbGet(key){
   });
 }
 
-// Save all critical state to IDB — called after every trade event
+// Save critical state to IDB — per-asset keyed
 async function persistState(asset){
-  const a = asset || activeAsset;
-  const st = assetState[a];
-  const pfx = a.toLowerCase() + '_';
+  const a=asset||activeAsset; const st=AST[a]; const p=a.toLowerCase()+'_';
   try{
-    await idbSet(pfx+'nnData',   st.nnData);
-    await idbSet(pfx+'nnW',      st.nnW);
-    await idbSet(pfx+'trades',   st.trades.slice(-200));
-    await idbSet(pfx+'riskState',st.riskState);
+    await idbSet(p+'nnData',   st.nnData);
+    await idbSet(p+'nnW',      st.nnW);
+    await idbSet(p+'trades',   st.trades.slice(-200));
+    await idbSet(p+'riskState',st.riskState);
   }catch(e){ console.warn('IDB save failed:', e); }
 }
 
-// Load persisted state — called once at startup for both assets
+// Load persisted state — both assets, with BTC legacy key migration
 async function loadPersistedState(){
   try{
     await idbOpen();
-    // Load both assets
     for(const a of ['BTC','ETH']){
-      const st = assetState[a];
-      const pfx = a.toLowerCase() + '_';
-      // Fallback: BTC used old unprefixed keys — migrate them
-      const savedNN    = await idbGet(pfx+'nnData')   || (a==='BTC' ? await idbGet('nnData')    : null);
-      const savedW     = await idbGet(pfx+'nnW')      || (a==='BTC' ? await idbGet('nnW')       : null);
-      const savedTrades= await idbGet(pfx+'trades')   || (a==='BTC' ? await idbGet('trades')    : null);
-      const savedRisk  = await idbGet(pfx+'riskState')|| (a==='BTC' ? await idbGet('riskState') : null);
+      const st=AST[a]; const p=a.toLowerCase()+'_';
+      // BTC falls back to old unprefixed keys for backward compat
+      const savedNN    = await idbGet(p+'nnData')    || (a==='BTC'?await idbGet('nnData'):null);
+      const savedW     = await idbGet(p+'nnW')       || (a==='BTC'?await idbGet('nnW'):null);
+      const savedTrades= await idbGet(p+'trades')    || (a==='BTC'?await idbGet('trades'):null);
+      const savedRisk  = await idbGet(p+'riskState') || (a==='BTC'?await idbGet('riskState'):null);
 
-      if(savedNN && Array.isArray(savedNN) && savedNN.length > 0){
+      if(savedNN&&Array.isArray(savedNN)&&savedNN.length>0){
         st.nnData = savedNN.map(s=>({
           ...s,
-          f: s.f&&s.f.length===6 ? [...s.f, 0, 0, 0] :
-             s.f&&s.f.length===9 ? s.f : null
+          f: s.f&&s.f.length===6?[...s.f,0,0,0]:s.f&&s.f.length===9?s.f:null
         })).filter(s=>s.f!==null);
-        console.log(`IDB [${a}]: loaded ${st.nnData.length} NN training samples`);
+        console.log(`IDB [${a}]: loaded ${st.nnData.length} samples`);
       }
-      if(savedW && savedW.w1 && savedW.w1.length===8 && savedW.w1[0] && savedW.w1[0].length===9
-         && savedW.w1[0][0]!==null && savedW.w1[0][0]!==undefined){
-        st.nnW = savedW;
-        console.log(`IDB [${a}]: restored NN weights (8×9)`);
-      } else if(st.nnData.length >= 2){
-        st.nnW = nnRand();
-        const recent = st.nnData.slice(-40);
-        for(let e=0;e<20;e++) recent.forEach(d=>nnTrainOn(st,d.f,d.l));
-        console.log(`IDB [${a}]: re-trained NN from saved data`);
+      if(savedW&&savedW.w1&&savedW.w1.length===8&&savedW.w1[0]&&savedW.w1[0].length===9
+         &&savedW.w1[0][0]!==null&&savedW.w1[0][0]!==undefined){
+        st.nnW=savedW;
+        console.log(`IDB [${a}]: restored NN weights`);
+      } else if(st.nnData.length>=2){
+        st.nnW=nnRand();
+        const rec=st.nnData.slice(-40);
+        for(let e=0;e<20;e++) rec.forEach(d=>{ const tmp=activeAsset; activeAsset=a; nnTrain(d.f,d.l); activeAsset=tmp; });
+        console.log(`IDB [${a}]: re-trained NN`);
       }
-      if(savedTrades && Array.isArray(savedTrades) && savedTrades.length > 0){
-        st.trades = savedTrades;
+      if(savedTrades&&Array.isArray(savedTrades)&&savedTrades.length>0){
+        st.trades=savedTrades;
         console.log(`IDB [${a}]: restored ${st.trades.length} trades`);
       }
-      if(savedRisk && typeof savedRisk === 'object'){
-        st.riskState.dailyLoss = savedRisk.dailyLoss ?? 0;
-        st.riskState.consecutiveLosses = savedRisk.consecutiveLosses ?? 0;
-        st.riskState.lastLossTime = savedRisk.lastLossTime ?? 0;
-        st.riskState.dailyStart = savedRisk.dailyStart ?? '';
-        console.log(`IDB [${a}]: restored risk state`);
+      if(savedRisk&&typeof savedRisk==='object'){
+        st.riskState.dailyLoss=savedRisk.dailyLoss??0;
+        st.riskState.consecutiveLosses=savedRisk.consecutiveLosses??0;
+        st.riskState.lastLossTime=savedRisk.lastLossTime??0;
+        st.riskState.dailyStart=savedRisk.dailyStart??'';
       }
     }
   }catch(e){ console.warn('IDB load failed:', e); }
@@ -943,21 +976,6 @@ function nnRand(){const r=()=>(Math.random()-.5)*.4;
   // w2: 1×8 (output neuron, 8 inputs from hidden layer)
   return{w1:Array.from({length:8},()=>Array.from({length:9},r)),b1:Array.from({length:8},r),
     w2:Array.from({length:1},()=>Array.from({length:8},r)),b2:[r()]};}
-
-// nnTrainOn: train on a specific asset state (used during IDB load for non-active asset)
-function nnTrainOn(st, inp, lbl, lr=.06){
-  if(!st.nnW||!inp||inp.length!==9)return;
-  if(!st.nnW.w1||st.nnW.w1.length!==8||st.nnW.w1[0].length!==9||st.nnW.w1[0][0]===null){st.nnW=nnRand();}
-  if(inp.some(v=>!isFinite(v)||isNaN(v)))return;
-  const h=st.nnW.w1.map((row,i)=>sig(row.reduce((s,w,j)=>s+(w||0)*inp[j],0)+(st.nnW.b1[i]||0)));
-  const out=sig(st.nnW.w2[0].reduce((s,w,i)=>s+(w||0)*h[i],0)+(st.nnW.b2[0]||0));
-  if(isNaN(out))return;
-  const dO=(out-lbl)*out*(1-out);
-  st.nnW.w2[0]=st.nnW.w2[0].map((w,i)=>(w||0)-lr*dO*h[i]); st.nnW.b2[0]=(st.nnW.b2[0]||0)-lr*dO;
-  const dH=h.map((hi,i)=>dO*(st.nnW.w2[0][i]||0)*hi*(1-hi));
-  st.nnW.w1=st.nnW.w1.map((row,i)=>row.map((w,j)=>(w||0)-lr*dH[i]*inp[j]));
-  st.nnW.b1=st.nnW.b1.map((b,i)=>(b||0)-lr*dH[i]);
-}
 
 function nnFwd(inp){
   if(!nnW)return .5;
@@ -1175,149 +1193,114 @@ function clearStoredData(){
 // ═══════════════════════════════════════════════════
 // ASSET SWITCHING — BTC ↔ ETH
 // ═══════════════════════════════════════════════════
-let switchAdvisoryTarget = null; // pending recommended asset
+let _advisoryTarget = null;
 
 async function switchAsset(asset){
-  if(asset === activeAsset) return;
-  if(active){ showToast('⚠️ Close active trade before switching asset','#f7c948'); return; }
+  if(asset===activeAsset)return;
+  if(active){ showToast('⚠️ Close active trade before switching','#f7c948'); return; }
 
-  const prev = activeAsset;
-  activeAsset = asset;
+  activeAsset=asset;
+  const cfg=ASSET_CFG[asset];
 
-  // Reset tick buffer and chart state for new asset
-  tickBuffer = [];
-  tickWindowStart = 0;
-  lastTickPrice = null;
-  lastWSTime = AS().lastWSTime || 0;
-  chartDisplayPrice = null;
-  chartPriceVel = 0;
-  priceChartDirty = true; projChartDirty = true; pnlChartDirty = true;
+  // Restore this asset's tick buffer (already running in background — no reset needed)
+  lastWSTime=A().lastWSTime||0;
+  chartDisplayPrice=null; chartPriceVel=0;
+  priceChartDirty=true; projChartDirty=true; pnlChartDirty=true;
 
-  // Update UI
-  const cfg = ASSET_CONFIG[asset];
-  document.getElementById('at-btc').classList.toggle('active', asset==='BTC');
-  document.getElementById('at-eth').classList.toggle('active', asset==='ETH');
-  document.getElementById('hdr-asset-label').textContent = cfg.label;
-  document.getElementById('hdr-asset-label').classList.toggle('eth-mode', asset==='ETH');
-  document.getElementById('price-asset-label').textContent = cfg.priceLabel;
+  // Update UI labels and buttons
+  const logo=document.getElementById('hdr-logo');
+  if(logo){ logo.textContent=cfg.label; logo.className='logo-m'+(asset==='ETH'?' eth':''); }
+  const pl=document.getElementById('price-lbl');
+  if(pl) pl.textContent=cfg.priceLabel;
+  document.getElementById('at-btc').className='at-btn'+(asset==='BTC'?' at-active':'');
+  document.getElementById('at-eth').className='at-btn'+(asset==='ETH'?' at-active eth':'');
 
-  // Restore amtInput for this asset (stored separately)
-  const ki = document.getElementById('ki');
-  if(ki && AS().strikeInput > 0) ki.value = AS().strikeInput.toFixed(2);
-  const amtEl = document.getElementById('amt');
-  if(amtEl) amtInput = parseFloat(amtEl.value)||0;
+  // Restore strike input for this asset
+  const ki=document.getElementById('ki');
+  if(ki&&A().strikeInput>0) ki.value=A().strikeInput.toFixed(2);
 
   // Re-init Kalshi for new asset
-  kalshiMarket = null; kalshiYESPrice = null; kalshiAutoStrike = null;
-  kalshiOrderId = null;
+  kalshiMarket=null; kalshiYESPrice=null; kalshiAutoStrike=null; kalshiOrderId=null;
   renderKalshiMarketBar();
   kalshiInit();
 
-  // Inject live price from background feed if available
-  if(AS().livePrice) onNewPrice(AS().livePrice, 'SWITCH');
+  // Inject background price immediately if available
+  if(A().livePrice) onNewPrice(A().livePrice,'SWITCH');
 
-  // Refresh UI panels
-  renderLog();
-  updateBrainPanel();
-  renderRiskPanel();
-  renderSignalPanel();
-  dismissSwitchAdvisory();
-
-  showToast(`Switched to ${asset} 15M ·  Kalshi loading…`, cfg.color);
+  // Refresh all UI panels
+  renderLog(); updateBrainPanel(); renderRiskPanel(); renderSignalPanel();
+  dismissAdvisory();
+  showToast(`Switched to ${asset} 15M · Kalshi loading…`, cfg.color);
 }
 
-// ── Smart Switch Advisory ──
-// Called periodically to check if the other asset is more favorable
-function evaluateSwitchAdvisory(){
-  const other = activeAsset === 'BTC' ? 'ETH' : 'BTC';
-  const ost = assetState[other];
-  const ast = assetState[activeAsset];
+// ── Smart switch advisory ──
+function evalAdvisory(){
+  if(active)return; // never interrupt open trade
+  const other=activeAsset==='BTC'?'ETH':'BTC';
+  const ast=AST[activeAsset]; const ost=AST[other];
+  let score=0; const why=[];
 
-  if(active) return; // never interrupt an open trade
+  // 1. No fixed-strike contract (Up/Down only = live price used as strike)
+  const isUpDown=kalshiMarket&&!kalshiMarket.floor_strike&&!kalshiMarket.cap_strike
+    &&!(kalshiMarket.yes_sub_title||'').match(/\$[\d,]+/);
+  if(isUpDown){ score+=35; why.push('No fixed-strike on '+activeAsset); }
 
-  let reasons = [];
-  let score = 0;
-
-  // 1. No active strike on current asset (Up/Down only = live price as strike)
-  //    This means Kalshi only has Up/Down contracts — fixed-strike market may not be available
-  const currentIsUpDown = kalshiMarket && !kalshiMarket.floor_strike && !kalshiMarket.cap_strike &&
-    !(kalshiMarket.yes_sub_title||'').match(/\$[\d,]+/);
-  if(currentIsUpDown){
-    score += 35;
-    reasons.push('No fixed-strike contract on ' + activeAsset);
-  }
-
-  // 2. Other asset has an active market with fixed strike
+  // 2. Other asset has fixed-strike contract
   if(ost.kalshiMarket){
-    const otherHasStrike = ost.kalshiMarket.floor_strike || ost.kalshiMarket.cap_strike ||
-      (ost.kalshiMarket.yes_sub_title||'').match(/\$[\d,]+/);
-    if(otherHasStrike){ score += 20; reasons.push(other + ' has active fixed-strike contract'); }
+    const ohx=ost.kalshiMarket.floor_strike||ost.kalshiMarket.cap_strike
+      ||(ost.kalshiMarket.yes_sub_title||'').match(/\$[\d,]+/);
+    if(ohx){ score+=20; why.push(other+' has fixed-strike contract'); }
   }
 
   // 3. Wide spread on current asset
   if(kalshiMarket){
-    const bid = parseFloat(kalshiMarket.yes_bid_dollars)||0;
-    const ask = parseFloat(kalshiMarket.yes_ask_dollars)||0;
-    if(bid>0 && ask>0 && (ask-bid) > 0.15){
-      score += 15;
-      reasons.push(`${activeAsset} spread wide ($${(ask-bid).toFixed(2)})`);
-    }
+    const bid=parseFloat(kalshiMarket.yes_bid_dollars)||0;
+    const ask=parseFloat(kalshiMarket.yes_ask_dollars)||0;
+    if(bid>0&&ask>0&&(ask-bid)>0.15){ score+=15; why.push(`${activeAsset} spread $${(ask-bid).toFixed(2)}`); }
   }
 
   // 4. Consecutive losses on current asset
-  if(ast.riskState.consecutiveLosses >= RISK_CONSEC_BRAKE){
-    score += 25;
-    reasons.push(`${activeAsset} on ${ast.riskState.consecutiveLosses}-loss streak`);
+  if(ast.riskState.consecutiveLosses>=RISK_CONSEC_BRAKE){
+    score+=25; why.push(`${activeAsset} ${ast.riskState.consecutiveLosses}-loss streak`);
   }
 
-  // 5. Time of day — BTC dead zone 3am–6am ET (UTC-5) = 8:00–11:00 UTC
-  const utcH = new Date().getUTCHours();
-  if(activeAsset==='BTC' && utcH >= 8 && utcH < 11){
-    score += 10;
-    reasons.push('BTC low-volume window (3–6am ET)');
+  // 5. BTC dead-zone: 3–6am ET = 8–11 UTC
+  const utcH=new Date().getUTCHours();
+  if(activeAsset==='BTC'&&utcH>=8&&utcH<11){ score+=10; why.push('BTC low-volume (3–6am ET)'); }
+
+  // 6. Win rate divergence
+  if(ast.trades.length>=5){
+    const wr=ast.trades.filter(t=>t.result==='WIN').length/ast.trades.length;
+    if(wr<0.40){ score+=20; why.push(`${activeAsset} win rate ${Math.round(wr*100)}%`); }
+  }
+  if(ost.trades.length>=5){
+    const wr=ost.trades.filter(t=>t.result==='WIN').length/ost.trades.length;
+    if(wr>0.60){ score+=15; why.push(`${other} win rate ${Math.round(wr*100)}%`); }
   }
 
-  // 6. Low confidence on current asset vs good historical win rate on other
-  if(ast.trades.length >= 5){
-    const wins = ast.trades.filter(t=>t.result==='WIN').length;
-    const wr = wins/ast.trades.length;
-    if(wr < 0.40){ score += 20; reasons.push(`${activeAsset} win rate low (${Math.round(wr*100)}%)`); }
-  }
-  if(ost.trades.length >= 5){
-    const wins = ost.trades.filter(t=>t.result==='WIN').length;
-    const wr = wins/ost.trades.length;
-    if(wr > 0.60){ score += 15; reasons.push(`${other} win rate strong (${Math.round(wr*100)}%)`); }
-  }
-
-  // Show advisory if score >= 35 and not dismissed
-  const adv = document.getElementById('switch-advisory');
-  if(score >= 35 && !ast.advisoryDismissed && reasons.length > 0){
-    switchAdvisoryTarget = other;
-    document.getElementById('switch-adv-text').textContent =
-      `Switch to ${other}? — ${reasons.slice(0,2).join(' · ')}`;
-    document.getElementById('switch-adv-btn').textContent = `SWITCH TO ${other}`;
-    adv.style.display = 'flex';
-    // Auto-switch if score >= 70 (very clear signal)
-    if(score >= 70){
-      showToast(`⚡ Auto-switching to ${other} — ${reasons[0]}`, ASSET_CONFIG[other].color);
+  const adv=document.getElementById('switch-adv');
+  if(score>=35&&!ast.advisoryDismissed&&why.length){
+    _advisoryTarget=other;
+    document.getElementById('switch-adv-text').textContent=`Switch to ${other}? — ${why.slice(0,2).join(' · ')}`;
+    document.getElementById('switch-adv-btn').textContent=`SWITCH TO ${other}`;
+    adv.style.display='flex';
+    // Auto-switch if overwhelmingly clear
+    if(score>=70){
+      showToast(`⚡ Auto-switching to ${other} — ${why[0]}`,ASSET_CFG[other].color);
       switchAsset(other);
     }
   } else {
-    adv.style.display = 'none';
+    adv.style.display='none';
   }
 }
-
-function acceptSwitchAdvisory(){
-  if(switchAdvisoryTarget) switchAsset(switchAdvisoryTarget);
+function acceptAdvisory(){ if(_advisoryTarget) switchAsset(_advisoryTarget); }
+function dismissAdvisory(){
+  if(_advisoryTarget) AST[activeAsset].advisoryDismissed=true;
+  const adv=document.getElementById('switch-adv');
+  if(adv) adv.style.display='none';
+  _advisoryTarget=null;
 }
-function dismissSwitchAdvisory(){
-  if(switchAdvisoryTarget) assetState[activeAsset].advisoryDismissed = true;
-  document.getElementById('switch-advisory').style.display = 'none';
-  switchAdvisoryTarget = null;
-}
-// Reset dismiss flag when asset changes (so advisory can re-trigger next cycle)
-// and run advisory every 60 seconds
-setInterval(()=>{ assetState[activeAsset].advisoryDismissed = false; evaluateSwitchAdvisory(); }, 60000);
+setInterval(()=>{ AST[activeAsset].advisoryDismissed=false; evalAdvisory(); }, 60000);
 
 function recordTrade(t){
   const f=buildFeatures(t.ep||prices,t.bet,parseFloat(t.strike));
@@ -1363,39 +1346,44 @@ async function loadInit(){
   return null;
 }
 
-// ── Second-resolution tick buffer for 15-min chart ──
-let tickBuffer=[];        // [{t,p}] one entry per price tick
-let tickWindowStart=0;    // UTC ms start of current 15-min window
-let lastTickPrice=null;
-let lastWSTime=0;
+// ── Second-resolution tick buffer — per-asset, both run simultaneously ──
+// tickBuffer/tickWindowStart/lastTickPrice live in AST[asset] (see mkAssetSt)
+let lastWSTime=0; // global — tracks last WS message for REST watchdog
 
 function get15mWindowStart(){const now=Date.now();return now-(now%(15*60*1000));}
 
-function pushTick(price){
+// Push a tick into a specific asset's buffer (defaults to active asset)
+function pushTick(price, asset){
+  const a = asset || activeAsset;
+  const st = AST[a];
   const now=Date.now();
   const ws=get15mWindowStart();
-  if(ws!==tickWindowStart){tickWindowStart=ws;tickBuffer=[];}
-  if(lastTickPrice===price&&tickBuffer.length>0&&now-tickBuffer[tickBuffer.length-1].t<500)return;
-  lastTickPrice=price;
-  tickBuffer.push({t:now,p:price});
-  if(tickBuffer.length>1800)tickBuffer.shift();
+  if(ws!==st.tickWindowStart){st.tickWindowStart=ws; st.tickBuffer=[];}
+  if(st.lastTickPrice===price && st.tickBuffer.length>0 && now-st.tickBuffer[st.tickBuffer.length-1].t<500)return;
+  st.lastTickPrice=price;
+  st.tickBuffer.push({t:now,p:price});
+  if(st.tickBuffer.length>1800)st.tickBuffer.shift();
 }
+
+// Expose active asset's tickBuffer for chart drawing code
+Object.defineProperty(window,'tickBuffer',{get(){return A().tickBuffer;},configurable:true});
 
 function getChartPrices(){
-  return tickBuffer.length>=5?tickBuffer.map(x=>x.p):prices;
+  const tb=A().tickBuffer;
+  return tb.length>=5?tb.map(x=>x.p):prices;
 }
 
-// ── Price feed — asset-aware Binance/Kraken WSes ──
-let btcWS=null, btcWSSource='', btcWSReconnect=null, btcWSFailures=0; // legacy aliases
+// ── Binance WebSocket — aggTrade, sub-100ms ──
+// ── Price feed — asset-aware dual Binance/Kraken WSes ──
+// Both BTC and ETH feeds run simultaneously; only active asset drives onNewPrice
 
 function onNewPrice(price,src){
-  const cfg = ASSET_CONFIG[activeAsset];
+  const cfg=ASSET_CFG[activeAsset];
   if(!price||price<cfg.priceMin)return;
   livePrice=price; source=src;
-  pushTick(price);
+  pushTick(price, activeAsset);
   prices[prices.length-1]=price;
-  lastWSTime=Date.now();
-  AS().lastWSTime=Date.now();
+  lastWSTime=Date.now(); A().lastWSTime=Date.now();
   priceChartDirty=true; projChartDirty=true;
   renderPrice();
   renderSignalPanelFast();
@@ -1404,49 +1392,47 @@ function onNewPrice(price,src){
 }
 
 function connectAssetBinanceWS(asset){
-  const st = assetState[asset];
-  const cfg = ASSET_CONFIG[asset];
-  if(st.binanceWS && st.binanceWS.readyState < 2) return;
-  if(st.binanceWSReconnect){clearTimeout(st.binanceWSReconnect); st.binanceWSReconnect=null;}
+  const st=AST[asset]; const cfg=ASSET_CFG[asset];
+  if(st.binanceWS&&st.binanceWS.readyState<2)return;
+  if(st.binanceWSReconnect){clearTimeout(st.binanceWSReconnect);st.binanceWSReconnect=null;}
   try{
-    const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${cfg.binanceStream}`);
-    st.binanceWS = ws;
-    ws.onopen=()=>{st.binanceWSSource='BINANCE'; st.binanceWSFailures=0; if(asset===activeAsset)btcWSSource='BINANCE';};
+    const ws=new WebSocket(`wss://stream.binance.com:9443/ws/${cfg.binanceStream}`);
+    st.binanceWS=ws;
+    ws.onopen=()=>{st.binanceWSSource='BINANCE';st.binanceWSFailures=0;};
     ws.onmessage=e=>{
       try{
-        const d=JSON.parse(e.data); const p=parseFloat(d.p);
+        const d=JSON.parse(e.data);const p=parseFloat(d.p);
         if(p>cfg.priceMin){
           if(asset===activeAsset) onNewPrice(p,'BINANCE');
-          else assetState[asset].livePrice=p;
+          else { st.livePrice=p; pushTick(p, asset); }
         }
       }catch(_){}
     };
     ws.onerror=()=>{st.binanceWSFailures++;};
     ws.onclose=()=>{
-      st.binanceWSSource=''; if(asset===activeAsset)btcWSSource='';
+      st.binanceWSSource='';
       const delay=Math.min(1000*Math.pow(2,st.binanceWSFailures),10000);
       st.binanceWSReconnect=setTimeout(()=>connectAssetBinanceWS(asset),delay);
-      if(st.binanceWSFailures>=1) connectAssetKrakenWS(asset);
+      if(st.binanceWSFailures>=1)connectAssetKrakenWS(asset);
     };
-  }catch(_){assetState[asset].binanceWSFailures++; connectAssetKrakenWS(asset);}
+  }catch(_){AST[asset].binanceWSFailures++;connectAssetKrakenWS(asset);}
 }
 
 function connectAssetKrakenWS(asset){
-  const st = assetState[asset];
-  const cfg = ASSET_CONFIG[asset];
-  if(st.krakenWSInst && st.krakenWSInst.readyState < 2) return;
+  const st=AST[asset]; const cfg=ASSET_CFG[asset];
+  if(st.krakenWSInst&&st.krakenWSInst.readyState<2)return;
   try{
-    const ws = new WebSocket('wss://ws.kraken.com');
-    st.krakenWSInst = ws;
-    ws.onopen=()=>{ws.send(JSON.stringify({event:'subscribe',pair:[cfg.krakenPair],subscription:{name:cfg.krakenTopic}}));};
+    const ws=new WebSocket('wss://ws.kraken.com');
+    st.krakenWSInst=ws;
+    ws.onopen=()=>{ws.send(JSON.stringify({event:'subscribe',pair:[cfg.krakenPair],subscription:{name:'ticker'}}));};
     ws.onmessage=e=>{
       try{
         const d=JSON.parse(e.data);
-        if(Array.isArray(d)&&d[2]===cfg.krakenTopic){
+        if(Array.isArray(d)&&d[2]==='ticker'){
           const p=parseFloat(d[1].c[0]);
           if(p>cfg.priceMin){
-            if(asset===activeAsset && st.binanceWSSource!=='BINANCE') onNewPrice(p,'KRAKEN');
-            else if(st.binanceWSSource!=='BINANCE') assetState[asset].livePrice=p;
+            if(asset===activeAsset&&st.binanceWSSource!=='BINANCE') onNewPrice(p,'KRAKEN');
+            else if(st.binanceWSSource!=='BINANCE'){ st.livePrice=p; pushTick(p, asset); }
           }
         }
       }catch(_){}
@@ -1455,18 +1441,18 @@ function connectAssetKrakenWS(asset){
   }catch(_){}
 }
 
-// Start both asset feeds; only active asset pushes to onNewPrice
-function connectBinanceWS(){ connectAssetBinanceWS('BTC'); connectAssetBinanceWS('ETH'); }
-function connectKrakenWS(){  connectAssetKrakenWS('BTC');  connectAssetKrakenWS('ETH'); }
-let krakenWS = null; // legacy alias
+// Legacy entry points called from init()
+function connectBinanceWS(){connectAssetBinanceWS('BTC');connectAssetBinanceWS('ETH');}
+function connectKrakenWS(){connectAssetKrakenWS('BTC');connectAssetKrakenWS('ETH');}
 
 // ── REST fallback — only if both WSes are dead ──
 let priceSourceIdx=0;
 const priceSources=[krakenP,binanceP,coinbaseP];
 async function fetchPrice(){
+  const cfg=ASSET_CFG[activeAsset];
   for(let i=0;i<priceSources.length;i++){
     const fn=priceSources[(priceSourceIdx+i)%priceSources.length];
-    try{const p=await fn();if(p>ASSET_CONFIG[activeAsset].priceMin){priceSourceIdx=(priceSourceIdx+i)%priceSources.length;return p;}}catch(_){}
+    try{const p=await fn();if(p>cfg.priceMin){priceSourceIdx=(priceSourceIdx+i)%priceSources.length;return p;}}catch(_){}
   }
   return null;
 }
@@ -1490,22 +1476,22 @@ async function priceTick(){
 // ═══════════════════════════════════════════════════
 const KALSHI_BASE = 'https://api.elections.kalshi.com/trade-api/v2';
 const KALSHI_WS   = 'wss://api.elections.kalshi.com/trade-api/ws/v2';
-const BTC_SERIES  = 'KXBTC15M'; // BTC 15-minute series ticker
-const ETH_SERIES  = 'KXETH15M'; // ETH 15-minute series ticker
-function activeKalshiSeries(){ return ASSET_CONFIG[activeAsset].series; }
+const BTC_SERIES  = 'KXBTC15M';
+const ETH_SERIES  = 'KXETH15M';
+function activeSeries(){ return ASSET_CFG[activeAsset].series; }
 
-let kalshiMarket = null;   // current active market object from Kalshi
-let kalshiYESPrice = null;   // live YES midpoint from Kalshi orderbook
-let kalshiYESLastWS = 0;    // timestamp of last WS YES price update
+// [proxied per asset] let kalshiMarket = null;   // current active market object from Kalshi
+// [proxied per asset] let kalshiYESPrice = null;   // live YES midpoint from Kalshi orderbook
+// [proxied per asset] let kalshiYESLastWS = 0;    // timestamp of last WS YES price update
 
 // True only when the Kalshi WebSocket is streaming live order-book prices
 // REST polling alone is NOT sufficient for real order placement
 function kalshiIsLive(){
   return kalshiYESLastWS > 0 && (Date.now() - kalshiYESLastWS) < 10000;
 }
-let kalshiWS = null;       // WebSocket instance
-let kalshiAutoStrike = null; // parsed float strike from current market
-let wsReconnectTimer = null;
+// [proxied per asset] let kalshiWS = null;       // WebSocket instance
+// [proxied per asset] let kalshiAutoStrike = null; // parsed float strike from current market
+// [proxied per asset] let wsReconnectTimer = null;
 
 // Fetch via Vercel proxy (avoids CORS on Kalshi public endpoints)
 async function kalshiPublicFetch(path, params={}){
@@ -1521,7 +1507,7 @@ async function kalshiPublicFetch(path, params={}){
 }
 
 async function kalshiFetchMarket(){
-  const d = await kalshiPublicFetch('/markets', {series_ticker:activeKalshiSeries(), status:'open', limit:'5'});
+  const d = await kalshiPublicFetch('/markets', {series_ticker:activeSeries(), status:'open', limit:'5'});
   if(!d) return null;
   const markets = d.markets || [];
   if(!markets.length){
@@ -1545,19 +1531,27 @@ async function kalshiFetchDetails(ticker){
 // at trade-open time as the "strike" reference for our model.
 function parseKalshiStrike(market){
   if(!market) return null;
-  // Check if market has an explicit dollar strike in subtitle (some series do)
+  // 1. Check yes_sub_title / subtitle / title for dollar amount
   const sub = market.yes_sub_title || market.subtitle || market.title || '';
   const m1 = sub.match(/\$\s*([\d,]+(?:\.\d+)?)/);
   if(m1) return parseFloat(m1[1].replace(/,/g,''));
-  // Try floor/cap strike fields
+  // 2. Try rulebook_variables["Count/Price"] — used on some Kalshi fixed-strike markets
+  const rv = market.rulebook_variables || {};
+  const rvKeys = ['Count/Price','count/price','price','strike'];
+  for(const k of rvKeys){
+    if(rv[k]!==undefined){
+      const v=parseFloat(String(rv[k]).replace(/,/g,''));
+      if(v>0) return v;
+    }
+  }
+  // 3. floor_strike / cap_strike
   if(market.floor_strike) return parseFloat(market.floor_strike);
   if(market.cap_strike) return parseFloat(market.cap_strike);
-  // Try ticker suffix with explicit T prefix: KXBTC15M-26MAR09-T83500
+  // 4. Ticker suffix T prefix: KXBTC15M-26MAR09-T83500
   const ticker = market.ticker || '';
   const mT = ticker.match(/T(\d{4,})(?:-|$)/);
   if(mT) return parseFloat(mT[1]);
-  // KXBTC15M "Up or Down" — no fixed strike.
-  // Return null here; kalshiInit will call applyAutoStrike() once livePrice arrives.
+  // No fixed strike found — Up/Down market
   return null;
 }
 
@@ -2437,6 +2431,26 @@ function renderHeader(){
   const col=mode==='live'?'#00e5a0':mode==='demo'?'#f7c948':'#555';
   document.getElementById('src').textContent=source; document.getElementById('src').style.color=col;
   const dot=document.getElementById('dot'); dot.style.background=blinking?'#fff':col; dot.style.boxShadow=`0 0 5px ${col}`;
+  // Update live trade badges on asset toggle buttons
+  for(const a of ['BTC','ETH']){
+    const st=AST[a];
+    const liveEl=document.getElementById(`at-${a.toLowerCase()}-live`);
+    const pnlEl=document.getElementById(`at-${a.toLowerCase()}-pnl`);
+    if(!liveEl||!pnlEl) continue;
+    if(st.active){
+      liveEl.classList.add('show');
+      const entry=st.active.yp||0;
+      const cur=st.kalshiYESPrice||entry;
+      const pct=entry>0?((cur-entry)/entry*100):0;
+      const cfg=ASSET_CFG[a];
+      pnlEl.textContent=(pct>=0?'+':'')+pct.toFixed(1)+'%';
+      pnlEl.style.color=pct>=0?'#00e5a0':'#ff4566';
+    } else {
+      liveEl.classList.remove('show');
+      pnlEl.textContent='';
+    }
+  }
+  renderDualBar();
 }
 
 // Fast surgical renders — update only price-sensitive elements without full panel rebuild
@@ -3095,6 +3109,7 @@ function renderTradeSetup(){
   const can=!active&&strikeInput>0&&amtInput>0&&!!livePrice;
   document.getElementById('bup').disabled=!can; document.getElementById('bdn').disabled=!can;
   document.getElementById('bup').style.opacity=can?'1':'0.3'; document.getElementById('bdn').style.opacity=can?'1':'0.3';
+  renderAutoBuyBtn();
   const sm=computeStrikeModel(prices,strikeInput);
   if(sm){
     const upWins=sm.aboveProb>sm.belowProb;
@@ -3309,6 +3324,61 @@ function renderActiveTrade(clock){
   drawProjection(proj,unrealizedPnL,peakROI,active.bet);
 }
 
+// ── Dual trade bottom bar — shows both BTC+ETH open trades simultaneously ──
+function renderDualBar(){
+  const bar = document.getElementById('dual-bar');
+  if(!bar) return;
+  const btcTrade = AST.BTC.active;
+  const ethTrade = AST.ETH.active;
+  const anyActive = btcTrade || ethTrade;
+
+  // Show bar only when at least one trade is open on either asset
+  bar.style.display = anyActive ? 'block' : 'none';
+  document.body.classList.toggle('dual-active', !!anyActive);
+
+  for(const a of ['BTC','ETH']){
+    const st = AST[a];
+    const t = st.active;
+    const cell = document.getElementById(`dual-${a.toLowerCase()}`);
+    const betEl = document.getElementById(`dual-${a.toLowerCase()}-bet`);
+    const pnlEl = document.getElementById(`dual-${a.toLowerCase()}-pnl`);
+    const capEl = document.getElementById(`dual-${a.toLowerCase()}-cap`);
+    if(!cell||!betEl||!pnlEl||!capEl) continue;
+
+    cell.classList.toggle('active-asset', a===activeAsset);
+
+    if(!t){
+      cell.classList.add('no-trade');
+      betEl.textContent='NO TRADE'; betEl.style.color='#2a2a40';
+      pnlEl.textContent='—'; pnlEl.style.color='#2a2a40';
+      capEl.textContent='';
+      continue;
+    }
+    cell.classList.remove('no-trade');
+
+    // Bet direction
+    betEl.textContent=t.bet; betEl.style.color=t.bet==='UP'?'#00e5a0':'#ff4566';
+
+    // Unrealized P&L
+    const sv = parseFloat(t.strike)||0;
+    const curP = st.livePrice||0;
+    const entryYES = t.entryYESPrice||0;
+    const curYES = st.kalshiYESPrice !== null
+      ? (t.bet==='UP' ? st.kalshiYESPrice : Math.max(0.05,Math.min(0.95,1-st.kalshiYESPrice)))
+      : entryYES;
+    const unrlzd = entryYES>0 ? (curYES - entryYES) * t.contracts : 0;
+    const pct = t.amount>0 ? (unrlzd/t.amount*100) : 0;
+    pnlEl.textContent = (unrlzd>=0?'+':'')+unrlzd.toFixed(2);
+    pnlEl.style.color = unrlzd>=0?'#00e5a0':'#ff4566';
+
+    // Capture %
+    const win = (t.bet==='UP'&&curP>sv)||(t.bet==='DOWN'&&curP<sv);
+    const cfg = ASSET_CFG[a];
+    capEl.textContent = win ? `${pct>=0?'+':''}${pct.toFixed(1)}% · WINNING` : `${pct.toFixed(1)}% · LOSING`;
+    capEl.style.color = win ? '#00e5a060' : '#ff456660';
+  }
+}
+
 function renderLog(){
   const settled=trades.filter(t=>t.result);
   const wins=settled.filter(t=>t.result==='WIN').length;
@@ -3365,7 +3435,7 @@ function placeTrade(bet){
     result:null,exit:null,finalPnL:null};
   trades.push(t); active=t; peakROI=null; peakCapture=null; trailArmed=false; exitIdx=null; priceChartDirty=true; projChartDirty=true;
   riskState.tpTriggered=false; riskState.slTriggered=false;
-  showActive(); renderLog();
+  showActive(); renderLog(); renderDualBar();
 
   // Only place a real Kalshi order when API key is connected AND market is live
   // If kalshiYESPrice is null (REST only, no live order book) → simulation trade
@@ -3443,9 +3513,12 @@ async function closeTradeWithSell(exitReason='manual_sell'){
     }
   }
   updateRiskOnTradeClosed(exitResult,finalPnL);
+  const _closedAsset = activeAsset;
   active=null; peakROI=null; peakCapture=null; trailArmed=false; priceChartDirty=true; projChartDirty=true;
   persistState();
-  showSetup(); renderLog(); renderRiskPanel(); renderTradeSetup();
+  showSetup(); renderLog(); renderRiskPanel(); renderTradeSetup(); renderDualBar();
+  // If this trade closed on the inactive asset, fire a toast notification
+  // (handled by the calling context since activeAsset is always current here)
 }
 
 function closeTrade(){
@@ -3481,6 +3554,86 @@ function clearLog(){trades=[];exitIdx=null;renderLog();}
 // CLOCK TICK — every second
 // ═══════════════════════════════════════════════════
 let clockFull=0;
+// ═══════════════════════════════════════════════════
+// AUTO-BUY ENGINE
+// ═══════════════════════════════════════════════════
+// Per-asset auto-buy state
+const autoBuyState = {
+  BTC: { armed: false, confThresh: 72, cooldownUntil: 0, countdown: 0, countdownBet: null },
+  ETH: { armed: false, confThresh: 72, cooldownUntil: 0, countdown: 0, countdownBet: null },
+};
+
+function armAutoBuy(asset){
+  const ab = autoBuyState[asset || activeAsset];
+  if(ab.armed){ ab.armed=false; ab.countdown=0; ab.countdownBet=null; renderAutoBuyBtn(); showToast('🔒 Auto-buy disarmed','#f7c948'); return; }
+  ab.armed=true; ab.countdown=0; ab.countdownBet=null;
+  renderAutoBuyBtn();
+  showToast(`🎯 Auto-buy ARMED (≥${ab.confThresh}% confidence will fire)`,'#00e5a0');
+}
+
+function renderAutoBuyBtn(){
+  const ab = autoBuyState[activeAsset];
+  const btn = document.getElementById('auto-buy-btn');
+  if(!btn) return;
+  if(ab.countdown>0){
+    btn.textContent=`⚡ FIRING IN ${ab.countdown}s… (tap to cancel)`;
+    btn.style.background='#ff456820'; btn.style.borderColor='#ff456860'; btn.style.color='#ff4566';
+  } else if(ab.armed){
+    btn.textContent=`🎯 AUTO-BUY ARMED ≥${ab.confThresh}% — tap to disarm`;
+    btn.style.background='#00e5a015'; btn.style.borderColor='#00e5a040'; btn.style.color='#00e5a0';
+  } else {
+    btn.textContent='⚡ ARM AUTO-BUY';
+    btn.style.background='#1a1a35'; btn.style.borderColor='#2a2a50'; btn.style.color='#7b9fff';
+  }
+}
+
+// Called every second in clockTick — checks if armed + signal strong enough
+function checkAutoBuy(){
+  const ab = autoBuyState[activeAsset];
+  if(!ab.armed || active || !livePrice || !strikeInput || strikeInput<=0) return;
+  if(Date.now() < ab.cooldownUntil) return;
+
+  const sm = computeStrikeModel(prices, strikeInput);
+  if(!sm) return;
+  const ra = computeRiskAssessment();
+  if(!ra) return;
+
+  const upConf = sm.aboveProb;
+  const dnConf = sm.belowProb;
+  const bestBet = upConf >= dnConf ? 'UP' : 'DOWN';
+  const bestConf = Math.max(upConf, dnConf);
+
+  // Check minimum confidence threshold and risk gate
+  if(bestConf < ab.confThresh || !ra.approved) {
+    // Confidence dropped — cancel any pending countdown
+    if(ab.countdown > 0){ ab.countdown=0; ab.countdownBet=null; renderAutoBuyBtn(); }
+    return;
+  }
+
+  // Confidence met — start or continue countdown (3 second review window)
+  if(ab.countdown === 0){
+    ab.countdown=3; ab.countdownBet=bestBet;
+    renderAutoBuyBtn();
+    showToast(`⚡ Auto-buy ${bestBet} in 3s… (${bestConf.toFixed(0)}% conf)`, '#f7c948');
+    return;
+  }
+
+  // Make sure bet direction hasn't flipped during countdown
+  if(ab.countdownBet !== bestBet){ ab.countdown=0; ab.countdownBet=null; renderAutoBuyBtn(); return; }
+
+  ab.countdown--;
+  renderAutoBuyBtn();
+
+  if(ab.countdown === 0){
+    // Fire!
+    ab.cooldownUntil = Date.now() + 90000; // 90s cooldown after auto-trade
+    ab.countdownBet = null;
+    placeTrade(bestBet);
+    showToast(`⚡ Auto-buy fired — ${bestBet} @ ${bestConf.toFixed(0)}% confidence`, ASSET_CFG[activeAsset].color);
+    renderAutoBuyBtn();
+  }
+}
+
 function clockTick(){
   const c=getClock();
   const now=Date.now();
@@ -3494,7 +3647,7 @@ function clockTick(){
   ct.textContent=timeStr; ct.style.color=col;
 
 
-  // Cycle reset — window expired
+  // Cycle reset — window expired (active asset)
   if(prevSecsLeft!==null&&c.secsLeft>prevSecsLeft+850&&active){
     const sv=parseFloat(active.strike), exit=prices[prices.length-1];
     const won=(active.bet==='UP'&&exit>sv)||(active.bet==='DOWN'&&exit<sv);
@@ -3502,10 +3655,35 @@ function clockTick(){
     trades=trades.map(t=>t.id!==active.id?t:{...t,result:won?'WIN':'LOSS',exit,finalPnL});
     recordTrade({...active,result:won?'WIN':'LOSS'});
     updateRiskOnTradeClosed(won?'WIN':'LOSS', finalPnL);
-    active=null; peakROI=null; peakCapture=null; trailArmed=false; showSetup(); renderLog(); updateBrainPanel();
-    // Reset tick buffer for new window
-    tickBuffer=[]; tickWindowStart=get15mWindowStart();
+    active=null; peakROI=null; peakCapture=null; trailArmed=false; showSetup(); renderLog(); updateBrainPanel(); renderDualBar();
+    // Reset tick buffer for this asset's new window
+    AST[activeAsset].tickBuffer=[]; AST[activeAsset].tickWindowStart=get15mWindowStart();
   }
+
+  // Background asset expiry check — handles trades on the non-visible asset
+  const bgAsset = activeAsset==='BTC'?'ETH':'BTC';
+  const bgSt = AST[bgAsset];
+  if(prevSecsLeft!==null && c.secsLeft>prevSecsLeft+850 && bgSt.active){
+    const bgTrade = bgSt.active;
+    const bgSv = parseFloat(bgTrade.strike);
+    const bgExit = bgSt.livePrice || bgSv;
+    const bgWon = (bgTrade.bet==='UP'&&bgExit>bgSv)||(bgTrade.bet==='DOWN'&&bgExit<bgSv);
+    const bgPnL = bgWon ? kalshiPotentialProfit(bgTrade.amount,bgTrade.entryYESPrice) : -bgTrade.amount;
+    bgSt.trades = bgSt.trades.map(t=>t.id!==bgTrade.id?t:{...t,result:bgWon?'WIN':'LOSS',exit:bgExit,finalPnL:bgPnL});
+    // Train NN for background asset
+    const _prev=activeAsset; activeAsset=bgAsset;
+    recordTrade({...bgTrade,result:bgWon?'WIN':'LOSS'});
+    updateRiskOnTradeClosed(bgWon?'WIN':'LOSS', bgPnL);
+    activeAsset=_prev;
+    bgSt.active=null; bgSt.peakROI=null; bgSt.peakCapture=null; bgSt.trailArmed=false;
+    bgSt.tickBuffer=[]; bgSt.tickWindowStart=get15mWindowStart();
+    renderDualBar();
+    // Toast notification for background trade result
+    const icon = bgWon?'✅':'❌';
+    const col = bgWon?'#00e5a0':'#ff4566';
+    showToast(`${icon} ${bgAsset} trade expired — ${bgWon?'WIN':'LOSS'} ${bgWon?'+':''}${fmtUSD(bgPnL)}`, col);
+  }
+
   prevSecsLeft=c.secsLeft;
 
   if(active){
@@ -3532,6 +3710,8 @@ function clockTick(){
     if(lastAdvisory) maybeAutoClose(lastAdvisory);
   }
   renderHeader();
+  // Auto-buy check every second
+  checkAutoBuy();
 }
 
 // ═══════════════════════════════════════════════════
@@ -3607,11 +3787,11 @@ async function fetchFills(){
 
 // ── Order engine ──
 // State for live Kalshi order tracking
-let kalshiOrderId = null;       // order_id of our open position
-let kalshiOrderSide = null;     // 'yes' or 'no'
-let kalshiOrderContracts = 0;   // how many contracts we hold
-let kalshiOrderCost = 0;        // dollars spent
-let autoCloseArmed = false;     // whether auto-close is watching
+// [proxied per asset] let kalshiOrderId = null;       // order_id of our open position
+// [proxied per asset] let kalshiOrderSide = null;     // 'yes' or 'no'
+// [proxied per asset] let kalshiOrderContracts = 0;   // how many contracts we hold
+// [proxied per asset] let kalshiOrderCost = 0;        // dollars spent
+// [proxied per asset] let autoCloseArmed = false;     // whether auto-close is watching
 
 // Place a market order on Kalshi
 // bet: 'UP' → buy YES, 'DOWN' → buy NO
@@ -3927,12 +4107,20 @@ async function init(){
       onNewPrice(Math.max(last*0.995,last+(Math.random()-.498)*(last*.0005)),'DEMO');
     },500);
   }
-  // Start Kalshi market API (active asset only at startup)
+  // Start Kalshi market API (active asset)
   kalshiInit();
+  // Background: pre-fetch ETH Kalshi market so advisory has data
+  setTimeout(async()=>{
+    const prevAsset=activeAsset;
+    activeAsset='ETH';
+    const m=await kalshiFetchMarket();
+    if(m){ AST['ETH'].kalshiMarket=m; AST['ETH'].kalshiAutoStrike=parseKalshiStrike(m); }
+    activeAsset=prevAsset;
+  }, 5000);
   // Auto-connect portfolio silently — no button tap needed
   autoConnectKey();
-  // Evaluate switch advisory shortly after startup
-  setTimeout(evaluateSwitchAdvisory, 8000);
+  // Initial advisory check after feeds are loaded
+  setTimeout(evalAdvisory, 9000);
   // Roll new candle every 60s
   setInterval(()=>{
     if(livePrice&&prices.length>0) prices=[...prices.slice(-59),livePrice];
