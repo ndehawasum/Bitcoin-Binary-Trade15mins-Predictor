@@ -2815,13 +2815,18 @@ function placeTrade(bet){
   riskState.tpTriggered=false; riskState.slTriggered=false;
   showActive(); renderLog();
 
-  // Place real Kalshi order if connected
-  if(authConnected&&kalshiMarket){
+  // Only place a real Kalshi order when API key is connected AND market is live
+  // If kalshiYESPrice is null (REST only, no live order book) → simulation trade
+  const goLive = authConnected && kalshiMarket && kalshiYESPrice !== null;
+  if(goLive){
     kalshiPlaceOrder(bet, amtInput).then(order=>{
       showToast(`✅ Kalshi order placed — ${order.fill_count_fp||'?'} contracts filled`,'#00e5a0');
     }).catch(e=>{
       showToast(`⚠️ Kalshi order failed: ${e.message}`,'#ff4566');
     });
+  } else {
+    const reason = !authConnected ? 'no API key' : kalshiYESPrice===null ? 'Kalshi REST — sim trade' : 'no market';
+    showToast(`📋 Sim trade placed (${reason})`,'#f7c948');
   }
 }
 
