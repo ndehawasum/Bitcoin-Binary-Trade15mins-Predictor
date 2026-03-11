@@ -22,6 +22,7 @@ input[type=number]{-moz-appearance:textfield}
 #hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
 .logo-k{font-size:9px;letter-spacing:5px;color:#f7c948}
 .logo-m{font-size:20px;font-weight:900;letter-spacing:-1px;background:linear-gradient(100deg,#f7c948,#ff7b00);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.logo-m.eth-mode{background:linear-gradient(100deg,#a78bfa,#7b9fff);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
 .hdr-r{text-align:right}
 .hdr-t{font-size:9px;color:#333;margin-bottom:2px}
 .dot-row{display:flex;align-items:center;gap:5px;justify-content:flex-end}
@@ -30,6 +31,21 @@ input[type=number]{-moz-appearance:textfield}
 
 /* demo */
 #demo-ban{background:#1a1200;border:1px solid #f7c94830;border-radius:9px;padding:6px 11px;margin-bottom:9px;font-size:9px;color:#f7c948;display:none}
+
+/* asset toggle */
+#asset-toggle{display:flex;gap:6px;margin-bottom:9px}
+.at-btn{flex:1;padding:7px 0;border-radius:10px;border:1px solid #1a1a35;cursor:pointer;font-family:inherit;font-size:10px;letter-spacing:3px;font-weight:700;background:#0c0c1c;color:#444;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:5px}
+.at-btn.active{background:#0f1f2e;border-color:#7b9fff60;color:#7b9fff;box-shadow:0 0 10px #7b9fff20}
+.at-btn[data-asset="ETH"].active{background:#1a0f2e;border-color:#a78bfa60;color:#a78bfa;box-shadow:0 0 10px #a78bfa20}
+.at-icon{font-size:12px}
+.at-badge{font-size:7px;padding:1px 5px;border-radius:4px;margin-left:4px;font-weight:900;letter-spacing:1px}
+
+/* switch advisory banner */
+#switch-advisory{background:#0f1a0f;border:1px solid #00e5a040;border-radius:9px;padding:7px 11px;margin-bottom:9px;font-size:9px;color:#00e5a0;display:none;align-items:center;gap:7px;flex-wrap:wrap}
+#switch-adv-icon{font-size:13px;flex-shrink:0}
+#switch-adv-text{flex:1;min-width:0;line-height:1.4}
+#switch-adv-btn{background:#00e5a0;color:#07070f;border:none;border-radius:6px;padding:3px 9px;font-size:8px;font-weight:900;letter-spacing:2px;cursor:pointer;font-family:inherit;flex-shrink:0}
+#switch-adv-dismiss{background:none;border:none;color:#00e5a060;cursor:pointer;font-size:11px;padding:0 2px;flex-shrink:0}
 
 /* top row */
 #top-row{display:flex;gap:9px;margin-bottom:10px}
@@ -208,7 +224,7 @@ input[type=number]{-moz-appearance:textfield}
 <div id="app">
 
   <div id="hdr">
-    <div><div class="logo-k">KALSHI</div><div class="logo-m">BTC 15M EDGE</div></div>
+    <div><div class="logo-k">KALSHI</div><div class="logo-m" id="hdr-asset-label">BTC 15M EDGE</div></div>
     <div class="hdr-r">
       <div class="hdr-t" id="hdr-t">--:--:--</div>
       <div class="dot-row">
@@ -220,9 +236,27 @@ input[type=number]{-moz-appearance:textfield}
 
   <div id="demo-ban">⚡ Demo mode — APIs unreachable. Real UTC clock active.</div>
 
+  <!-- ASSET TOGGLE -->
+  <div id="asset-toggle">
+    <button class="at-btn active" id="at-btc" data-asset="BTC" onclick="switchAsset('BTC')">
+      <span class="at-icon">₿</span> BTC
+    </button>
+    <button class="at-btn" id="at-eth" data-asset="ETH" onclick="switchAsset('ETH')">
+      <span class="at-icon">Ξ</span> ETH
+    </button>
+  </div>
+
+  <!-- SWITCH ADVISORY BANNER -->
+  <div id="switch-advisory" style="display:none">
+    <span id="switch-adv-icon">⚡</span>
+    <span id="switch-adv-text"></span>
+    <button id="switch-adv-btn" onclick="acceptSwitchAdvisory()">SWITCH</button>
+    <button id="switch-adv-dismiss" onclick="dismissSwitchAdvisory()">✕</button>
+  </div>
+
   <div id="top-row">
     <div id="pc">
-      <div style="font-size:8px;letter-spacing:4px;color:#333;margin-bottom:2px">BTC/USD</div>
+      <div style="font-size:8px;letter-spacing:4px;color:#333;margin-bottom:2px" id="price-asset-label">BTC/USD</div>
       <div id="lp">…</div>
       <div id="pd"></div>
       <div id="si"></div>
@@ -667,15 +701,104 @@ input[type=number]{-moz-appearance:textfield}
 <script>
 'use strict';
 // ═══════════════════════════════════════════════════
-// STATE
+// ASSET MANAGEMENT — BTC / ETH switchable
 // ═══════════════════════════════════════════════════
-let prices=[], livePrice=null, pred=null, source='', mode='loading';
-let active=null, trades=[], peakROI=null, exitIdx=null;
-let peakCapture=null, trailArmed=false; // trailing capture state
+let activeAsset = 'BTC'; // 'BTC' or 'ETH'
+const ASSET_CONFIG = {
+  BTC: {
+    label: 'BTC 15M EDGE',
+    priceLabel: 'BTC/USD',
+    series: 'KXBTC15M',
+    binanceStream: 'btcusdt@aggTrade',
+    krakenPair: 'XBT/USD',
+    krakenTopic: 'ticker',
+    priceMin: 1000,
+    color: '#f7c948',
+    colorDim: '#f7c94840',
+    accentClass: '',
+  },
+  ETH: {
+    label: 'ETH 15M EDGE',
+    priceLabel: 'ETH/USD',
+    series: 'KXETH15M',
+    binanceStream: 'ethusdt@aggTrade',
+    krakenPair: 'ETH/USD',
+    krakenTopic: 'ticker',
+    priceMin: 50,
+    color: '#a78bfa',
+    colorDim: '#a78bfa40',
+    accentClass: 'eth',
+  },
+};
+
+// Per-asset state factory
+function mkAssetState(){
+  return {
+    prices: [], livePrice: null, pred: null, source: '', mode: 'loading',
+    active: null, trades: [], peakROI: null, exitIdx: null,
+    peakCapture: null, trailArmed: false,
+    strikeInput: 0,
+    nnW: null, nnData: [],
+    kalshiMarket: null, kalshiYESPrice: null, kalshiYESLastWS: 0,
+    kalshiAutoStrike: null, kalshiWS: null, wsReconnectTimer: null,
+    kalshiOrderId: null,
+    riskState: {
+      dailyLoss: 0, dailyStart: new Date().toDateString(),
+      consecutiveLosses: 0, lastLossTime: 0, accountBalance: 0,
+      tpTriggered: false, slTriggered: false,
+    },
+    sellCaptureThresh: 0.60,
+    sellSignalThresh: 0.45,
+    // price feed
+    binanceWS: null, binanceWSFailures: 0, binanceWSReconnect: null, binanceWSSource: '',
+    lastWSTime: 0,
+    priceChartDirty: true, projChartDirty: true, pnlChartDirty: true,
+    advisoryDismissed: false,
+  };
+}
+const assetState = { BTC: mkAssetState(), ETH: mkAssetState() };
+
+// ── Proxy accessors — read/write active asset state ──
+// (Kept as let variables so all existing code works without changes)
+function AS(){ return assetState[activeAsset]; }
+
+// ═══════════════════════════════════════════════════
+// STATE (proxied to active asset)
+// ═══════════════════════════════════════════════════
+// These getters/setters let existing code continue using bare variable names
+// by referencing the active asset's state object.
+Object.defineProperties(window, {
+  prices:       { get(){ return AS().prices; },       set(v){ AS().prices=v; },       configurable:true },
+  livePrice:    { get(){ return AS().livePrice; },    set(v){ AS().livePrice=v; },    configurable:true },
+  pred:         { get(){ return AS().pred; },         set(v){ AS().pred=v; },         configurable:true },
+  source:       { get(){ return AS().source; },       set(v){ AS().source=v; },       configurable:true },
+  active:       { get(){ return AS().active; },       set(v){ AS().active=v; },       configurable:true },
+  trades:       { get(){ return AS().trades; },       set(v){ AS().trades=v; },       configurable:true },
+  peakROI:      { get(){ return AS().peakROI; },      set(v){ AS().peakROI=v; },      configurable:true },
+  exitIdx:      { get(){ return AS().exitIdx; },      set(v){ AS().exitIdx=v; },      configurable:true },
+  peakCapture:  { get(){ return AS().peakCapture; },  set(v){ AS().peakCapture=v; },  configurable:true },
+  trailArmed:   { get(){ return AS().trailArmed; },   set(v){ AS().trailArmed=v; },   configurable:true },
+  strikeInput:  { get(){ return AS().strikeInput; },  set(v){ AS().strikeInput=v; },  configurable:true },
+  nnW:          { get(){ return AS().nnW; },          set(v){ AS().nnW=v; },          configurable:true },
+  nnData:       { get(){ return AS().nnData; },       set(v){ AS().nnData=v; },       configurable:true },
+  kalshiMarket: { get(){ return AS().kalshiMarket; }, set(v){ AS().kalshiMarket=v; }, configurable:true },
+  kalshiYESPrice:  { get(){ return AS().kalshiYESPrice; },  set(v){ AS().kalshiYESPrice=v; },  configurable:true },
+  kalshiYESLastWS: { get(){ return AS().kalshiYESLastWS; }, set(v){ AS().kalshiYESLastWS=v; }, configurable:true },
+  kalshiAutoStrike:{ get(){ return AS().kalshiAutoStrike; },set(v){ AS().kalshiAutoStrike=v; },configurable:true },
+  kalshiWS:     { get(){ return AS().kalshiWS; },     set(v){ AS().kalshiWS=v; },     configurable:true },
+  wsReconnectTimer:{ get(){ return AS().wsReconnectTimer; },set(v){ AS().wsReconnectTimer=v; },configurable:true },
+  kalshiOrderId:{ get(){ return AS().kalshiOrderId; },set(v){ AS().kalshiOrderId=v; },configurable:true },
+  riskState:    { get(){ return AS().riskState; },    set(v){ AS().riskState=v; },    configurable:true },
+  sellCaptureThresh:{ get(){ return AS().sellCaptureThresh; },set(v){ AS().sellCaptureThresh=v; },configurable:true },
+  sellSignalThresh: { get(){ return AS().sellSignalThresh; }, set(v){ AS().sellSignalThresh=v; }, configurable:true },
+  priceChartDirty: { get(){ return AS().priceChartDirty; },set(v){ AS().priceChartDirty=v; },configurable:true },
+  projChartDirty:  { get(){ return AS().projChartDirty; }, set(v){ AS().projChartDirty=v; }, configurable:true },
+  pnlChartDirty:   { get(){ return AS().pnlChartDirty; },  set(v){ AS().pnlChartDirty=v; }, configurable:true },
+});
+
+// dirty flags for chart redraws — now proxied per asset (see Object.defineProperties above)
 let prevSecsLeft=null, blinking=false;
-let strikeInput=0, amtInput=0;
-// dirty flags for chart redraws
-let priceChartDirty=true, projChartDirty=true, pnlChartDirty=true;
+let amtInput=0;
 
 // ── Chart animation state ──
 let chartAnimFrame = null;       // rAF handle
@@ -693,16 +816,7 @@ const CHART_SPRING_STIFF = 0.30; // tighter spring — price tracks faster
 const CHART_SPRING_DAMP  = 0.70; // slight undershoot gives organic feel
 let lastAdvisory=null;
 
-// ── RISK MANAGEMENT STATE ──
-let riskState={
-  dailyLoss: 0,          // total $ lost today
-  dailyStart: new Date().toDateString(), // reset daily
-  consecutiveLosses: 0,  // streak counter
-  lastLossTime: 0,       // timestamp of last loss (cooldown)
-  accountBalance: 0,     // pulled from Kalshi or manually set
-  tpTriggered: false,    // take-profit already fired this trade
-  slTriggered: false,    // stop-loss already fired
-};
+// ── RISK MANAGEMENT CONSTANTS ──
 const RISK_CONF_MIN    = 58;   // % min model confidence to trade
 const RISK_EV_MIN      = 0.05; // minimum expected value edge
 const RISK_MAX_ACCT_PCT= 0.20; // 20% max account risk per trade
@@ -713,14 +827,12 @@ const RISK_SL_ROI      =-0.50; // stop loss at 50% of bet (unrealized -50%)
 const RISK_COOLDOWN_MS = 60000;// 1-minute cooldown after loss
 const SELL_CAPTURE_THRESH_DEFAULT = 0.60; // lowered from 0.72 — fires sooner, dynamic engine extends when conditions warrant
 const SELL_SIGNAL_THRESH_DEFAULT  = 0.45; // lowered from 0.55
-// Runtime-tunable — user can adjust via the risk panel sliders
-let sellCaptureThresh = SELL_CAPTURE_THRESH_DEFAULT;
-let sellSignalThresh  = SELL_SIGNAL_THRESH_DEFAULT;
+// Runtime-tunable — proxied per asset via Object.defineProperties
 
 // ═══════════════════════════════════════════════════
 // NEURAL NETWORK (8→6→1)
 // ═══════════════════════════════════════════════════
-let nnW=null, nnData=[];
+// nnW and nnData are now proxied per asset (see Object.defineProperties above)
 // ═══════════════════════════════════════════════════
 // INDEXEDDB PERSISTENCE — survives page reload
 // Stores: nnData, nnW (weights), trades, riskState
@@ -763,56 +875,61 @@ function idbGet(key){
 }
 
 // Save all critical state to IDB — called after every trade event
-async function persistState(){
+async function persistState(asset){
+  const a = asset || activeAsset;
+  const st = assetState[a];
+  const pfx = a.toLowerCase() + '_';
   try{
-    await idbSet('nnData',   nnData);
-    await idbSet('nnW',      nnW);
-    await idbSet('trades',   trades.slice(-200)); // keep last 200
-    await idbSet('riskState',riskState);
+    await idbSet(pfx+'nnData',   st.nnData);
+    await idbSet(pfx+'nnW',      st.nnW);
+    await idbSet(pfx+'trades',   st.trades.slice(-200));
+    await idbSet(pfx+'riskState',st.riskState);
   }catch(e){ console.warn('IDB save failed:', e); }
 }
 
-// Load persisted state — called once at startup before rendering
+// Load persisted state — called once at startup for both assets
 async function loadPersistedState(){
   try{
     await idbOpen();
-    const savedNN    = await idbGet('nnData');
-    const savedW     = await idbGet('nnW');
-    const savedTrades= await idbGet('trades');
-    const savedRisk  = await idbGet('riskState');
+    // Load both assets
+    for(const a of ['BTC','ETH']){
+      const st = assetState[a];
+      const pfx = a.toLowerCase() + '_';
+      // Fallback: BTC used old unprefixed keys — migrate them
+      const savedNN    = await idbGet(pfx+'nnData')   || (a==='BTC' ? await idbGet('nnData')    : null);
+      const savedW     = await idbGet(pfx+'nnW')      || (a==='BTC' ? await idbGet('nnW')       : null);
+      const savedTrades= await idbGet(pfx+'trades')   || (a==='BTC' ? await idbGet('trades')    : null);
+      const savedRisk  = await idbGet(pfx+'riskState')|| (a==='BTC' ? await idbGet('riskState') : null);
 
-    if(savedNN && Array.isArray(savedNN) && savedNN.length > 0){
-      // Migrate old 6-feature samples → 9 by padding zeros (candle features neutral)
-      nnData = savedNN.map(s=>({
-        ...s,
-        f: s.f&&s.f.length===6 ? [...s.f, 0, 0, 0] :
-           s.f&&s.f.length===9 ? s.f : null
-      })).filter(s=>s.f!==null);
-      console.log(`IDB: loaded ${nnData.length} NN training samples (migrated to 9 features if needed)`);
-    }
-    // Validate weight shape — accept 8×9 only; old 8×6 triggers re-init
-    if(savedW && savedW.w1 && savedW.w1.length===8 && savedW.w1[0] && savedW.w1[0].length===9
-       && savedW.w1[0][0]!==null && savedW.w1[0][0]!==undefined){
-      nnW = savedW;
-      console.log('IDB: restored NN weights (8×9)');
-    } else if(nnData.length >= 2){
-      // Have data but no valid weights — re-train from scratch
-      nnW = nnRand();
-      const recent = nnData.slice(-40);
-      for(let e=0;e<20;e++) recent.forEach(d=>nnTrain(d.f,d.l));
-      console.log('IDB: re-trained NN from saved data');
-    }
-    if(savedTrades && Array.isArray(savedTrades) && savedTrades.length > 0){
-      trades = savedTrades;
-      console.log(`IDB: restored ${trades.length} trades`);
-    }
-    if(savedRisk && typeof savedRisk === 'object'){
-      // Merge carefully — keep structure, restore numeric fields only
-      riskState.dailyLoss = savedRisk.dailyLoss ?? 0;
-      riskState.consecutiveLosses = savedRisk.consecutiveLosses ?? 0;
-      riskState.lastLossTime = savedRisk.lastLossTime ?? 0;
-      riskState.dailyStart = savedRisk.dailyStart ?? '';
-      console.log('IDB: restored risk state');
+      if(savedNN && Array.isArray(savedNN) && savedNN.length > 0){
+        st.nnData = savedNN.map(s=>({
+          ...s,
+          f: s.f&&s.f.length===6 ? [...s.f, 0, 0, 0] :
+             s.f&&s.f.length===9 ? s.f : null
+        })).filter(s=>s.f!==null);
+        console.log(`IDB [${a}]: loaded ${st.nnData.length} NN training samples`);
+      }
+      if(savedW && savedW.w1 && savedW.w1.length===8 && savedW.w1[0] && savedW.w1[0].length===9
+         && savedW.w1[0][0]!==null && savedW.w1[0][0]!==undefined){
+        st.nnW = savedW;
+        console.log(`IDB [${a}]: restored NN weights (8×9)`);
+      } else if(st.nnData.length >= 2){
+        st.nnW = nnRand();
+        const recent = st.nnData.slice(-40);
+        for(let e=0;e<20;e++) recent.forEach(d=>nnTrainOn(st,d.f,d.l));
+        console.log(`IDB [${a}]: re-trained NN from saved data`);
+      }
+      if(savedTrades && Array.isArray(savedTrades) && savedTrades.length > 0){
+        st.trades = savedTrades;
+        console.log(`IDB [${a}]: restored ${st.trades.length} trades`);
+      }
+      if(savedRisk && typeof savedRisk === 'object'){
+        st.riskState.dailyLoss = savedRisk.dailyLoss ?? 0;
+        st.riskState.consecutiveLosses = savedRisk.consecutiveLosses ?? 0;
+        st.riskState.lastLossTime = savedRisk.lastLossTime ?? 0;
+        st.riskState.dailyStart = savedRisk.dailyStart ?? '';
+        console.log(`IDB [${a}]: restored risk state`);
+      }
     }
   }catch(e){ console.warn('IDB load failed:', e); }
 }
@@ -826,6 +943,21 @@ function nnRand(){const r=()=>(Math.random()-.5)*.4;
   // w2: 1×8 (output neuron, 8 inputs from hidden layer)
   return{w1:Array.from({length:8},()=>Array.from({length:9},r)),b1:Array.from({length:8},r),
     w2:Array.from({length:1},()=>Array.from({length:8},r)),b2:[r()]};}
+
+// nnTrainOn: train on a specific asset state (used during IDB load for non-active asset)
+function nnTrainOn(st, inp, lbl, lr=.06){
+  if(!st.nnW||!inp||inp.length!==9)return;
+  if(!st.nnW.w1||st.nnW.w1.length!==8||st.nnW.w1[0].length!==9||st.nnW.w1[0][0]===null){st.nnW=nnRand();}
+  if(inp.some(v=>!isFinite(v)||isNaN(v)))return;
+  const h=st.nnW.w1.map((row,i)=>sig(row.reduce((s,w,j)=>s+(w||0)*inp[j],0)+(st.nnW.b1[i]||0)));
+  const out=sig(st.nnW.w2[0].reduce((s,w,i)=>s+(w||0)*h[i],0)+(st.nnW.b2[0]||0));
+  if(isNaN(out))return;
+  const dO=(out-lbl)*out*(1-out);
+  st.nnW.w2[0]=st.nnW.w2[0].map((w,i)=>(w||0)-lr*dO*h[i]); st.nnW.b2[0]=(st.nnW.b2[0]||0)-lr*dO;
+  const dH=h.map((hi,i)=>dO*(st.nnW.w2[0][i]||0)*hi*(1-hi));
+  st.nnW.w1=st.nnW.w1.map((row,i)=>row.map((w,j)=>(w||0)-lr*dH[i]*inp[j]));
+  st.nnW.b1=st.nnW.b1.map((b,i)=>(b||0)-lr*dH[i]);
+}
 
 function nnFwd(inp){
   if(!nnW)return .5;
@@ -1039,6 +1171,154 @@ function clearStoredData(){
     showToast('Browser storage cleared','#f7c948');
   };
 }
+
+// ═══════════════════════════════════════════════════
+// ASSET SWITCHING — BTC ↔ ETH
+// ═══════════════════════════════════════════════════
+let switchAdvisoryTarget = null; // pending recommended asset
+
+async function switchAsset(asset){
+  if(asset === activeAsset) return;
+  if(active){ showToast('⚠️ Close active trade before switching asset','#f7c948'); return; }
+
+  const prev = activeAsset;
+  activeAsset = asset;
+
+  // Reset tick buffer and chart state for new asset
+  tickBuffer = [];
+  tickWindowStart = 0;
+  lastTickPrice = null;
+  lastWSTime = AS().lastWSTime || 0;
+  chartDisplayPrice = null;
+  chartPriceVel = 0;
+  priceChartDirty = true; projChartDirty = true; pnlChartDirty = true;
+
+  // Update UI
+  const cfg = ASSET_CONFIG[asset];
+  document.getElementById('at-btc').classList.toggle('active', asset==='BTC');
+  document.getElementById('at-eth').classList.toggle('active', asset==='ETH');
+  document.getElementById('hdr-asset-label').textContent = cfg.label;
+  document.getElementById('hdr-asset-label').classList.toggle('eth-mode', asset==='ETH');
+  document.getElementById('price-asset-label').textContent = cfg.priceLabel;
+
+  // Restore amtInput for this asset (stored separately)
+  const ki = document.getElementById('ki');
+  if(ki && AS().strikeInput > 0) ki.value = AS().strikeInput.toFixed(2);
+  const amtEl = document.getElementById('amt');
+  if(amtEl) amtInput = parseFloat(amtEl.value)||0;
+
+  // Re-init Kalshi for new asset
+  kalshiMarket = null; kalshiYESPrice = null; kalshiAutoStrike = null;
+  kalshiOrderId = null;
+  renderKalshiMarketBar();
+  kalshiInit();
+
+  // Inject live price from background feed if available
+  if(AS().livePrice) onNewPrice(AS().livePrice, 'SWITCH');
+
+  // Refresh UI panels
+  renderLog();
+  updateBrainPanel();
+  renderRiskPanel();
+  renderSignalPanel();
+  dismissSwitchAdvisory();
+
+  showToast(`Switched to ${asset} 15M ·  Kalshi loading…`, cfg.color);
+}
+
+// ── Smart Switch Advisory ──
+// Called periodically to check if the other asset is more favorable
+function evaluateSwitchAdvisory(){
+  const other = activeAsset === 'BTC' ? 'ETH' : 'BTC';
+  const ost = assetState[other];
+  const ast = assetState[activeAsset];
+
+  if(active) return; // never interrupt an open trade
+
+  let reasons = [];
+  let score = 0;
+
+  // 1. No active strike on current asset (Up/Down only = live price as strike)
+  //    This means Kalshi only has Up/Down contracts — fixed-strike market may not be available
+  const currentIsUpDown = kalshiMarket && !kalshiMarket.floor_strike && !kalshiMarket.cap_strike &&
+    !(kalshiMarket.yes_sub_title||'').match(/\$[\d,]+/);
+  if(currentIsUpDown){
+    score += 35;
+    reasons.push('No fixed-strike contract on ' + activeAsset);
+  }
+
+  // 2. Other asset has an active market with fixed strike
+  if(ost.kalshiMarket){
+    const otherHasStrike = ost.kalshiMarket.floor_strike || ost.kalshiMarket.cap_strike ||
+      (ost.kalshiMarket.yes_sub_title||'').match(/\$[\d,]+/);
+    if(otherHasStrike){ score += 20; reasons.push(other + ' has active fixed-strike contract'); }
+  }
+
+  // 3. Wide spread on current asset
+  if(kalshiMarket){
+    const bid = parseFloat(kalshiMarket.yes_bid_dollars)||0;
+    const ask = parseFloat(kalshiMarket.yes_ask_dollars)||0;
+    if(bid>0 && ask>0 && (ask-bid) > 0.15){
+      score += 15;
+      reasons.push(`${activeAsset} spread wide ($${(ask-bid).toFixed(2)})`);
+    }
+  }
+
+  // 4. Consecutive losses on current asset
+  if(ast.riskState.consecutiveLosses >= RISK_CONSEC_BRAKE){
+    score += 25;
+    reasons.push(`${activeAsset} on ${ast.riskState.consecutiveLosses}-loss streak`);
+  }
+
+  // 5. Time of day — BTC dead zone 3am–6am ET (UTC-5) = 8:00–11:00 UTC
+  const utcH = new Date().getUTCHours();
+  if(activeAsset==='BTC' && utcH >= 8 && utcH < 11){
+    score += 10;
+    reasons.push('BTC low-volume window (3–6am ET)');
+  }
+
+  // 6. Low confidence on current asset vs good historical win rate on other
+  if(ast.trades.length >= 5){
+    const wins = ast.trades.filter(t=>t.result==='WIN').length;
+    const wr = wins/ast.trades.length;
+    if(wr < 0.40){ score += 20; reasons.push(`${activeAsset} win rate low (${Math.round(wr*100)}%)`); }
+  }
+  if(ost.trades.length >= 5){
+    const wins = ost.trades.filter(t=>t.result==='WIN').length;
+    const wr = wins/ost.trades.length;
+    if(wr > 0.60){ score += 15; reasons.push(`${other} win rate strong (${Math.round(wr*100)}%)`); }
+  }
+
+  // Show advisory if score >= 35 and not dismissed
+  const adv = document.getElementById('switch-advisory');
+  if(score >= 35 && !ast.advisoryDismissed && reasons.length > 0){
+    switchAdvisoryTarget = other;
+    document.getElementById('switch-adv-text').textContent =
+      `Switch to ${other}? — ${reasons.slice(0,2).join(' · ')}`;
+    document.getElementById('switch-adv-btn').textContent = `SWITCH TO ${other}`;
+    adv.style.display = 'flex';
+    // Auto-switch if score >= 70 (very clear signal)
+    if(score >= 70){
+      showToast(`⚡ Auto-switching to ${other} — ${reasons[0]}`, ASSET_CONFIG[other].color);
+      switchAsset(other);
+    }
+  } else {
+    adv.style.display = 'none';
+  }
+}
+
+function acceptSwitchAdvisory(){
+  if(switchAdvisoryTarget) switchAsset(switchAdvisoryTarget);
+}
+function dismissSwitchAdvisory(){
+  if(switchAdvisoryTarget) assetState[activeAsset].advisoryDismissed = true;
+  document.getElementById('switch-advisory').style.display = 'none';
+  switchAdvisoryTarget = null;
+}
+// Reset dismiss flag when asset changes (so advisory can re-trigger next cycle)
+// and run advisory every 60 seconds
+setInterval(()=>{ assetState[activeAsset].advisoryDismissed = false; evaluateSwitchAdvisory(); }, 60000);
+
 function recordTrade(t){
   const f=buildFeatures(t.ep||prices,t.bet,parseFloat(t.strike));
   if(!f)return;
@@ -1105,61 +1385,80 @@ function getChartPrices(){
   return tickBuffer.length>=5?tickBuffer.map(x=>x.p):prices;
 }
 
-// ── Binance WebSocket — aggTrade, sub-100ms ──
-let btcWS=null, btcWSSource='', btcWSReconnect=null, btcWSFailures=0;
+// ── Price feed — asset-aware Binance/Kraken WSes ──
+let btcWS=null, btcWSSource='', btcWSReconnect=null, btcWSFailures=0; // legacy aliases
 
 function onNewPrice(price,src){
-  if(!price||price<1000)return;
+  const cfg = ASSET_CONFIG[activeAsset];
+  if(!price||price<cfg.priceMin)return;
   livePrice=price; source=src;
   pushTick(price);
   prices[prices.length-1]=price;
   lastWSTime=Date.now();
+  AS().lastWSTime=Date.now();
   priceChartDirty=true; projChartDirty=true;
   renderPrice();
   renderSignalPanelFast();
   if(active)renderActiveTradeFast();
-  // Chart redraws via rAF loop — no sync call needed
   if(!blinking){blinking=true;renderHeader();setTimeout(()=>{blinking=false;renderHeader();},200);}
 }
 
-function connectBinanceWS(){
-  if(btcWS&&btcWS.readyState<2)return;
-  if(btcWSReconnect){clearTimeout(btcWSReconnect);btcWSReconnect=null;}
+function connectAssetBinanceWS(asset){
+  const st = assetState[asset];
+  const cfg = ASSET_CONFIG[asset];
+  if(st.binanceWS && st.binanceWS.readyState < 2) return;
+  if(st.binanceWSReconnect){clearTimeout(st.binanceWSReconnect); st.binanceWSReconnect=null;}
   try{
-    btcWS=new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@aggTrade');
-    btcWS.onopen=()=>{btcWSSource='BINANCE';btcWSFailures=0;};
-    btcWS.onmessage=e=>{
-      try{const d=JSON.parse(e.data);const p=parseFloat(d.p);if(p>1000)onNewPrice(p,'BINANCE');}catch(_){}
-    };
-    btcWS.onerror=()=>{btcWSFailures++;};
-    btcWS.onclose=()=>{
-      btcWSSource='';
-      const delay=Math.min(1000*Math.pow(2,btcWSFailures),10000);
-      btcWSReconnect=setTimeout(connectBinanceWS,delay);
-      if(btcWSFailures>=1)connectKrakenWS();
-    };
-  }catch(_){btcWSFailures++;connectKrakenWS();}
-}
-
-// ── Kraken WebSocket — fallback ──
-let krakenWS=null;
-function connectKrakenWS(){
-  if(krakenWS&&krakenWS.readyState<2)return;
-  try{
-    krakenWS=new WebSocket('wss://ws.kraken.com');
-    krakenWS.onopen=()=>{krakenWS.send(JSON.stringify({event:'subscribe',pair:['XBT/USD'],subscription:{name:'ticker'}}));};
-    krakenWS.onmessage=e=>{
+    const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${cfg.binanceStream}`);
+    st.binanceWS = ws;
+    ws.onopen=()=>{st.binanceWSSource='BINANCE'; st.binanceWSFailures=0; if(asset===activeAsset)btcWSSource='BINANCE';};
+    ws.onmessage=e=>{
       try{
-        const d=JSON.parse(e.data);
-        if(Array.isArray(d)&&d[2]==='ticker'){
-          const p=parseFloat(d[1].c[0]);
-          if(p>1000&&btcWSSource!=='BINANCE')onNewPrice(p,'KRAKEN');
+        const d=JSON.parse(e.data); const p=parseFloat(d.p);
+        if(p>cfg.priceMin){
+          if(asset===activeAsset) onNewPrice(p,'BINANCE');
+          else assetState[asset].livePrice=p;
         }
       }catch(_){}
     };
-    krakenWS.onclose=()=>{setTimeout(()=>{if(btcWSSource!=='BINANCE')connectKrakenWS();},5000);};
+    ws.onerror=()=>{st.binanceWSFailures++;};
+    ws.onclose=()=>{
+      st.binanceWSSource=''; if(asset===activeAsset)btcWSSource='';
+      const delay=Math.min(1000*Math.pow(2,st.binanceWSFailures),10000);
+      st.binanceWSReconnect=setTimeout(()=>connectAssetBinanceWS(asset),delay);
+      if(st.binanceWSFailures>=1) connectAssetKrakenWS(asset);
+    };
+  }catch(_){assetState[asset].binanceWSFailures++; connectAssetKrakenWS(asset);}
+}
+
+function connectAssetKrakenWS(asset){
+  const st = assetState[asset];
+  const cfg = ASSET_CONFIG[asset];
+  if(st.krakenWSInst && st.krakenWSInst.readyState < 2) return;
+  try{
+    const ws = new WebSocket('wss://ws.kraken.com');
+    st.krakenWSInst = ws;
+    ws.onopen=()=>{ws.send(JSON.stringify({event:'subscribe',pair:[cfg.krakenPair],subscription:{name:cfg.krakenTopic}}));};
+    ws.onmessage=e=>{
+      try{
+        const d=JSON.parse(e.data);
+        if(Array.isArray(d)&&d[2]===cfg.krakenTopic){
+          const p=parseFloat(d[1].c[0]);
+          if(p>cfg.priceMin){
+            if(asset===activeAsset && st.binanceWSSource!=='BINANCE') onNewPrice(p,'KRAKEN');
+            else if(st.binanceWSSource!=='BINANCE') assetState[asset].livePrice=p;
+          }
+        }
+      }catch(_){}
+    };
+    ws.onclose=()=>{setTimeout(()=>{if(st.binanceWSSource!=='BINANCE')connectAssetKrakenWS(asset);},5000);};
   }catch(_){}
 }
+
+// Start both asset feeds; only active asset pushes to onNewPrice
+function connectBinanceWS(){ connectAssetBinanceWS('BTC'); connectAssetBinanceWS('ETH'); }
+function connectKrakenWS(){  connectAssetKrakenWS('BTC');  connectAssetKrakenWS('ETH'); }
+let krakenWS = null; // legacy alias
 
 // ── REST fallback — only if both WSes are dead ──
 let priceSourceIdx=0;
@@ -1167,7 +1466,7 @@ const priceSources=[krakenP,binanceP,coinbaseP];
 async function fetchPrice(){
   for(let i=0;i<priceSources.length;i++){
     const fn=priceSources[(priceSourceIdx+i)%priceSources.length];
-    try{const p=await fn();if(p>1000){priceSourceIdx=(priceSourceIdx+i)%priceSources.length;return p;}}catch(_){}
+    try{const p=await fn();if(p>ASSET_CONFIG[activeAsset].priceMin){priceSourceIdx=(priceSourceIdx+i)%priceSources.length;return p;}}catch(_){}
   }
   return null;
 }
@@ -1192,6 +1491,8 @@ async function priceTick(){
 const KALSHI_BASE = 'https://api.elections.kalshi.com/trade-api/v2';
 const KALSHI_WS   = 'wss://api.elections.kalshi.com/trade-api/ws/v2';
 const BTC_SERIES  = 'KXBTC15M'; // BTC 15-minute series ticker
+const ETH_SERIES  = 'KXETH15M'; // ETH 15-minute series ticker
+function activeKalshiSeries(){ return ASSET_CONFIG[activeAsset].series; }
 
 let kalshiMarket = null;   // current active market object from Kalshi
 let kalshiYESPrice = null;   // live YES midpoint from Kalshi orderbook
@@ -1220,7 +1521,7 @@ async function kalshiPublicFetch(path, params={}){
 }
 
 async function kalshiFetchMarket(){
-  const d = await kalshiPublicFetch('/markets', {series_ticker:BTC_SERIES, status:'open', limit:'5'});
+  const d = await kalshiPublicFetch('/markets', {series_ticker:activeKalshiSeries(), status:'open', limit:'5'});
   if(!d) return null;
   const markets = d.markets || [];
   if(!markets.length){
@@ -3626,10 +3927,12 @@ async function init(){
       onNewPrice(Math.max(last*0.995,last+(Math.random()-.498)*(last*.0005)),'DEMO');
     },500);
   }
-  // Start Kalshi market API
+  // Start Kalshi market API (active asset only at startup)
   kalshiInit();
   // Auto-connect portfolio silently — no button tap needed
   autoConnectKey();
+  // Evaluate switch advisory shortly after startup
+  setTimeout(evaluateSwitchAdvisory, 8000);
   // Roll new candle every 60s
   setInterval(()=>{
     if(livePrice&&prices.length>0) prices=[...prices.slice(-59),livePrice];
