@@ -1066,7 +1066,8 @@ const KALSHI_WS   = 'wss://api.elections.kalshi.com/trade-api/ws/v2';
 const BTC_SERIES  = 'KXBTC15M'; // BTC 15-minute series ticker
 
 let kalshiMarket = null;   // current active market object from Kalshi
-let kalshiYESPrice = null; // live YES midpoint from Kalshi orderbook
+let kalshiYESPrice = null;   // live YES midpoint from Kalshi orderbook
+let kalshiYESLastWS = 0;    // timestamp of last WS YES price update
 let kalshiWS = null;       // WebSocket instance
 let kalshiAutoStrike = null; // parsed float strike from current market
 let wsReconnectTimer = null;
@@ -1246,7 +1247,7 @@ function kalshiWSConnect(ticker){
             if(d.yes_ask_dollars!=null) kalshiMarket.yes_ask_dollars = d.yes_ask_dollars;
             if(d.last_price_dollars!=null) kalshiMarket.last_price_dollars = d.last_price_dollars;
             const mid = kalshiYESMid(kalshiMarket);
-            if(mid!==null){ kalshiYESPrice = mid; setKalshiStatus('ws','KALSHI LIVE'); }
+            if(mid!==null){ kalshiYESPrice = mid; kalshiYESLastWS = Date.now(); setKalshiStatus('ws','KALSHI LIVE'); }
             renderKalshiMarketBarAndApplyStrike();
           }
         }
@@ -1255,6 +1256,7 @@ function kalshiWSConnect(ticker){
     kalshiWS.onerror = ()=>{ setKalshiStatus('partial','KALSHI REST'); };
     kalshiWS.onclose = ()=>{
       setKalshiStatus('partial','KALSHI REST');
+      kalshiYESLastWS = 0; // mark WS as dead so watchdog knows
       // Reconnect after 8s
       wsReconnectTimer = setTimeout(()=>{ if(kalshiMarket) kalshiWSConnect(kalshiMarket.ticker); },8000);
     };
@@ -1289,19 +1291,34 @@ async function kalshiInit(){
   // Open WebSocket
   kalshiWSConnect(market.ticker);
   // Refresh every 60s — picks up new 15-min cycle and resyncs Up/Down strike
+  // ── Kalshi REST refresh: every 15s when WS is dead, every 60s otherwise ──
+  // This ensures kalshiYESPrice is never stale by more than 15s
   setInterval(async()=>{
+    const wsAlive = kalshiWS && kalshiWS.readyState === 1 && (Date.now()-kalshiYESLastWS) < 30000;
+    if(wsAlive) return; // WS is live and fresh — REST refresh not needed
+
     const m = await kalshiFetchMarket();
     if(!m) return;
-    if(m.ticker!==kalshiMarket?.ticker){
-      kalshiMarket=m; kalshiAutoStrike=parseKalshiStrike(m); kalshiYESPrice=kalshiYESMid(m)||null;
+    // Always update YES price from REST when WS is not providing it
+    const restMid = kalshiYESMid(m);
+    if(restMid !== null){
+      kalshiYESPrice = restMid;
+      setKalshiStatus('partial','KALSHI REST ●'); // show price is fresh even if via REST
+    }
+    if(m.ticker !== kalshiMarket?.ticker){
+      kalshiMarket=m; kalshiAutoStrike=parseKalshiStrike(m);
       renderKalshiMarketBarAndApplyStrike();
       kalshiWSConnect(m.ticker);
     } else {
-      // Re-sync Up/Down strike to current BTC price every minute
-      if(!kalshiAutoStrike && livePrice){ kalshiAutoStrike=null; }
+      kalshiMarket = {...kalshiMarket, ...m}; // merge fresh prices into market obj
       renderKalshiMarketBarAndApplyStrike();
+      // WS is dead — attempt reconnect
+      if(!wsAlive && kalshiMarket.ticker){
+        if(wsReconnectTimer) clearTimeout(wsReconnectTimer);
+        wsReconnectTimer = setTimeout(()=>kalshiWSConnect(kalshiMarket.ticker), 2000);
+      }
     }
-  }, 60000);
+  }, 15000);
 }
 
 
@@ -2475,12 +2492,16 @@ function applyDynamicThresholds(sm, bet, clock){
 function updateThreshGuard(){
   const guard = document.getElementById('thresh-live-guard');
   if(!guard) return;
-  if(kalshiYESPrice !== null){
-    guard.textContent = '✅ Live YES price — auto-sell active';
-    guard.style.color = '#00e5a040';
+  const isSim = !authConnected || !kalshiOrderId;
+  if(isSim){
+    guard.textContent = '📋 Simulation mode — auto-sell trains freely on model price';
+    guard.style.color = '#f7c94870';
+  } else if(kalshiYESPrice !== null){
+    guard.textContent = '✅ Live mode — auto-sell armed on real Kalshi price';
+    guard.style.color = '#00e5a060';
   } else {
-    guard.textContent = '⚡ Auto-sell requires live Kalshi YES price';
-    guard.style.color = '#2a2a40';
+    guard.textContent = '⚠️ Live mode — waiting for Kalshi order-book price';
+    guard.style.color = '#ff456660';
   }
 }
 
@@ -2512,32 +2533,42 @@ function checkRiskAutoExit(unrealizedPnL){
   const tp=maxProfit*RISK_TP_ROI;
   const sl=-active.amount*Math.abs(RISK_SL_ROI);
 
-  // ── LIVE PRICE GUARD ──
-  // Profit-capture and TP auto-sells only fire when we have a real
-  // Kalshi order-book YES price — never on model estimates.
-  // Without this, a noisy model spike could trigger a sell that fills
-  // at a much worse price (or not at all on FOK).
+  // ── Simulation vs Live mode ──
+  // Sim mode:  no API key / no active Kalshi contract
+  //            → auto-sell fires freely on model price (training data)
+  // Live mode: API key connected + real Kalshi contract open
+  //            → auto-sell requires live order-book price (real money)
+  const simMode  = !authConnected || !kalshiOrderId;
   const hasLiveYES = kalshiYESPrice !== null;
 
-  // Sell-capture: ≥ SELL_CAPTURE_THRESH of max profit locked in (live price only)
-  const sellCapture = hasLiveYES && maxProfit>0 && unrealizedPnL>=maxProfit*sellCaptureThresh;
-  // Take-profit: legacy ROI-based exit (live price only)
-  const tpHit = hasLiveYES && unrealizedPnL>=tp;
-  // Stop-loss: allowed on estimated price too — we always want to cut losses
-  const slHit = unrealizedPnL<=sl;
+  // In sim mode: no price guard needed — we're just training, not sending orders
+  // In live mode: guard stays — only fire on real Kalshi order-book price
+  const sellCapture = maxProfit>0 && unrealizedPnL>=maxProfit*sellCaptureThresh
+                      && (simMode || hasLiveYES);
+  const tpHit       = unrealizedPnL>=tp && (simMode || hasLiveYES);
+  const slHit       = unrealizedPnL<=sl; // stop-loss always fires regardless
+
+  // Debug: visible in DevTools → Console while trade is active
+  if(active){
+    const pct=maxProfit>0?Math.round(unrealizedPnL/maxProfit*100):0;
+    console.log(`[AutoExit] ${simMode?'SIM':'LIVE'} | P&L:$${unrealizedPnL.toFixed(2)} | ${pct}% captured | need:${Math.round(sellCaptureThresh*100)}% | liveYES:${hasLiveYES} | fire:${sellCapture||tpHit||slHit}`);
+  }
 
   if(sellCapture){
     riskState.tpTriggered=true;
     const pct=Math.round(unrealizedPnL/maxProfit*100);
-    showToast(`💰 ${pct}% of max profit captured (+$${unrealizedPnL.toFixed(2)}) — selling`,'#00e5a0');
+    const tag=simMode?'📋 SIM':'💰';
+    showToast(`${tag} ${pct}% captured (+$${unrealizedPnL.toFixed(2)}) — selling`,'#00e5a0');
     setTimeout(()=>closeTradeWithSell('profit_capture'),800);
   } else if(tpHit){
     riskState.tpTriggered=true;
-    showToast(`🎯 Take profit hit! +$${unrealizedPnL.toFixed(2)} — selling`,'#00e5a0');
+    const tag=simMode?'📋 SIM':'🎯';
+    showToast(`${tag} Take profit +$${unrealizedPnL.toFixed(2)} — selling`,'#00e5a0');
     setTimeout(()=>closeTradeWithSell('take_profit'),800);
   } else if(slHit){
     riskState.slTriggered=true;
-    showToast(`🛑 Stop loss hit! -$${Math.abs(unrealizedPnL).toFixed(2)} — selling`,'#ff4566');
+    const tag=simMode?'📋 SIM':'🛑';
+    showToast(`${tag} Stop loss -$${Math.abs(unrealizedPnL).toFixed(2)} — selling`,'#ff4566');
     setTimeout(()=>closeTradeWithSell('stop_loss'),800);
   }
 }
@@ -2803,40 +2834,58 @@ async function closeTradeWithSell(exitReason='manual_sell'){
   const currentYES=sm?estimateYESPrice(sm,active.bet):active.entryYESPrice;
   const winNow=(active.bet==='UP'&&livePrice>sv)||(active.bet==='DOWN'&&livePrice<sv);
   const unrealizedPnL=kalshiUnrealizedPnL(active.contracts,active.entryYESPrice,currentYES);
-
-  // P&L: if selling early we use unrealized (contract sale proceeds) not binary win/loss
   const isSell=exitReason==='profit_capture'||exitReason==='manual_sell'||exitReason==='take_profit';
   const finalPnL=isSell?unrealizedPnL:(winNow?kalshiPotentialProfit(active.amount,active.entryYESPrice):unrealizedPnL);
-
-  exitIdx=prices.length-1;
   const exitResult=finalPnL>=0?'WIN':'LOSS';
   const exitLabel=exitReason==='profit_capture'?'sold (profit capture)':exitReason==='take_profit'?'sold (TP)':exitReason==='stop_loss'?'sold (SL)':'sold (manual)';
+
+  // ── KALSHI FIRST, UI SECOND ──
+  // We attempt the Kalshi sell BEFORE closing the trade in the UI.
+  // If Kalshi fails, the trade stays open so the user knows and can retry.
+  // Exception: if not connected (no API key) we close locally — user was
+  // paper trading or testing without a real position on Kalshi.
+  if(authConnected && kalshiOrderId){
+    // Live mode: show sending toast while we wait for Kalshi
+    let kalshiOk = false;
+    let kalshiErr = '';
+    try{
+      await kalshiSellPosition(currentYES);
+      kalshiOk = true;
+    } catch(e){
+      kalshiErr = e.message;
+    }
+
+    if(!kalshiOk){
+      // Sell failed — keep trade open, reset triggered flags so auto-exit can retry
+      riskState.tpTriggered = false;
+      riskState.slTriggered = false;
+      showToast(`❌ Kalshi sell failed: ${kalshiErr} — position still open, will retry`,'#ff4566');
+      console.warn('[closeTradeWithSell] Kalshi sell failed:', kalshiErr, '— trade kept open for retry');
+      return; // ← do NOT close the UI trade
+    }
+    // Kalshi confirmed — now close in UI
+    showToast(`✅ Sold on Kalshi — ${exitLabel} $${finalPnL>=0?'+':''}${finalPnL.toFixed(2)}`,'#00e5a0');
+    refreshPortfolio();
+  } else {
+    // No Kalshi connection — paper trade or test mode, close locally
+    showToast(`📋 Trade closed locally (no Kalshi connection) — ${exitLabel}`,'#f7c948');
+  }
+
+  // ── Close in UI only after Kalshi confirmed (or no connection) ──
+  exitIdx=prices.length-1;
   trades=trades.map(t=>t.id!==active.id?t:{...t,result:exitResult,exit:livePrice,finalPnL,earlyExit:true,exitReason});
   const tradeToRecord={...active,result:exitResult,exitReason,earlyExit:true,exitYES:currentYES};
   recordTrade(tradeToRecord);
-  // Smart close boost: if we closed profitably on a sell, train NN extra
-  // on this sample with higher weight (more epochs) so it learns the pattern
   if(isSell && finalPnL > 0){
     const f=buildFeatures(active.ep||prices, active.bet, parseFloat(active.strike));
     if(f){
-      // Extra 20 epochs on this winning-close sample to reinforce the exit pattern
-      for(let e=0;e<20;e++) nnTrain(f, 1); // label 1 = good outcome
+      for(let e=0;e<20;e++) nnTrain(f, 1);
       console.log('Smart close boost: +20 epochs on profitable sell pattern');
     }
   }
   updateRiskOnTradeClosed(exitResult,finalPnL);
   active=null; peakROI=null; priceChartDirty=true; projChartDirty=true;
-
-  // Attempt Kalshi sell order — place limit sell at current YES price
-  if(authConnected&&kalshiOrderId){
-    try{
-      await kalshiSellPosition(currentYES);
-      showToast(`✅ Sold on Kalshi — ${exitLabel} +$${finalPnL>=0?'':'-'}${Math.abs(finalPnL).toFixed(2)}`,'#00e5a0');
-      refreshPortfolio();
-    } catch(e){
-      showToast(`⚠️ Kalshi sell failed: ${e.message} — trade closed locally`,'#f7c948');
-    }
-  }
+  persistState();
   showSetup(); renderLog(); renderRiskPanel(); renderTradeSetup();
 }
 
