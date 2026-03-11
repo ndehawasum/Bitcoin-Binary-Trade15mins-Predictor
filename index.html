@@ -877,11 +877,11 @@ let lastAdvisory=null;
 const RISK_CONF_MIN    = 58;
 const RISK_EV_MIN      = 0.05;
 const RISK_MAX_ACCT_PCT= 0.20;
-const RISK_DAILY_CAP   = 0.05;
+const RISK_DAILY_CAP   = 0.08 // loosened: 8% daily cap (was 5%);
 const RISK_CONSEC_BRAKE= 3;
 const RISK_TP_ROI      = 0.60;
 const RISK_SL_ROI      =-0.25 // tightened: -25% of stake (was -50%);
-const RISK_COOLDOWN_MS = 60000;
+const RISK_COOLDOWN_MS = 45000 // loosened: 45s cooldown (was 60s);
 const SELL_CAPTURE_THRESH_DEFAULT = 0.60;
 const SELL_SIGNAL_THRESH_DEFAULT  = 0.45;
 // riskState, sellCaptureThresh, sellSignalThresh, nnW, nnData — proxied per asset above
@@ -2144,13 +2144,13 @@ function chartLoop(ts){
   const pts = chartData.map(x=>x.p);
   const sv = strikeInput > 0 ? strikeInput : 0;
 
-  // ── Y range: tight zoom with padding ──
+  // ── Y range: based on PRICE DATA ONLY — never pull in the strike ──
+  // Pulling the strike into the range caused ETH charts to collapse to $0 range
+  // when strike ≈ live price (both ~$2000). Strike is drawn separately and clipped.
   let mn = Math.min(...pts), mx = Math.max(...pts);
-  if(sv>0){ mn=Math.min(mn,sv); mx=Math.max(mx,sv); }
-  // Tight zoom: pad by 20% of the visible range only — no absolute floor.
-  // This means a $5 move fills most of the canvas height, making slopes visible.
-  // Minimum pad of $0.50 each side so the line never touches the very edge.
-  const pad = Math.max((mx - mn) * 0.20, 0.50);
+  // Tight zoom: pad by 20% of the visible range only.
+  // Minimum pad of $1.00 each side so the line never touches the very edge.
+  const pad = Math.max((mx - mn) * 0.20, 1.00);
   mn -= pad; mx += pad;
   const rng = mx - mn || 1;
 
@@ -2450,7 +2450,9 @@ function drawProjection(pts,roi,pk,bet){
 
 function drawPnLCharts(){
   if(!pnlChartDirty)return; pnlChartDirty=false;
-  const settled=trades.filter(t=>t.result&&t.finalPnL!=null);
+  // Combined chart across both assets
+  const allTradesPnL = [...AST.BTC.trades, ...AST.ETH.trades].sort((a,b)=>a.id-b.id);
+  const settled=allTradesPnL.filter(t=>t.result&&t.finalPnL!=null);
   const wrap=document.getElementById('charts-wrap');
   if(settled.length<1){wrap.style.display='none';return;}
   wrap.style.display='block';
@@ -2613,6 +2615,9 @@ function renderActiveTradeFast(){
 
 function renderPrice(){
   if(!livePrice)return;
+  // Always sync the label — guards against brief activeAsset swap during bg init
+  const _priceLbl = document.getElementById('price-lbl');
+  if(_priceLbl) _priceLbl.textContent = ASSET_CFG[activeAsset].priceLabel;
   document.getElementById('lp').textContent=fmtK(livePrice);
   if(prices.length>1){
     const d=prices[prices.length-1]-prices[prices.length-2], up=d>=0;
@@ -3570,17 +3575,36 @@ function renderDualBar(){
 }
 
 function renderLog(){
-  const settled=trades.filter(t=>t.result);
+  // Combined trades across BOTH assets — sorted newest first
+  const allTrades = [...AST.BTC.trades, ...AST.ETH.trades]
+    .sort((a,b) => b.id - a.id); // id is Date.now() at creation → sorts by time
+  const settled=allTrades.filter(t=>t.result);
   const wins=settled.filter(t=>t.result==='WIN').length;
   // Use finalPnL (dollar) stored on each trade
-  const totalPnL=trades.filter(t=>t.finalPnL!=null).reduce((s,t)=>s+t.finalPnL,0);
-  document.getElementById('ltb').textContent=`LOG (${trades.length})`;
+  const totalPnL=allTrades.filter(t=>t.finalPnL!=null).reduce((s,t)=>s+t.finalPnL,0);
+  document.getElementById('ltb').textContent=`LOG (${allTrades.length})`;
   const ls=document.getElementById('ls');
-  if(settled.length>0){ls.style.display='flex';document.getElementById('st').textContent=settled.length;const wr=settled.length?((wins/settled.length)*100).toFixed(0):0;const we=document.getElementById('swr');we.textContent=`${wr}%`;we.style.color=wins/settled.length>=.5?'#00e5a0':'#ff4566';const pe=document.getElementById('spl');pe.textContent=`${totalPnL>=0?'+':''}${fmtUSD(totalPnL)}`;pe.style.color=totalPnL>=0?'#00e5a0':'#ff4566';}else ls.style.display='none';
+  if(settled.length>0){
+    ls.style.display='flex';
+    document.getElementById('st').textContent=settled.length;
+    const wr=settled.length?((wins/settled.length)*100).toFixed(0):0;
+    const we=document.getElementById('swr');
+    we.textContent=`${wr}%`;
+    we.style.color=wins/settled.length>=.5?'#00e5a0':'#ff4566';
+    // Combined PnL + per-asset breakdown
+    const btcPnL=AST.BTC.trades.filter(t=>t.finalPnL!=null).reduce((s,t)=>s+t.finalPnL,0);
+    const ethPnL=AST.ETH.trades.filter(t=>t.finalPnL!=null).reduce((s,t)=>s+t.finalPnL,0);
+    const hasBoth=AST.BTC.trades.some(t=>t.finalPnL!=null)&&AST.ETH.trades.some(t=>t.finalPnL!=null);
+    const pe=document.getElementById('spl');
+    pe.textContent=hasBoth
+      ? `${totalPnL>=0?'+':''}${fmtUSD(totalPnL)} (BTC ${btcPnL>=0?'+':''}${fmtUSD(btcPnL)} · ETH ${ethPnL>=0?'+':''}${fmtUSD(ethPnL)})`
+      : `${totalPnL>=0?'+':''}${fmtUSD(totalPnL)}`;
+    pe.style.color=totalPnL>=0?'#00e5a0':'#ff4566';
+  }else ls.style.display='none';
   const empty=document.getElementById('le'), rows=document.getElementById('log-rows'), cl=document.getElementById('cl');
-  if(trades.length===0){empty.style.display='block';rows.innerHTML='';cl.style.display='none';}
+  if(allTrades.length===0){empty.style.display='block';rows.innerHTML='';cl.style.display='none';}
   else{empty.style.display='none';cl.style.display='block';
-    rows.innerHTML=[...trades].reverse().map(t=>{
+    rows.innerHTML=[...allTrades].map(t=>{
       const pnl=t.finalPnL!=null?t.finalPnL:null;
       const rc=t.result==='WIN'?'#00e5a0':t.result==='LOSS'?'#ff4566':'#f7c948', res=t.result||(active&&t.id===active.id?'OPEN':'—');
       const yesStr=t.entryYESPrice?` · YES $${t.entryYESPrice.toFixed(2)}`:'';
@@ -3595,7 +3619,11 @@ function renderLog(){
         if(t.earlyExit)          return '<span style="background:#f7c94812;border:1px solid #f7c94830;color:#f7c94870;padding:1px 5px;border-radius:3px;font-size:7px;letter-spacing:1px">⚡ EARLY</span>';
         return '';
       })();
-      return `<div class="tr"><div class="trt"><span style="color:#2a2a40;font-size:8px">${t.time}</span><span style="font-weight:700;color:${t.bet==='UP'?'#00e5a0':'#ff4566'}">${t.bet}</span><span style="color:#444;font-size:9px">${fmtK(parseFloat(t.strike))}</span><span style="font-weight:900;color:${rc}">${res}</span></div>${pnl!==null?`<div class="trb"><span style="color:${pnl>=0?'#00e5a0':'#ff4566'}">${pnl>=0?'+':''}${fmtUSD(pnl)}</span><span style="color:#333">${yesStr}</span>${exitBadge}</div>`:''}</div>`;
+      // Asset pill — shows which market this trade was on
+      const assetTag = t.asset
+        ? `<span style="background:${t.asset==='BTC'?'#f7c94818':'#a78bfa18'};border:1px solid ${t.asset==='BTC'?'#f7c94835':'#a78bfa35'};color:${t.asset==='BTC'?'#f7c948aa':'#a78bfaaa'};padding:1px 5px;border-radius:3px;font-size:7px;letter-spacing:1px">${t.asset}</span>`
+        : '';
+      return `<div class="tr"><div class="trt"><span style="color:#2a2a40;font-size:8px">${t.time}</span>${assetTag}<span style="font-weight:700;color:${t.bet==='UP'?'#00e5a0':'#ff4566'}">${t.bet}</span><span style="color:#444;font-size:9px">${fmtK(parseFloat(t.strike))}</span><span style="font-weight:900;color:${rc}">${res}</span></div>${pnl!==null?`<div class="trb"><span style="color:${pnl>=0?'#00e5a0':'#ff4566'}">${pnl>=0?'+':''}${fmtUSD(pnl)}</span><span style="color:#333">${yesStr}</span>${exitBadge}</div>`:''}</div>`;
     }).join('');}
   pnlChartDirty=true;
   // Use rAF so the DOM has laid out the canvas before we read offsetWidth
@@ -3633,7 +3661,7 @@ function placeTrade(bet){
   const entryYESPrice=estimateYESPriceLive(sm,bet);
   const contracts=kalshiContracts(amtInput,entryYESPrice);
   const t={id:Date.now(),bet,entry:livePrice,strike:String(strikeInput),amount:amtInput,
-    entryYESPrice,contracts,ep:[...prices],
+    entryYESPrice,contracts,ep:[...prices],asset:activeAsset,
     time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}),
     result:null,exit:null,finalPnL:null};
   trades.push(t); active=t; peakROI=null; peakCapture=null; trailArmed=false; exitIdx=null; active._peakYesC=0; priceChartDirty=true; projChartDirty=true;
@@ -3999,7 +4027,7 @@ function checkAutoBuy(){
 
   if(ab.countdown === 0){
     // ── FIRE ──
-    ab.cooldownUntil = Date.now() + 90000;
+    ab.cooldownUntil = Date.now() + 60000; // loosened: 60s auto-buy cooldown (was 90s)
     ab.countdownBet  = null;
     placeTrade(bestBet);
     showToast(
