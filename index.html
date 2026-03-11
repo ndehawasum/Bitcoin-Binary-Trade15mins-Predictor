@@ -788,6 +788,14 @@ function mkAssetSt(){
     priceChartDirty: true, projChartDirty: true, pnlChartDirty: true,
     advisoryDismissed: false,
     pred: null,
+    // Chart animation state — per-asset so switching is seamless
+    chartDisplayPrice: null,
+    chartPriceVel: 0,
+    chartTickVel: 0,
+    chartTickTime: 0,
+    chartLastTickPrice: null,
+    chartVelSmooth: 0,
+    chartPulse: 0,
   };
 }
 const AST = { BTC: mkAssetSt(), ETH: mkAssetSt() };
@@ -825,6 +833,13 @@ Object.defineProperties(window, {
   priceChartDirty: {get(){return A().priceChartDirty;}, set(v){A().priceChartDirty=v;}, configurable:true},
   projChartDirty:  {get(){return A().projChartDirty;},  set(v){A().projChartDirty=v;},  configurable:true},
   pnlChartDirty:   {get(){return A().pnlChartDirty;},   set(v){A().pnlChartDirty=v;},   configurable:true},
+  chartDisplayPrice:{get(){return A().chartDisplayPrice;},set(v){A().chartDisplayPrice=v;},configurable:true},
+  chartPriceVel:   {get(){return A().chartPriceVel;},   set(v){A().chartPriceVel=v;},   configurable:true},
+  chartTickVel:    {get(){return A().chartTickVel;},    set(v){A().chartTickVel=v;},    configurable:true},
+  chartTickTime:   {get(){return A().chartTickTime;},   set(v){A().chartTickTime=v;},   configurable:true},
+  chartLastTickPrice:{get(){return A().chartLastTickPrice;},set(v){A().chartLastTickPrice=v;},configurable:true},
+  chartVelSmooth:  {get(){return A().chartVelSmooth;},  set(v){A().chartVelSmooth=v;},  configurable:true},
+  chartPulse:      {get(){return A().chartPulse;},      set(v){A().chartPulse=v;},      configurable:true},
 });
 
 // ═══════════════════════════════════════════════════
@@ -841,19 +856,14 @@ let prevSecsLeft=null, blinking=false;
 let amtInput=0;
 
 // ── Chart animation state ──
-let chartAnimFrame = null;       // rAF handle
-let chartPulse = 0;              // 0→1 pulse animation for live dot
-let chartVelSmooth = 0;          // smoothed velocity for color intensity
-let chartLastTickPrice = null;   // last seen livePrice (detect new ticks)
-let chartTickVel = 0;            // inferred inter-tick velocity ($/ms)
-let chartTickTime = 0;           // timestamp of last tick
+// chartDisplayPrice, chartPriceVel, chartTickVel, chartTickTime, chartLastTickPrice,
+// chartVelSmooth, chartPulse — all proxied per-asset above for seamless switching
+let chartAnimFrame = null;       // rAF handle — single loop, asset-agnostic
 let chartLastPrice = null;       // last rendered price (for interpolation)
-let chartDisplayPrice = null;    // currently displayed price (animates toward livePrice)
-let chartPriceVel = 0;           // velocity for spring interpolation
 let chartLastDrawW = 0;          // last canvas width — only resize when it changes
 let chartLastDrawH = 0;
-const CHART_SPRING_STIFF = 0.30; // tighter spring — price tracks faster
-const CHART_SPRING_DAMP  = 0.70; // slight undershoot gives organic feel
+const CHART_SPRING_STIFF = 0.30;
+const CHART_SPRING_DAMP  = 0.70;
 let lastAdvisory=null;
 
 // ── RISK MANAGEMENT CONSTANTS ──
@@ -969,7 +979,7 @@ async function loadPersistedState(){
 
 const sig=x=>1/(1+Math.exp(-Math.max(-10,Math.min(10,x))));
 
-function nnInit(){nnW=nnRand();}
+function nnInit(){ AST.BTC.nnW=nnRand(); AST.ETH.nnW=nnRand(); }
 function nnRand(){const r=()=>(Math.random()-.5)*.4;
   // Architecture: 9 inputs → 8 hidden neurons → 1 output
   // w1: 8×9 (8 hidden neurons, each with 9 input weights)
@@ -1204,7 +1214,7 @@ async function switchAsset(asset){
 
   // Restore this asset's tick buffer (already running in background — no reset needed)
   lastWSTime=A().lastWSTime||0;
-  chartDisplayPrice=null; chartPriceVel=0;
+  // Chart animation state is per-asset via proxy — no reset needed, seamless transition
   priceChartDirty=true; projChartDirty=true; pnlChartDirty=true;
 
   // Update UI labels and buttons
@@ -1217,12 +1227,24 @@ async function switchAsset(asset){
 
   // Restore strike input for this asset
   const ki=document.getElementById('ki');
-  if(ki&&A().strikeInput>0) ki.value=A().strikeInput.toFixed(2);
+  if(ki){
+    if(A().strikeInput>0){ ki.value=A().strikeInput.toFixed(2); }
+    else if(A().kalshiAutoStrike>0){ ki.value=A().kalshiAutoStrike.toFixed(2); A().strikeInput=A().kalshiAutoStrike; }
+    else { ki.value=''; }
+  }
 
-  // Re-init Kalshi for new asset
-  kalshiMarket=null; kalshiYESPrice=null; kalshiAutoStrike=null; kalshiOrderId=null;
+  // Re-init Kalshi status display; only re-fetch if market not yet cached
   renderKalshiMarketBar();
-  kalshiInit();
+  if(!A().kalshiMarket){
+    kalshiInit(); // first visit to this asset — fetch fresh
+  } else {
+    // Already cached — just re-render and reconnect WS if needed
+    renderKalshiMarketBarAndApplyStrike();
+    if(!A().kalshiWS || A().kalshiWS.readyState > 1){
+      kalshiWSConnectForAsset(asset, A().kalshiMarket.ticker);
+    }
+    setKalshiStatus(A().kalshiYESLastWS>0?'ws':'partial', A().kalshiYESLastWS>0?'KALSHI LIVE':'KALSHI REST');
+  }
 
   // Inject background price immediately if available
   if(A().livePrice) onNewPrice(A().livePrice,'SWITCH');
@@ -1339,10 +1361,14 @@ async function binanceP(){const r=await fetch('https://api.binance.com/api/v3/ti
 async function coinbaseP(){const r=await fetch('https://api.coinbase.com/v2/prices/BTC-USD/spot');return parseFloat((await r.json()).data.amount);}
 function synth(base,n=60){const p=[];let v=base*.999;for(let i=0;i<n;i++){v=Math.max(v+(Math.random()-.498)*(base*.0006),base*.97);p.push(v);}p[p.length-1]=base;return p;}
 
-async function loadInit(){
-  try{const p=await krakenCandles();return{p,c:p[p.length-1],s:'KRAKEN'};}catch(_){}
-  try{const p=await binanceCandles();return{p,c:p[p.length-1],s:'BINANCE'};}catch(_){}
-  for(const fn of[krakenP,binanceP,coinbaseP]){try{const c=await fn();if(c>1000)return{p:synth(c),c,s:'LIVE'};}catch(_){}}
+async function loadInit(asset){
+  const a=asset||activeAsset;
+  const minP=ASSET_CFG[a].priceMin;
+  try{const p=await krakenCandles(a);return{p,c:p[p.length-1],s:'KRAKEN'};}catch(_){}
+  try{const p=await binanceCandles(a);return{p,c:p[p.length-1],s:'BINANCE'};}catch(_){}
+  for(const fn of[krakenP,binanceP,coinbaseP]){
+    try{const v=await fn(a);if(v>minP)return{p:synth(v),c:v,s:'LIVE'};}catch(_){}
+  }
   return null;
 }
 
@@ -1452,21 +1478,18 @@ async function fetchPrice(){
   const cfg=ASSET_CFG[activeAsset];
   for(let i=0;i<priceSources.length;i++){
     const fn=priceSources[(priceSourceIdx+i)%priceSources.length];
-    try{const p=await fn();if(p>cfg.priceMin){priceSourceIdx=(priceSourceIdx+i)%priceSources.length;return p;}}catch(_){}
+    try{const p=await fn(activeAsset);if(p>cfg.priceMin){priceSourceIdx=(priceSourceIdx+i)%priceSources.length;return p;}}catch(_){}
   }
   return null;
 }
 
 async function priceTick(){
-  // Skip REST poll if WebSocket delivered a price in last 6s
-  if(Date.now()-lastWSTime<6000)return;
-  if(mode==='demo'){
-    const base=livePrice||83000;
-    onNewPrice(Math.max(base*0.995,base+(Math.random()-.498)*(base*.0008)),'DEMO');
-    return;
-  }
+  // Skip REST poll if active asset WS delivered a price in last 6s
+  const assetLastWS = A().lastWSTime || 0;
+  if(Date.now()-assetLastWS<6000) return;
+  if(mode==='demo') return; // demo handles its own tick
   const p=await fetchPrice();
-  if(p)onNewPrice(p,source||'REST');
+  if(p) onNewPrice(p, source||'REST');
 }
 
 
@@ -1653,101 +1676,125 @@ function estimateYESPriceLive(sm, bet){
 }
 
 // Connect Kalshi WebSocket for live YES price
-function kalshiWSConnect(ticker){
-  if(kalshiWS&&kalshiWS.readyState<2) kalshiWS.close();
-  if(wsReconnectTimer) clearTimeout(wsReconnectTimer);
+// kalshiWSConnectForAsset: connects Kalshi WS for a specific asset using its own state
+// Never touches the proxy — safe to call for background assets
+function kalshiWSConnectForAsset(asset, ticker){
+  const st = AST[asset];
+  if(st.kalshiWS&&st.kalshiWS.readyState<2) st.kalshiWS.close();
+  if(st.wsReconnectTimer) clearTimeout(st.wsReconnectTimer);
   try{
-    kalshiWS = new WebSocket(KALSHI_WS);
-    kalshiWS.onopen = ()=>{
-      setKalshiStatus('ws','KALSHI WS');
-      kalshiWS.send(JSON.stringify({
-        id:1, cmd:'subscribe',
-        params:{channels:['ticker'], market_tickers:[ticker]}
-      }));
+    const ws = new WebSocket(KALSHI_WS);
+    st.kalshiWS = ws;
+    ws.onopen = ()=>{
+      if(asset===activeAsset) setKalshiStatus('ws','KALSHI WS');
+      ws.send(JSON.stringify({id:1, cmd:'subscribe', params:{channels:['ticker'], market_tickers:[ticker]}}));
     };
-    kalshiWS.onmessage = e=>{
+    ws.onmessage = e=>{
       try{
         const msg = JSON.parse(e.data);
         if(msg.type==='ticker'&&msg.data){
           const d = msg.data;
-          // Update kalshiMarket YES prices from WS
-          if(kalshiMarket&&d.market_ticker===kalshiMarket.ticker){
-            if(d.yes_bid_dollars!=null) kalshiMarket.yes_bid_dollars = d.yes_bid_dollars;
-            if(d.yes_ask_dollars!=null) kalshiMarket.yes_ask_dollars = d.yes_ask_dollars;
-            if(d.last_price_dollars!=null) kalshiMarket.last_price_dollars = d.last_price_dollars;
-            const mid = kalshiYESMid(kalshiMarket);
-            if(mid!==null){ kalshiYESPrice = mid; kalshiYESLastWS = Date.now(); setKalshiStatus('ws','KALSHI LIVE'); }
-            renderKalshiMarketBarAndApplyStrike();
+          if(st.kalshiMarket&&d.market_ticker===st.kalshiMarket.ticker){
+            if(d.yes_bid_dollars!=null) st.kalshiMarket.yes_bid_dollars = d.yes_bid_dollars;
+            if(d.yes_ask_dollars!=null) st.kalshiMarket.yes_ask_dollars = d.yes_ask_dollars;
+            if(d.last_price_dollars!=null) st.kalshiMarket.last_price_dollars = d.last_price_dollars;
+            const mid = kalshiYESMid(st.kalshiMarket);
+            if(mid!==null){
+              st.kalshiYESPrice = mid; st.kalshiYESLastWS = Date.now();
+              if(asset===activeAsset) setKalshiStatus('ws','KALSHI LIVE');
+            }
+            if(asset===activeAsset) renderKalshiMarketBarAndApplyStrike();
           }
         }
       }catch(_){}
     };
-    kalshiWS.onerror = ()=>{ setKalshiStatus('partial','KALSHI REST'); };
-    kalshiWS.onclose = ()=>{
-      setKalshiStatus('partial','KALSHI REST');
-      kalshiYESLastWS = 0; // mark WS as dead so watchdog knows
-      // Reconnect after 8s
-      wsReconnectTimer = setTimeout(()=>{ if(kalshiMarket) kalshiWSConnect(kalshiMarket.ticker); },8000);
+    ws.onerror = ()=>{ if(asset===activeAsset) setKalshiStatus('partial','KALSHI REST'); };
+    ws.onclose = ()=>{
+      if(asset===activeAsset){ setKalshiStatus('partial','KALSHI REST'); }
+      st.kalshiYESLastWS = 0;
+      st.wsReconnectTimer = setTimeout(()=>{ if(st.kalshiMarket) kalshiWSConnectForAsset(asset,st.kalshiMarket.ticker); }, 8000);
     };
-  }catch(_){ setKalshiStatus('partial','KALSHI REST'); }
+  }catch(_){ if(asset===activeAsset) setKalshiStatus('partial','KALSHI REST'); }
 }
+// Legacy alias used by existing code paths — connects for active asset
+function kalshiWSConnect(ticker){ kalshiWSConnectForAsset(activeAsset, ticker); }
 
 // Full Kalshi init — fetch market, details, strike, then open WS
+// Track whether the per-asset Kalshi refresh interval has been started
+const _kalshiIntervalStarted = {BTC: false, ETH: false};
+
 async function kalshiInit(){
+  const asset = activeAsset; // capture at call time — all closures below use this
+  const st = AST[asset];
   setKalshiStatus('loading','KALSHI ...');
   const market = await kalshiFetchMarket();
   if(!market){ return; }
-  kalshiMarket = market;
-  kalshiAutoStrike = parseKalshiStrike(market); // null for Up/Down until livePrice ready
+  st.kalshiMarket = market;
+  st.kalshiAutoStrike = parseKalshiStrike(market);
   const mid = kalshiYESMid(market);
-  if(mid) kalshiYESPrice = mid;
-  setKalshiStatus('partial','KALSHI REST');
-  // Try to apply strike now; if livePrice not ready yet, poll until it is
-  if(livePrice){
-    renderKalshiMarketBarAndApplyStrike();
-  } else {
+  if(mid) st.kalshiYESPrice = mid;
+  if(asset===activeAsset) setKalshiStatus('partial','KALSHI REST');
+  // Apply strike — poll until livePrice available for this asset
+  const applyStrikeForAsset = () => {
+    const p = st.livePrice;
+    if(!p) return false;
+    if(!st.kalshiAutoStrike){
+      st.kalshiAutoStrike = parseKalshiStrike(st.kalshiMarket);
+      if(!st.kalshiAutoStrike) st.kalshiAutoStrike = p; // Up/Down: use live price
+    }
+    const ki = document.getElementById('ki');
+    if(asset===activeAsset && ki){ ki.value = st.kalshiAutoStrike.toFixed(2); }
+    st.strikeInput = st.kalshiAutoStrike;
+    if(asset===activeAsset){ renderKalshiMarketBarAndApplyStrike(); renderTradeSetup(); renderSignalPanel(); }
+    return true;
+  };
+  if(!applyStrikeForAsset()){
     const waitForPrice = setInterval(()=>{
-      if(livePrice){
-        clearInterval(waitForPrice);
-        kalshiAutoStrike = parseKalshiStrike(kalshiMarket); // re-parse with livePrice
-        renderKalshiMarketBarAndApplyStrike();
-      }
+      if(applyStrikeForAsset()) clearInterval(waitForPrice);
     }, 500);
   }
   // Fetch full market details
   const full = await kalshiFetchDetails(market.ticker);
-  if(full){ kalshiMarket = full; kalshiYESPrice=kalshiYESMid(full)||kalshiYESPrice; renderKalshiMarketBarAndApplyStrike(); }
-  // Open WebSocket
-  kalshiWSConnect(market.ticker);
+  if(full){
+    st.kalshiMarket=full;
+    st.kalshiYESPrice=kalshiYESMid(full)||st.kalshiYESPrice;
+    if(!st.kalshiAutoStrike) st.kalshiAutoStrike=parseKalshiStrike(full);
+    if(asset===activeAsset) renderKalshiMarketBarAndApplyStrike();
+  }
+  // Open WebSocket for this asset
+  kalshiWSConnectForAsset(asset, market.ticker);
   // Refresh every 60s — picks up new 15-min cycle and resyncs Up/Down strike
   // ── Kalshi REST refresh: every 15s when WS is dead, every 60s otherwise ──
   // This ensures kalshiYESPrice is never stale by more than 15s
-  setInterval(async()=>{
-    const wsAlive = kalshiWS && kalshiWS.readyState === 1 && (Date.now()-kalshiYESLastWS) < 30000;
-    if(wsAlive) return; // WS is live and fresh — REST refresh not needed
-
-    const m = await kalshiFetchMarket();
-    if(!m) return;
-    // Always update YES price from REST when WS is not providing it
-    const restMid = kalshiYESMid(m);
-    if(restMid !== null){
-      kalshiYESPrice = restMid;
-      setKalshiStatus('partial','KALSHI REST ●'); // show price is fresh even if via REST
-    }
-    if(m.ticker !== kalshiMarket?.ticker){
-      kalshiMarket=m; kalshiAutoStrike=parseKalshiStrike(m);
-      renderKalshiMarketBarAndApplyStrike();
-      kalshiWSConnect(m.ticker);
-    } else {
-      kalshiMarket = {...kalshiMarket, ...m}; // merge fresh prices into market obj
-      renderKalshiMarketBarAndApplyStrike();
-      // WS is dead — attempt reconnect
-      if(!wsAlive && kalshiMarket.ticker){
-        if(wsReconnectTimer) clearTimeout(wsReconnectTimer);
-        wsReconnectTimer = setTimeout(()=>kalshiWSConnect(kalshiMarket.ticker), 2000);
+  // Only start the refresh interval ONCE per asset — prevents duplicate intervals on switch
+  if(!_kalshiIntervalStarted[asset]){
+    _kalshiIntervalStarted[asset] = true;
+    setInterval(async()=>{
+      // Use captured `st` and `asset` — never touches proxy
+      const wsAlive = st.kalshiWS && st.kalshiWS.readyState===1 && (Date.now()-st.kalshiYESLastWS)<30000;
+      if(wsAlive) return;
+      const m = await kalshiPublicFetch('/markets', {series_ticker:ASSET_CFG[asset].series, status:'open', limit:'5'});
+      const mkt = m?.markets?.[0] || null;
+      if(!mkt) return;
+      const restMid = kalshiYESMid(mkt);
+      if(restMid!==null){
+        st.kalshiYESPrice = restMid;
+        if(asset===activeAsset) setKalshiStatus('partial','KALSHI REST ●');
       }
-    }
-  }, 15000);
+      if(mkt.ticker !== st.kalshiMarket?.ticker){
+        st.kalshiMarket=mkt; st.kalshiAutoStrike=parseKalshiStrike(mkt);
+        if(asset===activeAsset) renderKalshiMarketBarAndApplyStrike();
+        kalshiWSConnectForAsset(asset, mkt.ticker);
+      } else {
+        st.kalshiMarket={...st.kalshiMarket,...mkt};
+        if(asset===activeAsset) renderKalshiMarketBarAndApplyStrike();
+        if(!wsAlive && st.kalshiMarket.ticker){
+          if(st.wsReconnectTimer) clearTimeout(st.wsReconnectTimer);
+          st.wsReconnectTimer = setTimeout(()=>kalshiWSConnectForAsset(asset, st.kalshiMarket.ticker), 2000);
+        }
+      }
+    }, 15000);
+  }
 }
 
 
@@ -2289,18 +2336,26 @@ function chartLoop(ts){
   }
   ctx.textAlign='left';
 
-  // ── Y axis: no labels, faint horizontal grid lines only ──
-  // Labels removed — the moving price pill on the right is the reference.
-  // Grid lines help the eye track slope without cluttering the chart.
-  const dollarStart = Math.ceil(mn);
-  const dollarEnd   = Math.floor(mx);
-  for(let v = dollarStart; v <= dollarEnd; v++){
+  // ── Y axis: adaptive grid lines — step size based on price range ──
+  // Step picks the smallest "round" interval that gives 4-8 visible lines.
+  // Works for both BTC ($100+ range) and ETH ($10-50 range) without perf hit.
+  const visRange = mx - mn;
+  const targetLines = 6;
+  const rawStep = visRange / targetLines;
+  // Round to nearest: 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000...
+  const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
+  const normalized = rawStep / magnitude;
+  const niceStep = normalized < 1.5 ? 1 : normalized < 3.5 ? 2 : normalized < 7.5 ? 5 : 10;
+  const gridStep = niceStep * magnitude;
+  const gridStart = Math.ceil(mn / gridStep) * gridStep;
+  for(let v = gridStart; v <= mx + gridStep * 0.01; v += gridStep){
+    if(v < mn) continue;
     const y = ty(v);
     if(y < PT || y > H - PB) continue;
-    const isFive = v % 5 === 0;
+    const isMajor = Math.abs(Math.round(v / (gridStep * 5)) * (gridStep * 5) - v) < gridStep * 0.01;
     ctx.beginPath();
     ctx.moveTo(PL, y); ctx.lineTo(PL + CW, y);
-    ctx.strokeStyle = isFive ? '#ffffff06' : '#ffffff02';
+    ctx.strokeStyle = isMajor ? '#ffffff07' : '#ffffff03';
     ctx.lineWidth = dpr;
     ctx.stroke();
   }
@@ -4092,38 +4147,55 @@ async function init(){
   setInterval(priceTick,5000); // REST watchdog — only fires if WS dead
 
   clockTick(); renderHeader();
-  // Load initial candle history
-  const data=await loadInit();
-  if(data){prices=data.p;livePrice=data.c;source=data.s;mode='live';
-    pushTick(livePrice);
-    connectBinanceWS();
+  // Load initial candle history for BTC (active asset at startup)
+  const data=await loadInit('BTC');
+  if(data){
+    AST.BTC.prices=data.p; AST.BTC.livePrice=data.c; AST.BTC.source=data.s; mode='live';
+    pushTick(data.c, 'BTC');
+    connectBinanceWS(); // starts both BTC + ETH WS
     connectKrakenWS();
+    // Background: seed ETH candle history from its own feed
+    loadInit('ETH').then(ethData=>{
+      if(ethData){
+        AST.ETH.prices=ethData.p; AST.ETH.livePrice=ethData.c; AST.ETH.source=ethData.s;
+        pushTick(ethData.c, 'ETH');
+      } else {
+        const eb=AST.ETH.livePrice||2500; AST.ETH.prices=synth(eb,60);
+      }
+    }).catch(()=>{ const eb=AST.ETH.livePrice||2500; AST.ETH.prices=synth(eb,60); });
   } else {
-    const b=83000+Math.random()*5000;prices=synth(b,60);livePrice=prices[prices.length-1];
-    source='DEMO';mode='demo';document.getElementById('demo-ban').style.display='block';
+    const b=83000+Math.random()*5000;
+    AST.BTC.prices=synth(b,60); AST.BTC.livePrice=AST.BTC.prices[59];
+    const eb=2500+Math.random()*200;
+    AST.ETH.prices=synth(eb,60); AST.ETH.livePrice=AST.ETH.prices[59];
+    mode='demo'; document.getElementById('demo-ban').style.display='block';
     setInterval(()=>{
-      if(mode!=='demo')return;
-      const last=livePrice||83000;
-      onNewPrice(Math.max(last*0.995,last+(Math.random()-.498)*(last*.0005)),'DEMO');
+      if(mode!=='demo') return;
+      for(const a of ['BTC','ETH']){
+        const st=AST[a]; const base=st.livePrice||(a==='BTC'?83000:2500);
+        const p=Math.max(base*0.995, base+(Math.random()-.498)*(base*.0005));
+        st.livePrice=p; pushTick(p,a);
+        if(a===activeAsset) onNewPrice(p,'DEMO');
+      }
     },500);
   }
-  // Start Kalshi market API (active asset)
-  kalshiInit();
-  // Background: pre-fetch ETH Kalshi market so advisory has data
-  setTimeout(async()=>{
-    const prevAsset=activeAsset;
-    activeAsset='ETH';
-    const m=await kalshiFetchMarket();
-    if(m){ AST['ETH'].kalshiMarket=m; AST['ETH'].kalshiAutoStrike=parseKalshiStrike(m); }
-    activeAsset=prevAsset;
-  }, 5000);
+  // Init Kalshi for BTC (active), then ETH in background with 3s stagger
+  kalshiInit(); // BTC — activeAsset is 'BTC' here
+  setTimeout(()=>{
+    const prev=activeAsset; activeAsset='ETH';
+    kalshiInit(); // ETH — captured inside kalshiInit
+    activeAsset=prev;
+  }, 3000);
   // Auto-connect portfolio silently — no button tap needed
   autoConnectKey();
   // Initial advisory check after feeds are loaded
   setTimeout(evalAdvisory, 9000);
   // Roll new candle every 60s
   setInterval(()=>{
-    if(livePrice&&prices.length>0) prices=[...prices.slice(-59),livePrice];
+    for(const a of ['BTC','ETH']){
+      const st=AST[a];
+      if(st.livePrice&&st.prices.length>0) st.prices=[...st.prices.slice(-59),st.livePrice];
+    }
   },60000);
   priceChartDirty=true;
   renderPrice(); renderSignalPanel(); renderTradeSetup(); renderHeader(); updateBrainPanel();
