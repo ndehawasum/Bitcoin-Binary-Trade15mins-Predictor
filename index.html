@@ -1068,6 +1068,12 @@ const BTC_SERIES  = 'KXBTC15M'; // BTC 15-minute series ticker
 let kalshiMarket = null;   // current active market object from Kalshi
 let kalshiYESPrice = null;   // live YES midpoint from Kalshi orderbook
 let kalshiYESLastWS = 0;    // timestamp of last WS YES price update
+
+// True only when the Kalshi WebSocket is streaming live order-book prices
+// REST polling alone is NOT sufficient for real order placement
+function kalshiIsLive(){
+  return kalshiYESLastWS > 0 && (Date.now() - kalshiYESLastWS) < 10000;
+}
 let kalshiWS = null;       // WebSocket instance
 let kalshiAutoStrike = null; // parsed float strike from current market
 let wsReconnectTimer = null;
@@ -2492,16 +2498,16 @@ function applyDynamicThresholds(sm, bet, clock){
 function updateThreshGuard(){
   const guard = document.getElementById('thresh-live-guard');
   if(!guard) return;
-  const isSim = !authConnected || !kalshiOrderId;
-  if(isSim){
-    guard.textContent = '📋 Simulation mode — auto-sell trains freely on model price';
+  const isSim = !authConnected || !kalshiOrderId || !kalshiIsLive();
+  if(isSim && authConnected && kalshiYESPrice!==null){
+    guard.textContent = '📋 Simulation — Kalshi REST (WS not live)';
     guard.style.color = '#f7c94870';
-  } else if(kalshiYESPrice !== null){
+  } else if(isSim){
+    guard.textContent = '📋 Simulation mode — auto-sell trains freely';
+    guard.style.color = '#f7c94870';
+  } else {
     guard.textContent = '✅ Live mode — auto-sell armed on real Kalshi price';
     guard.style.color = '#00e5a060';
-  } else {
-    guard.textContent = '⚠️ Live mode — waiting for Kalshi order-book price';
-    guard.style.color = '#ff456660';
   }
 }
 
@@ -2538,7 +2544,8 @@ function checkRiskAutoExit(unrealizedPnL){
   //            → auto-sell fires freely on model price (training data)
   // Live mode: API key connected + real Kalshi contract open
   //            → auto-sell requires live order-book price (real money)
-  const simMode  = !authConnected || !kalshiOrderId;
+  // simMode: no key, no active Kalshi contract, or WS not live
+  const simMode  = !authConnected || !kalshiOrderId || !kalshiIsLive();
   const hasLiveYES = kalshiYESPrice !== null;
 
   // In sim mode: no price guard needed — we're just training, not sending orders
@@ -2817,7 +2824,9 @@ function placeTrade(bet){
 
   // Only place a real Kalshi order when API key is connected AND market is live
   // If kalshiYESPrice is null (REST only, no live order book) → simulation trade
-  const goLive = authConnected && kalshiMarket && kalshiYESPrice !== null;
+  // Real order only when: API key connected + WS streaming live prices
+  // REST-only (kalshiIsLive()=false) → simulation, no real order sent
+  const goLive = authConnected && kalshiMarket && kalshiIsLive();
   if(goLive){
     kalshiPlaceOrder(bet, amtInput).then(order=>{
       showToast(`✅ Kalshi order placed — ${order.fill_count_fp||'?'} contracts filled`,'#00e5a0');
@@ -2825,7 +2834,7 @@ function placeTrade(bet){
       showToast(`⚠️ Kalshi order failed: ${e.message}`,'#ff4566');
     });
   } else {
-    const reason = !authConnected ? 'no API key' : kalshiYESPrice===null ? 'Kalshi REST — sim trade' : 'no market';
+    const reason = !authConnected ? 'no API key' : !kalshiIsLive() ? 'Kalshi REST — sim trade' : 'no market';
     showToast(`📋 Sim trade placed (${reason})`,'#f7c948');
   }
 }
