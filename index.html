@@ -1991,15 +1991,37 @@ function chartLoop(ts){
   }
   ctx.textAlign='left';
 
-  // ── Y axis price labels (3 levels) ──
-  ctx.font=`${7.5*dpr}px 'Courier New'`;
-  ctx.fillStyle='#2a2a40';
-  const yLevels=[0.15,0.5,0.85];
-  yLevels.forEach(frac=>{
-    const v=mx-frac*rng;
-    const y=ty(v);
-    ctx.fillText('$'+Math.round(v).toLocaleString(),PL+2*dpr,y-3*dpr);
-  });
+  // ── Y axis: $1 increment grid lines + labels ──
+  // Find the first whole dollar at or above mn, step by $1
+  const dollarStart = Math.ceil(mn);   // first whole $ in view
+  const dollarEnd   = Math.floor(mx);  // last whole $ in view
+  ctx.font=`${7*dpr}px 'Courier New'`;
+  for(let v = dollarStart; v <= dollarEnd; v++){
+    const y = ty(v);
+    if(y < PT || y > H - PB) continue; // clip to chart area
+
+    // Determine label prominence:
+    // multiples of $10 → brighter line + label
+    // multiples of $5  → medium line + label
+    // every $1         → faint tick line, no label (would be too dense)
+    const isTen  = v % 10 === 0;
+    const isFive = v % 5  === 0;
+    const showLabel = isTen || isFive;
+
+    // Grid line
+    ctx.beginPath();
+    ctx.moveTo(PL, y); ctx.lineTo(PL + CW, y);
+    ctx.strokeStyle = isTen ? '#ffffff0e' : isFive ? '#ffffff07' : '#ffffff03';
+    ctx.lineWidth = dpr;
+    ctx.stroke();
+
+    // Label — only on $5 and $10 multiples to avoid clutter
+    if(showLabel){
+      const label = '$' + v.toLocaleString();
+      ctx.fillStyle = isTen ? '#3a3a55' : '#2a2a40';
+      ctx.fillText(label, PL + 2*dpr, y - 3*dpr);
+    }
+  }
 
   // ── Exit marker ──
   if(exitIdx!==null && active){
