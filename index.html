@@ -14,7 +14,7 @@ input[type=number]{-moz-appearance:textfield}
 ::-webkit-scrollbar-track{background:#07070f}
 ::-webkit-scrollbar-thumb{background:#1a1a35;border-radius:2px}
 #app{max-width:440px;margin:0 auto;padding:14px 11px 60px}
-.card{background:#0c0c1c;border:1px solid #1a1a35;border-radius:14px;padding:12px 14px;margin-bottom:10px}
+.card{background:#0c0c1c;border:1px solid #1a1a35;border-radius:14px;padding:12px 14px;margin-bottom:10px;will-change:auto}
 .lbl{font-size:8px;letter-spacing:4px;color:#444;margin-bottom:6px}
 .gold{color:#f7c948}
 
@@ -47,11 +47,16 @@ input[type=number]{-moz-appearance:textfield}
 #ct{font-size:20px;font-weight:900;line-height:1.1}
 
 /* mini price chart */
-#pcc{width:100%;height:72px;display:block}
+#pcc{
+  width:100%;height:220px;display:block;
+  border-radius:10px;
+  will-change:transform;   /* promote to GPU compositor layer */
+  image-rendering:pixelated;
+}
 
 /* tabs */
 #tabs{display:flex;gap:6px;margin-bottom:10px}
-.tb{flex:1;padding:6px 0;border-radius:8px;border:none;cursor:pointer;font-family:inherit;font-size:8px;letter-spacing:3px;background:#0c0c1c;color:#444;font-weight:400;transition:all .12s}
+.tb{flex:1;padding:6px 0;border-radius:8px;border:none;cursor:pointer;font-family:inherit;font-size:8px;letter-spacing:3px;background:#0c0c1c;color:#444;font-weight:400;transition:background .08s,color .08s}
 .tb.on{background:#f7c948;color:#07070f;font-weight:900}
 .pnl{display:none}.pnl.on{display:block}
 
@@ -64,7 +69,7 @@ input[type=number]{-moz-appearance:textfield}
 
 /* prob split */
 #prob-split{display:flex;border-radius:10px;overflow:hidden;margin-bottom:10px;height:30px}
-#prob-up,#prob-dn{display:flex;align-items:center;justify-content:center;font-weight:900;font-size:12px;color:#07070f;transition:width .8s ease}
+#prob-up,#prob-dn{display:flex;align-items:center;justify-content:center;font-weight:900;font-size:12px;color:#07070f;transition:width .4s cubic-bezier(.4,0,.2,1),background .4s ease}
 
 /* velocity */
 .vel-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #0a0a1e}
@@ -243,9 +248,15 @@ input[type=number]{-moz-appearance:textfield}
     </div>
   </div>
 
-  <div class="card" style="padding:10px 13px;margin-bottom:10px">
-    <div class="lbl">PRICE CHART</div>
-    <canvas id="pcc" height="72"></canvas>
+  <div class="card" style="padding:10px 13px 6px;margin-bottom:10px;position:relative">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <div class="lbl" style="margin:0">PRICE  <span id="chart-src-badge" style="color:#2a2a40;font-size:7px;letter-spacing:2px"></span></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span id="chart-spread" style="font-size:8px;color:#333;letter-spacing:1px"></span>
+        <span id="chart-window-lbl" style="font-size:7px;color:#2a2a40;letter-spacing:2px">30S</span>
+      </div>
+    </div>
+    <canvas id="pcc"></canvas>
   </div>
 
   <div id="tabs">
@@ -439,8 +450,16 @@ input[type=number]{-moz-appearance:textfield}
           <div style="display:flex;justify-content:space-between;font-size:9px;margin-bottom:4px">
             <span style="color:#333">Entry YES price</span><span id="at-entry-yes" style="color:#f7c948;font-weight:700">—</span>
           </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;font-size:9px;margin-bottom:4px">
+            <span style="color:#333">Current YES price</span>
+            <span style="display:flex;align-items:center;gap:6px">
+              <span id="at-yes-delta" style="font-size:8px;font-weight:700">—</span>
+              <span id="at-cur-yes" style="font-weight:700">—</span>
+            </span>
+          </div>
           <div style="display:flex;justify-content:space-between;font-size:9px;margin-bottom:4px">
-            <span style="color:#333">Current implied price</span><span id="at-cur-yes" style="font-weight:700">—</span>
+            <span style="color:#333">Contract move</span>
+            <span id="at-contract-move" style="font-weight:900;font-size:10px">—</span>
           </div>
           <div style="display:flex;justify-content:space-between;font-size:9px;margin-bottom:4px">
             <span style="color:#333">Contracts held</span><span id="at-contracts" style="color:#666">—</span>
@@ -579,7 +598,8 @@ input[type=number]{-moz-appearance:textfield}
       <button class="brain-btn" id="exp-btn" onclick="exportNN()">⬇ EXPORT TRAINING DATA</button>
       <label class="brain-btn" id="imp-lbl">⬆ IMPORT TRAINING DATA<input type="file" id="imp-file" accept=".json" style="display:none" onchange="importNN(event)"></label>
       <button class="brain-btn" id="rst-btn" onclick="resetNN()">RESET NEURAL NETWORK</button>
-      <div style="font-size:8px;color:#2a2a40;text-align:center">No localStorage — export JSON to save between sessions</div>
+      <button class="brain-btn" onclick="clearStoredData()" style="background:transparent;border:1px solid #ff456615;color:#ff456640;margin-top:2px">CLEAR BROWSER STORAGE</button>
+      <div style="font-size:8px;color:#2a2a40;text-align:center" id="idb-status">💾 Auto-saved to browser — survives reload</div>
     </div>
   </div>
 
@@ -655,6 +675,21 @@ let prevSecsLeft=null, blinking=false;
 let strikeInput=0, amtInput=0;
 // dirty flags for chart redraws
 let priceChartDirty=true, projChartDirty=true, pnlChartDirty=true;
+
+// ── Chart animation state ──
+let chartAnimFrame = null;       // rAF handle
+let chartPulse = 0;              // 0→1 pulse animation for live dot
+let chartVelSmooth = 0;          // smoothed velocity for color intensity
+let chartLastTickPrice = null;   // last seen livePrice (detect new ticks)
+let chartTickVel = 0;            // inferred inter-tick velocity ($/ms)
+let chartTickTime = 0;           // timestamp of last tick
+let chartLastPrice = null;       // last rendered price (for interpolation)
+let chartDisplayPrice = null;    // currently displayed price (animates toward livePrice)
+let chartPriceVel = 0;           // velocity for spring interpolation
+let chartLastDrawW = 0;          // last canvas width — only resize when it changes
+let chartLastDrawH = 0;
+const CHART_SPRING_STIFF = 0.30; // tighter spring — price tracks faster
+const CHART_SPRING_DAMP  = 0.70; // slight undershoot gives organic feel
 let lastAdvisory=null;
 
 // ── RISK MANAGEMENT STATE ──
@@ -685,27 +720,132 @@ let sellSignalThresh  = SELL_SIGNAL_THRESH_DEFAULT;
 // NEURAL NETWORK (8→6→1)
 // ═══════════════════════════════════════════════════
 let nnW=null, nnData=[];
+// ═══════════════════════════════════════════════════
+// INDEXEDDB PERSISTENCE — survives page reload
+// Stores: nnData, nnW (weights), trades, riskState
+// ═══════════════════════════════════════════════════
+const IDB_NAME = 'btc15m_edge';
+const IDB_STORE = 'state';
+const IDB_VERSION = 1;
+let idb = null;
+
+function idbOpen(){
+  return new Promise((res,rej)=>{
+    const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if(!db.objectStoreNames.contains(IDB_STORE))
+        db.createObjectStore(IDB_STORE);
+    };
+    req.onsuccess = e => { idb = e.target.result; res(idb); };
+    req.onerror   = e => { console.warn('IDB open failed:', e); rej(e); };
+  });
+}
+
+function idbSet(key, value){
+  if(!idb) return Promise.resolve();
+  return new Promise((res,rej)=>{
+    const tx = idb.transaction(IDB_STORE,'readwrite');
+    tx.objectStore(IDB_STORE).put(value, key);
+    tx.oncomplete = res; tx.onerror = rej;
+  });
+}
+
+function idbGet(key){
+  if(!idb) return Promise.resolve(null);
+  return new Promise((res,rej)=>{
+    const tx = idb.transaction(IDB_STORE,'readonly');
+    const req = tx.objectStore(IDB_STORE).get(key);
+    req.onsuccess = ()=>res(req.result??null);
+    req.onerror   = ()=>res(null);
+  });
+}
+
+// Save all critical state to IDB — called after every trade event
+async function persistState(){
+  try{
+    await idbSet('nnData',   nnData);
+    await idbSet('nnW',      nnW);
+    await idbSet('trades',   trades.slice(-200)); // keep last 200
+    await idbSet('riskState',riskState);
+  }catch(e){ console.warn('IDB save failed:', e); }
+}
+
+// Load persisted state — called once at startup before rendering
+async function loadPersistedState(){
+  try{
+    await idbOpen();
+    const savedNN    = await idbGet('nnData');
+    const savedW     = await idbGet('nnW');
+    const savedTrades= await idbGet('trades');
+    const savedRisk  = await idbGet('riskState');
+
+    if(savedNN && Array.isArray(savedNN) && savedNN.length > 0){
+      nnData = savedNN;
+      console.log(`IDB: loaded ${nnData.length} NN training samples`);
+    }
+    // Validate weight shape before restoring
+    if(savedW && savedW.w1 && savedW.w1.length===8 && savedW.w1[0] && savedW.w1[0].length===6
+       && savedW.w1[0][0]!==null && savedW.w1[0][0]!==undefined){
+      nnW = savedW;
+      console.log('IDB: restored NN weights (8×6)');
+    } else if(nnData.length >= 2){
+      // Have data but no valid weights — re-train from scratch
+      nnW = nnRand();
+      const recent = nnData.slice(-40);
+      for(let e=0;e<20;e++) recent.forEach(d=>nnTrain(d.f,d.l));
+      console.log('IDB: re-trained NN from saved data');
+    }
+    if(savedTrades && Array.isArray(savedTrades) && savedTrades.length > 0){
+      trades = savedTrades;
+      console.log(`IDB: restored ${trades.length} trades`);
+    }
+    if(savedRisk && typeof savedRisk === 'object'){
+      // Merge carefully — keep structure, restore numeric fields only
+      riskState.dailyLoss = savedRisk.dailyLoss ?? 0;
+      riskState.consecutiveLosses = savedRisk.consecutiveLosses ?? 0;
+      riskState.lastLossTime = savedRisk.lastLossTime ?? 0;
+      riskState.dailyStart = savedRisk.dailyStart ?? '';
+      console.log('IDB: restored risk state');
+    }
+  }catch(e){ console.warn('IDB load failed:', e); }
+}
+
 const sig=x=>1/(1+Math.exp(-Math.max(-10,Math.min(10,x))));
 
 function nnInit(){nnW=nnRand();}
 function nnRand(){const r=()=>(Math.random()-.5)*.4;
-  return{w1:Array.from({length:6},()=>Array.from({length:8},r)),b1:Array.from({length:6},r),
-    w2:Array.from({length:1},()=>Array.from({length:6},r)),b2:[r()]};}
+  // Architecture: 6 inputs → 8 hidden neurons → 1 output
+  // w1: 8×6 (8 hidden neurons, each with 6 input weights)
+  // w2: 1×8 (output neuron, 8 inputs from hidden layer)
+  return{w1:Array.from({length:8},()=>Array.from({length:6},r)),b1:Array.from({length:8},r),
+    w2:Array.from({length:1},()=>Array.from({length:8},r)),b2:[r()]};}
 
 function nnFwd(inp){
-  if(!nnW)return.5;
-  const h=nnW.w1.map((row,i)=>sig(row.reduce((s,w,j)=>s+w*inp[j],0)+nnW.b1[i]));
-  return sig(nnW.w2[0].reduce((s,w,i)=>s+w*h[i],0)+nnW.b2[0]);
+  if(!nnW)return .5;
+  if(!inp||inp.length!==6||inp.some(v=>!isFinite(v)||isNaN(v)))return .5;
+  // Guard null/mismatched weights — re-init if corrupted
+  if(!nnW.w1||nnW.w1.length!==8||nnW.w1[0].length!==6||nnW.w1[0][0]===null||nnW.w1[0][0]===undefined){
+    nnW=nnRand(); return .5;
+  }
+  try{
+    const h=nnW.w1.map((row,i)=>sig(row.reduce((s,w,j)=>s+(w||0)*inp[j],0)+(nnW.b1[i]||0)));
+    const out=sig(nnW.w2[0].reduce((s,w,i)=>s+(w||0)*h[i],0)+(nnW.b2[0]||0));
+    return isNaN(out)?0.5:out;
+  }catch(e){return .5;}
 }
 function nnTrain(inp,lbl,lr=.06){
-  if(!nnW)return;
-  const h=nnW.w1.map((row,i)=>sig(row.reduce((s,w,j)=>s+w*inp[j],0)+nnW.b1[i]));
-  const out=sig(nnW.w2[0].reduce((s,w,i)=>s+w*h[i],0)+nnW.b2[0]);
+  if(!nnW||!inp||inp.length!==6)return;
+  if(!nnW.w1||nnW.w1.length!==8||nnW.w1[0][0]===null){nnW=nnRand();}
+  if(inp.some(v=>!isFinite(v)||isNaN(v)))return; // skip corrupt samples
+  const h=nnW.w1.map((row,i)=>sig(row.reduce((s,w,j)=>s+(w||0)*inp[j],0)+(nnW.b1[i]||0)));
+  const out=sig(nnW.w2[0].reduce((s,w,i)=>s+(w||0)*h[i],0)+(nnW.b2[0]||0));
+  if(isNaN(out))return;
   const dO=(out-lbl)*out*(1-out);
-  nnW.w2[0]=nnW.w2[0].map((w,i)=>w-lr*dO*h[i]); nnW.b2[0]-=lr*dO;
-  const dH=h.map((hi,i)=>dO*nnW.w2[0][i]*hi*(1-hi));
-  nnW.w1=nnW.w1.map((row,i)=>row.map((w,j)=>w-lr*dH[i]*inp[j]));
-  nnW.b1=nnW.b1.map((b,i)=>b-lr*dH[i]);
+  nnW.w2[0]=nnW.w2[0].map((w,i)=>(w||0)-lr*dO*h[i]); nnW.b2[0]=(nnW.b2[0]||0)-lr*dO;
+  const dH=h.map((hi,i)=>dO*(nnW.w2[0][i]||0)*hi*(1-hi));
+  nnW.w1=nnW.w1.map((row,i)=>row.map((w,j)=>(w||0)-lr*dH[i]*inp[j]));
+  nnW.b1=nnW.b1.map((b,i)=>(b||0)-lr*dH[i]);
 }
 function nnAcc(){
   if(nnData.length<5)return null;
@@ -714,18 +854,24 @@ function nnAcc(){
 function buildFeatures(arr,bet,strike){
   if(!arr||arr.length<15)return null;
   const last=arr[arr.length-1];
-  const rsi=calcRSI(arr)||50;
-  const e12=calcEMA(arr,12)||last, e26=calcEMA(arr,26)||last;
-  const e9=calcEMA(arr,9)||last, e21=calcEMA(arr,21)||last;
-  const bb=calcBB(arr); const bbp=bb?(last-bb.lower)/(bb.upper-bb.lower):.5;
-  const mom=(arr.length>=11)?(last-arr[arr.length-11])/last*1000:0;
-  const trend5=(arr.length>=5)?(last-arr[arr.length-5])/last*1000:0;
-  // Strike-relative feature — key for Kalshi prediction
-  const strikeDist=strike>0?(last-strike)/strike*1000:0;
-  return[(rsi-50)/50,(e12-e26)/last*1000,(e9-e21)/last*1000,bbp*2-1,mom,trend5];
-  // Note: we pass strikeDist separately to strike model
+  if(!last||last<=0)return null;
+  const safe=v=>(!isFinite(v)||isNaN(v))?0:v; // NaN/Inf guard
+  const rsi=safe(calcRSI(arr)||50);
+  const e12=safe(calcEMA(arr,12)||last), e26=safe(calcEMA(arr,26)||last);
+  const e9=safe(calcEMA(arr,9)||last), e21=safe(calcEMA(arr,21)||last);
+  const bb=calcBB(arr);
+  const bbRange=bb?(bb.upper-bb.lower):1;
+  const bbp=safe(bb&&bbRange>0?(last-bb.lower)/bbRange:.5);
+  const mom=safe((arr.length>=11)?(last-arr[arr.length-11])/last*1000:0);
+  const trend5=safe((arr.length>=5)?(last-arr[arr.length-5])/last*1000:0);
+  const f=[safe((rsi-50)/50),safe((e12-e26)/last*1000),safe((e9-e21)/last*1000),safe(bbp*2-1),mom,trend5];
+  // Final safety: if any feature is NaN, bail out
+  if(f.some(v=>!isFinite(v)||isNaN(v)))return null;
+  return f;
 }
 function exportNN(){
+  // Ensure weights are valid before export — re-init if any nulls crept in
+  if(!nnW||nnW.w1[0][0]===null||nnW.w1[0][0]===undefined) nnW=nnRand();
   const d={weights:nnW,data:nnData,at:new Date().toISOString()};
   const b=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='btc15m_brain.json'; a.click();
@@ -734,19 +880,45 @@ function importNN(e){
   const f=e.target.files[0]; if(!f)return;
   const r=new FileReader(); r.onload=ev=>{
     try{const d=JSON.parse(ev.target.result);
-      if(d.weights)nnW=d.weights; if(d.data)nnData=d.data;
-      updateBrainPanel(); alert(`Imported ${nnData.length} training samples.`);
+      if(d.data) nnData=d.data;
+      // Validate imported weights — check shape matches current arch (8×6)
+      const w=d.weights;
+      const validShape=w&&w.w1&&w.w1.length===8&&w.w1[0]&&w.w1[0].length===6
+        &&w.w1[0][0]!==null&&w.w1[0][0]!==undefined;
+      if(validShape){
+        nnW=w;
+      } else {
+        nnW=nnRand(); // old export or null weights — re-init; data still loaded
+      }
+      // Re-train on imported data so weights reflect the history
+      if(nnData.length>=2){
+        const recent=nnData.slice(-40);
+        for(let e=0;e<10;e++) recent.forEach(d=>nnTrain(d.f,d.l));
+      }
+      persistState(); updateBrainPanel(); showToast(`Imported ${nnData.length} samples — saved to browser storage`,'#00e5a0');
     }catch(_){alert('Invalid file.');}
   }; r.readAsText(f); e.target.value='';
 }
-function resetNN(){if(!confirm('Reset? All training data lost.'))return; nnW=nnRand(); nnData=[]; updateBrainPanel();}
+function resetNN(){if(!confirm('Reset? All training data lost.'))return; nnW=nnRand(); nnData=[]; persistState(); updateBrainPanel();}
+function clearStoredData(){
+  if(!confirm('Clear all browser storage? Trade log, NN data, and risk state will be wiped.'))return;
+  if(!idb){showToast('No storage to clear','#f7c948');return;}
+  const tx=idb.transaction(IDB_STORE,'readwrite');
+  tx.objectStore(IDB_STORE).clear();
+  tx.oncomplete=()=>{
+    nnW=nnRand(); nnData=[]; trades=[]; riskState={dailyLoss:0,consecutiveLosses:0,lastLossTime:0,tpTriggered:false,slTriggered:false,dailyStart:''};
+    updateBrainPanel(); renderLog(); renderRiskPanel();
+    showToast('Browser storage cleared','#f7c948');
+  };
+}
 function recordTrade(t){
   const f=buildFeatures(t.ep||prices,t.bet,parseFloat(t.strike));
   if(!f)return;
   nnData.push({f,l:t.result==='WIN'?1:0});
   if(nnData.length>300)nnData=nnData.slice(-300);
   const recent=nnData.slice(-40);
-  for(let e=0;e<5;e++)recent.forEach(d=>nnTrain(d.f,d.l));
+  for(let e=0;e<10;e++)recent.forEach(d=>nnTrain(d.f,d.l));
+  persistState(); // auto-save to IndexedDB after every trade
 }
 
 // ═══════════════════════════════════════════════════
@@ -818,7 +990,7 @@ function onNewPrice(price,src){
   renderPrice();
   renderSignalPanelFast();
   if(active)renderActiveTradeFast();
-  drawPriceChart();
+  // Chart redraws via rAF loop — no sync call needed
   if(!blinking){blinking=true;renderHeader();setTimeout(()=>{blinking=false;renderHeader();},200);}
 }
 
@@ -1195,9 +1367,11 @@ function computeStrikeModel(arr, strike){
   let nnInfluence=0;
   if(nnData.length>=8){
     const f=buildFeatures(arr,'UP',strike);
-    if(f){const nnOut=nnFwd(f)*100;
+    if(f){const nnRaw=nnFwd(f)*100;
+      const nnOut=isNaN(nnRaw)||!isFinite(nnRaw)?50:nnRaw;
       const w=Math.min(.45,nnData.length/200*.45);
-      techUpPct=techUpPct*(1-w)+nnOut*w; nnInfluence=Math.round(w*100);
+      const blended=techUpPct*(1-w)+nnOut*w;
+      if(isFinite(blended)&&!isNaN(blended)){techUpPct=blended; nnInfluence=Math.round(w*100);}
     }
   }
 
@@ -1377,220 +1551,341 @@ function computeAdvisory(arr,strike,bet,pnl,strikeModel,clock,peakPnL){
 // ═══════════════════════════════════════════════════
 // CANVAS DRAWINGS — only when dirty
 // ═══════════════════════════════════════════════════
-function drawPriceChart(){
-  if(!priceChartDirty)return; priceChartDirty=false;
-  const cv=document.getElementById('pcc'); if(!cv)return;
-  const dpr=window.devicePixelRatio||1;
-  const W2=cv.offsetWidth; if(W2===0)return;
-  const CH=160; // taller — like Kalshi chart
-  cv.width=W2*dpr; cv.height=CH*dpr;
-  cv.style.height=CH+'px';
-  const ctx=cv.getContext('2d');
-  const W=cv.width, H=cv.height;
-  const PL=8*dpr, PR=80*dpr, PT=16*dpr, PB=20*dpr; // left/right/top/bottom padding
-  const CW=W-PL-PR, ch=H-PT-PB; // chart content width/height
+// ── startChartLoop: persistent 60fps — starts once, never restarts ──
+function startChartLoop(){
+  // Always safe to call — if already looping, chartLoop re-queues itself
+  if(!chartAnimFrame)
+    chartAnimFrame = requestAnimationFrame(chartLoop);
+}
 
-  // ── Rolling 30-second window ──
-  const WINDOW_MS=30000;
-  const now=Date.now();
-  const windowStart=now-WINDOW_MS;
+function chartLoop(ts){
+  chartAnimFrame = requestAnimationFrame(chartLoop);
+
+  const cv = document.getElementById('pcc');
+  if(!cv) return;
+
+  // ── Detect new BTC tick → derive inter-tick velocity ──
+  if(livePrice && livePrice !== chartLastTickPrice){
+    if(chartLastTickPrice !== null && chartTickTime > 0 && (ts - chartTickTime) > 0)
+      chartTickVel = (livePrice - chartLastTickPrice) / Math.max(50, ts - chartTickTime);
+    chartLastTickPrice = livePrice;
+    chartTickTime = ts;
+    priceChartDirty = true;
+  }
+
+  // ── Sub-tick extrapolation: smooth motion between Binance ticks ──
+  if(livePrice && livePrice > 0){
+    chartTickVel *= 0.90; // decay between ticks
+    const msSince = ts - (chartTickTime || ts);
+    const extrapolated = livePrice + chartTickVel * Math.min(msSince, 250);
+    const target = livePrice * 0.7 + extrapolated * 0.3; // blend live + extrapolated
+    if(chartDisplayPrice === null) chartDisplayPrice = livePrice;
+    chartPriceVel = chartPriceVel * CHART_SPRING_DAMP + (target - chartDisplayPrice) * CHART_SPRING_STIFF;
+    chartDisplayPrice += chartPriceVel;
+  }
+
+  // ── Pulse + velocity — run every frame ──
+  chartPulse = (chartPulse + 0.05) % (Math.PI * 2);
+  chartVelSmooth = chartVelSmooth * 0.90 + Math.abs(chartPriceVel||0) * 0.10;
+
+  // Run at full 60fps — no dirty gate (eliminates micro-stutters)
+  priceChartDirty = false;
+
+  // ── Canvas sizing — only resize when layout changes ──
+  const dpr = window.devicePixelRatio || 1;
+  const W2  = cv.offsetWidth, CH = 220;
+  if(W2 === 0) return;
+  if(cv.width !== Math.round(W2*dpr) || cv.height !== CH*dpr){
+    cv.width  = Math.round(W2*dpr);
+    cv.height = CH*dpr;
+  }
+
+  const ctx = cv.getContext('2d');
+  ctx.save();
+  const W = cv.width, H = cv.height;
+  const PL=12*dpr, PR=90*dpr, PT=20*dpr, PB=28*dpr;
+  const CW=W-PL-PR, ch=H-PT-PB;
+
+  // ── Tick data ──
+  const WINDOW_MS = 45000; // 45s — more context
+  const now = Date.now();
+  const windowStart = now - WINDOW_MS;
 
   let chartData;
-  if(tickBuffer.length>=2){
-    chartData=tickBuffer.filter(x=>x.t>=windowStart);
-    if(chartData.length<2) chartData=tickBuffer.slice(-30);
+  if(tickBuffer.length >= 2){
+    chartData = tickBuffer.filter(x => x.t >= windowStart);
+    if(chartData.length < 2) chartData = tickBuffer.slice(-80);
   } else {
-    chartData=prices.map((p,i)=>({t:tickWindowStart+i*60000,p})).slice(-30);
+    chartData = prices.map((p,i)=>({t: now-(prices.length-1-i)*1000, p}));
   }
-  if(chartData.length<2)return;
+  if(chartData.length < 2){ ctx.restore(); return; }
 
-  const pts=chartData.map(x=>x.p);
-  const sv=strikeInput>0?strikeInput:0;
+  // Inject spring-interpolated tip
+  const dp = chartDisplayPrice || chartData[chartData.length-1].p;
+  const baseData = chartData.slice(0,-1);
+  const tip = {t: now, p: dp};
+  chartData = [...baseData, tip];
 
-  // Y range — tight zoom on actual price movement
-  const rawMn=Math.min(...pts), rawMx=Math.max(...pts);
-  const pad=(rawMx-rawMn)*0.3||rawMx*0.0005;
-  const mn=rawMn-pad, mx=rawMx+pad, rng=mx-mn||1;
+  const pts = chartData.map(x=>x.p);
+  const sv = strikeInput > 0 ? strikeInput : 0;
 
-  // X: timestamp-based so scrolling is smooth
-  const tEnd=chartData[chartData.length-1].t;
-  const tStart=tEnd-WINDOW_MS;
-  const tx=t=>PL+Math.max(0,Math.min(1,(t-tStart)/WINDOW_MS))*CW;
-  const ty=v=>PT+((mx-v)/rng)*ch;
+  // ── Y range: tight zoom with padding ──
+  let mn = Math.min(...pts), mx = Math.max(...pts);
+  if(sv>0){ mn=Math.min(mn,sv); mx=Math.max(mx,sv); }
+  const pad = Math.max((mx-mn)*0.28, mx*0.00035);
+  mn -= pad; mx += pad;
+  const rng = mx-mn || 1;
 
+  // ── Coordinate helpers ──
+  const tStart = now - WINDOW_MS;
+  const tx = t => PL + Math.max(0,Math.min(1,(t-tStart)/WINDOW_MS)) * CW;
+  const ty = v => PT + ((mx-v)/rng) * ch;
+
+  // ── Clear ──
   ctx.clearRect(0,0,W,H);
 
-  const hasStrike=sv>0;
-  const sy=hasStrike?ty(sv):null;
-  const curAbove=hasStrike&&pts[pts.length-1]>=sv;
-  const GREEN='#00e5a0', RED='#ff4566', ORANGE='#f97316';
+  const GREEN='#00e5a0', RED='#ff4566', AMBER='#f7c948';
+  const hasStrike = sv > 0;
+  const sy = hasStrike ? ty(sv) : null;
+  const curAbove = hasStrike && dp >= sv;
+  const lineCol = hasStrike ? (curAbove ? GREEN : RED) : AMBER;
 
-  // ── Strike line drawn FIRST (behind everything else) ──
+  // ── Background grid lines ──
+  const gridSteps = 4;
+  ctx.beginPath();
+  for(let i=1; i<gridSteps; i++){
+    const gy = PT + (ch/gridSteps)*i;
+    ctx.moveTo(PL, gy); ctx.lineTo(PL+CW, gy);
+  }
+  ctx.strokeStyle='#ffffff05'; ctx.lineWidth=dpr; ctx.stroke();
+
+  // ── Strike zone shading ──
   if(hasStrike){
-    const strikeCol=curAbove?GREEN:RED;
+    // WIN zone — brighter when BTC is actually above strike
+    ctx.fillStyle = curAbove ? GREEN+'12' : GREEN+'04';
+    ctx.fillRect(PL, PT, CW, Math.max(0, sy-PT));
+    // LOSS zone — brighter when BTC is below strike
+    ctx.fillStyle = !curAbove ? RED+'0e' : RED+'03';
+    ctx.fillRect(PL, sy, CW, Math.max(0, H-PB-sy));
+  }
+
+  // ── Strike dashed line ──
+  if(hasStrike){
     ctx.save();
     ctx.beginPath(); ctx.moveTo(PL,sy); ctx.lineTo(PL+CW,sy);
-    ctx.strokeStyle=strikeCol+'80'; ctx.lineWidth=1*dpr;
-    ctx.setLineDash([5*dpr,3*dpr]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle = (curAbove?GREEN:RED)+'55';
+    ctx.lineWidth = 1.5*dpr;
+    ctx.setLineDash([6*dpr,3*dpr]); ctx.stroke();
     ctx.restore();
   }
 
-  // ── Color-coded area fill — green above strike, red below, orange if no strike ──
+  // ── Area gradient fill — state-aware opacity ──
   if(hasStrike){
-    // Above-strike fill (green), clipped above strike line
+    // Above-strike fill — bright when winning
     ctx.save();
-    ctx.beginPath(); ctx.rect(PL,PT,CW,sy-PT); ctx.clip();
-    ctx.beginPath();
-    ctx.moveTo(tx(chartData[0].t),sy);
+    ctx.beginPath(); ctx.rect(PL,PT,CW,Math.max(0,sy-PT)); ctx.clip();
+    ctx.beginPath(); ctx.moveTo(tx(chartData[0].t),sy);
     chartData.forEach(d=>ctx.lineTo(tx(d.t),ty(d.p)));
-    ctx.lineTo(tx(chartData[chartData.length-1].t),sy);
-    ctx.closePath();
+    ctx.lineTo(tx(chartData[chartData.length-1].t),sy); ctx.closePath();
     const ga=ctx.createLinearGradient(0,PT,0,sy);
-    ga.addColorStop(0,GREEN+'50'); ga.addColorStop(1,GREEN+'08');
-    ctx.fillStyle=ga; ctx.fill();
-    ctx.restore();
-
-    // Below-strike fill (red), clipped below strike line
+    ga.addColorStop(0,curAbove?GREEN+'50':GREEN+'14');
+    ga.addColorStop(0.65,curAbove?GREEN+'18':GREEN+'05');
+    ga.addColorStop(1,GREEN+'00');
+    ctx.fillStyle=ga; ctx.fill(); ctx.restore();
+    // Below-strike fill — bright when losing
     ctx.save();
-    ctx.beginPath(); ctx.rect(PL,sy,CW,H-PB-sy); ctx.clip();
-    ctx.beginPath();
-    ctx.moveTo(tx(chartData[0].t),sy);
+    ctx.beginPath(); ctx.rect(PL,sy,CW,Math.max(0,H-PB-sy)); ctx.clip();
+    ctx.beginPath(); ctx.moveTo(tx(chartData[0].t),sy);
     chartData.forEach(d=>ctx.lineTo(tx(d.t),ty(d.p)));
-    ctx.lineTo(tx(chartData[chartData.length-1].t),sy);
-    ctx.closePath();
+    ctx.lineTo(tx(chartData[chartData.length-1].t),sy); ctx.closePath();
     const gr=ctx.createLinearGradient(0,sy,0,H-PB);
-    gr.addColorStop(0,RED+'18'); gr.addColorStop(1,RED+'04');
-    ctx.fillStyle=gr; ctx.fill();
-    ctx.restore();
+    gr.addColorStop(0,!curAbove?RED+'3a':RED+'10');
+    gr.addColorStop(0.65,!curAbove?RED+'12':RED+'03');
+    gr.addColorStop(1,RED+'00');
+    ctx.fillStyle=gr; ctx.fill(); ctx.restore();
   } else {
-    // No strike — plain orange fill
-    ctx.beginPath();
-    ctx.moveTo(tx(chartData[0].t),H-PB);
+    ctx.save();
+    ctx.beginPath(); ctx.moveTo(tx(chartData[0].t),H-PB);
     chartData.forEach(d=>ctx.lineTo(tx(d.t),ty(d.p)));
-    ctx.lineTo(tx(chartData[chartData.length-1].t),H-PB);
-    ctx.closePath();
+    ctx.lineTo(tx(chartData[chartData.length-1].t),H-PB); ctx.closePath();
     const go=ctx.createLinearGradient(0,PT,0,H-PB);
-    go.addColorStop(0,ORANGE+'55'); go.addColorStop(1,ORANGE+'00');
-    ctx.fillStyle=go; ctx.fill();
+    go.addColorStop(0,AMBER+'40'); go.addColorStop(1,AMBER+'00');
+    ctx.fillStyle=go; ctx.fill(); ctx.restore();
   }
 
-  // ── Price line — green above strike, red below, crossover mid-segment ──
-  if(hasStrike){
-    for(let i=1;i<chartData.length;i++){
-      const a=chartData[i-1], b=chartData[i];
-      const ax=tx(a.t),ay=ty(a.p),bx=tx(b.t),by=ty(b.p);
-      const aAbove=a.p>=sv, bAbove=b.p>=sv;
-      if(aAbove===bAbove){
-        ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by);
-        ctx.strokeStyle=aAbove?GREEN:RED;
-        ctx.lineWidth=2*dpr; ctx.lineJoin='round'; ctx.lineCap='round'; ctx.stroke();
-      } else {
-        // Interpolate crossover point
-        const frac=(sv-a.p)/(b.p-a.p);
-        const cx2=ax+(bx-ax)*frac, cy2=sy;
-        ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(cx2,cy2);
-        ctx.strokeStyle=aAbove?GREEN:RED;
-        ctx.lineWidth=2*dpr; ctx.lineJoin='round'; ctx.lineCap='round'; ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(cx2,cy2); ctx.lineTo(bx,by);
-        ctx.strokeStyle=bAbove?GREEN:RED;
-        ctx.lineWidth=2*dpr; ctx.lineJoin='round'; ctx.lineCap='round'; ctx.stroke();
-      }
+
+  // ── Price line: smooth Catmull-Rom spline + velocity glow ──
+  ctx.lineJoin='round'; ctx.lineCap='round';
+
+  function drawSpline(pts, color, lw){
+    if(pts.length < 2) return;
+    ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+    for(let i=0; i<pts.length-1; i++){
+      const p0=pts[Math.max(0,i-1)], p1=pts[i], p2=pts[i+1], p3=pts[Math.min(pts.length-1,i+2)];
+      const cp1x=p1.x+(p2.x-p0.x)/6, cp1y=p1.y+(p2.y-p0.y)/6;
+      const cp2x=p2.x-(p3.x-p1.x)/6, cp2y=p2.y-(p3.y-p1.y)/6;
+      ctx.bezierCurveTo(cp1x,cp1y,cp2x,cp2y,p2.x,p2.y);
     }
-  } else {
-    ctx.beginPath();
-    chartData.forEach((d,i)=>i===0?ctx.moveTo(tx(d.t),ty(d.p)):ctx.lineTo(tx(d.t),ty(d.p)));
-    ctx.strokeStyle=ORANGE; ctx.lineWidth=2*dpr; ctx.lineJoin='round'; ctx.lineCap='round'; ctx.stroke();
+    ctx.strokeStyle=color; ctx.lineWidth=lw; ctx.stroke();
   }
 
-  // ── Strike label — pinned to right margin, never overlaps price line ──
+  // Velocity glow — subtle outer halo when price moving fast
+  const velI=Math.min(1,chartVelSmooth*60);
+  if(velI>0.04){
+    const gCol=sv>0?(curAbove?GREEN:RED):AMBER;
+    ctx.globalAlpha=velI*0.15;
+    drawSpline(chartData.map(d=>({x:tx(d.t),y:ty(d.p)})), gCol, 10*dpr);
+    ctx.globalAlpha=1;
+  }
+
   if(hasStrike){
-    const strikeCol=curAbove?GREEN:RED;
-    const strikeLabel='$'+sv.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
-    ctx.font=`bold ${8.5*dpr}px -apple-system,sans-serif`;
-    const slw=ctx.measureText(strikeLabel).width;
-    const sPad=5*dpr, sH=15*dpr, sR=3*dpr;
-    // Position in the right-padding zone, centred on strike Y
-    const spx=W-PR+6*dpr;
-    const spy_raw=sy-sH/2;
-    // Clamp so pill never clips top/bottom
-    const spy=Math.max(PT, Math.min(H-PB-sH, spy_raw));
-    // Solid filled pill
+    let seg=[], lastAbove=null;
+    for(let i=0;i<chartData.length;i++){
+      const d=chartData[i]; const above=d.p>=sv;
+      if(lastAbove!==null&&above!==lastAbove){
+        const prev=chartData[i-1];
+        const frac=(sv-prev.p)/(d.p-prev.p);
+        const crossX=tx(prev.t)+(tx(d.t)-tx(prev.t))*frac;
+        seg.push({x:crossX,y:sy});
+        drawSpline(seg,lastAbove?GREEN:RED,2.5*dpr); seg=[{x:crossX,y:sy}];
+      }
+      seg.push({x:tx(d.t),y:ty(d.p)}); lastAbove=above;
+    }
+    if(seg.length>=2) drawSpline(seg,lastAbove?GREEN:RED,2.5*dpr);
+  } else {
+    drawSpline(chartData.map(d=>({x:tx(d.t),y:ty(d.p)})),AMBER,2.5*dpr);
+  }
+
+  // ── Entry price level line (if active trade) ──
+  if(active && active.entryPrice){
+    const ey=ty(active.entryPrice);
+    ctx.save();
+    ctx.beginPath(); ctx.moveTo(PL,ey); ctx.lineTo(PL+CW,ey);
+    ctx.strokeStyle='#f7c94840'; ctx.lineWidth=dpr;
+    ctx.setLineDash([2*dpr,4*dpr]); ctx.stroke();
+    ctx.restore();
+    ctx.font=`bold ${7.5*dpr}px 'Courier New'`;
+    ctx.fillStyle='#f7c94880';
+    ctx.fillText('ENTRY', PL+4*dpr, ey-3*dpr);
+  }
+
+  // ── Right-margin labels ──
+  const rightX = PL+CW+8*dpr;
+
+  // Strike pill
+  if(hasStrike){
+    const sc=curAbove?GREEN:RED;
+    const sl='$'+sv.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+    ctx.font=`bold ${8.5*dpr}px 'Courier New'`;
+    const slw=ctx.measureText(sl).width;
+    const sH=16*dpr, sPad=5*dpr, sR=3*dpr;
+    let spy=Math.max(PT,Math.min(H-PB-sH,sy-sH/2));
     ctx.beginPath();
-    if(ctx.roundRect) ctx.roundRect(spx,spy,slw+sPad*2,sH,sR);
-    else ctx.rect(spx,spy,slw+sPad*2,sH);
-    ctx.fillStyle='#0c0c1c'; ctx.fill();          // solid dark bg — never see-through
-    ctx.strokeStyle=strikeCol; ctx.lineWidth=dpr; ctx.stroke();
-    ctx.fillStyle=strikeCol;
-    ctx.fillText(strikeLabel, spx+sPad, spy+sH*0.73);
-    // Short horizontal tick from chart edge to pill
-    ctx.beginPath(); ctx.moveTo(PL+CW,sy); ctx.lineTo(spx-2*dpr,sy);
-    ctx.strokeStyle=strikeCol+'60'; ctx.lineWidth=dpr;
+    if(ctx.roundRect)ctx.roundRect(rightX,spy,slw+sPad*2,sH,sR);
+    else ctx.rect(rightX,spy,slw+sPad*2,sH);
+    ctx.fillStyle='#0c0c1c'; ctx.fill();
+    ctx.strokeStyle=sc; ctx.lineWidth=dpr; ctx.stroke();
+    ctx.fillStyle=sc; ctx.fillText(sl,rightX+sPad,spy+sH*0.72);
+    // connector tick
+    ctx.beginPath(); ctx.moveTo(PL+CW,sy); ctx.lineTo(rightX-2*dpr,sy);
+    ctx.strokeStyle=sc+'40'; ctx.lineWidth=dpr;
     ctx.setLineDash([3*dpr,2*dpr]); ctx.stroke(); ctx.setLineDash([]);
   }
 
-  // ── Current price dot + pill label ──
-  const lastD=chartData[chartData.length-1];
-  const lastX=tx(lastD.t), lastY=ty(lastD.p);
-  const curPrice=lastD.p;
-  const aboveNow=sv>0&&curPrice>=sv;
-  const pillCol=sv>0?(aboveNow?'#00e5a0':'#ff4566'):'#f97316';
-
-  // Current price pill — also pinned to right margin, stacked away from strike pill
-  const priceLabel='$'+curPrice.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
-  ctx.font=`bold ${9*dpr}px -apple-system,sans-serif`;
-  const plw=ctx.measureText(priceLabel).width;
-  const pillPad=5*dpr, pillH=16*dpr, pillR=4*dpr;
-  const pillW=plw+pillPad*2;
-  const px=W-PR+6*dpr;
-  let py=lastY-pillH/2;
-  // Clamp to chart bounds
-  py=Math.max(PT, Math.min(H-PB-pillH, py));
-  // If strike exists and pills overlap, push current price pill away
+  // Current price pill
+  const pl2='$'+dp.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+  ctx.font=`bold ${10*dpr}px 'Courier New'`;
+  const plw=ctx.measureText(pl2).width;
+  const pH=19*dpr, pPad=6*dpr, pR=4*dpr;
+  const lx2=tx(tip.t), ly2=ty(tip.p);
+  let py=Math.max(PT,Math.min(H-PB-pH,ly2-pH/2));
+  // Avoid overlap with strike pill
   if(hasStrike){
-    const strikePillY=Math.max(PT, Math.min(H-PB-15*dpr, sy-15*dpr/2));
-    if(Math.abs(py-strikePillY)<(pillH+2*dpr)){
-      py=curAbove ? strikePillY-pillH-2*dpr : strikePillY+15*dpr+2*dpr;
-      py=Math.max(PT, Math.min(H-PB-pillH, py));
-    }
+    const sRef=Math.max(PT,Math.min(H-PB-16*dpr,sy-8*dpr));
+    if(Math.abs(py-sRef)<pH+4*dpr)
+      py=curAbove?sRef-pH-4*dpr:sRef+20*dpr;
+    py=Math.max(PT,Math.min(H-PB-pH,py));
   }
-  // Solid filled pill
   ctx.beginPath();
-  ctx.roundRect?ctx.roundRect(px,py,pillW,pillH,pillR):ctx.rect(px,py,pillW,pillH);
-  ctx.fillStyle=pillCol; ctx.fill();
-  ctx.fillStyle='#07070f'; ctx.fillText(priceLabel,px+pillPad,py+pillH*0.72);
-  // Connector dot on chart at actual price position
-  ctx.beginPath(); ctx.arc(lastX,lastY,3.5*dpr,0,Math.PI*2);
-  ctx.fillStyle=pillCol; ctx.fill();
+  if(ctx.roundRect)ctx.roundRect(rightX,py,plw+pPad*2,pH,pR);
+  else ctx.rect(rightX,py,plw+pPad*2,pH);
+  ctx.fillStyle=lineCol; ctx.fill();
+  ctx.fillStyle='#07070f';
+  ctx.font=`bold ${10*dpr}px 'Courier New'`;
+  ctx.fillText(pl2,rightX+pPad,py+pH*0.70);
 
-  // ── Time axis: rolling seconds every 5s ──
-  ctx.font=`${7*dpr}px 'Courier New'`;
-  ctx.fillStyle='#444'; ctx.textAlign='center';
-  // Snap to 5-second grid
+  // Leading dot — pulsing heartbeat ring
+  const pulse=0.5+0.5*Math.sin(chartPulse);
+  const ringR=(5+pulse*4)*dpr;
+  ctx.beginPath(); ctx.arc(lx2,ly2,ringR,0,Math.PI*2);
+  ctx.strokeStyle=lineCol+(Math.round((0.08+pulse*0.20)*255).toString(16).padStart(2,'0'));
+  ctx.lineWidth=1.5*dpr; ctx.stroke();
+  ctx.beginPath(); ctx.arc(lx2,ly2,3.5*dpr,0,Math.PI*2);
+  ctx.fillStyle=lineCol; ctx.fill();
+  ctx.beginPath(); ctx.arc(lx2,ly2,1.5*dpr,0,Math.PI*2);
+  ctx.fillStyle='#fff'; ctx.globalAlpha=0.6; ctx.fill(); ctx.globalAlpha=1;
+
+  // ── Time axis ──
+  ctx.font=`${7.5*dpr}px 'Courier New'`;
+  ctx.textAlign='center';
   const tAxisStart=Math.ceil(tStart/5000)*5000;
-  for(let t=tAxisStart; t<=tEnd+1000; t+=5000){
+  for(let t=tAxisStart; t<=now+1000; t+=5000){
     const x=tx(t);
-    if(x<PL||x>PL+CW)continue;
-    const secsAgo=Math.round((tEnd-t)/1000);
-    const label=secsAgo===0?'now':`-${secsAgo}s`;
-    ctx.fillStyle='#444';
-    ctx.fillText(label,x,H-4*dpr);
-    ctx.beginPath(); ctx.moveTo(x,H-PB); ctx.lineTo(x,H-PB+3*dpr);
-    ctx.strokeStyle='#2a2a2a'; ctx.lineWidth=dpr; ctx.stroke();
+    if(x<PL||x>PL+CW) continue;
+    const ago=Math.round((now-t)/1000);
+    ctx.fillStyle='#2a2a40';
+    ctx.fillText(ago===0?'NOW':`-${ago}s`,x,H-7*dpr);
+    ctx.beginPath();ctx.moveTo(x,H-PB);ctx.lineTo(x,H-PB+3*dpr);
+    ctx.strokeStyle='#1a1a2e';ctx.lineWidth=dpr;ctx.stroke();
   }
   ctx.textAlign='left';
 
-  // ── Exit marker (timestamp-based) ──
-  if(exitIdx!==null&&active){
-    const exitTick=tickBuffer[exitIdx];
-    if(exitTick){
-      const ex=tx(exitTick.t), ey=ty(exitTick.p);
+  // ── Y axis price labels (3 levels) ──
+  ctx.font=`${7.5*dpr}px 'Courier New'`;
+  ctx.fillStyle='#2a2a40';
+  const yLevels=[0.15,0.5,0.85];
+  yLevels.forEach(frac=>{
+    const v=mx-frac*rng;
+    const y=ty(v);
+    ctx.fillText('$'+Math.round(v).toLocaleString(),PL+2*dpr,y-3*dpr);
+  });
+
+  // ── Exit marker ──
+  if(exitIdx!==null && active){
+    const et=tickBuffer[exitIdx];
+    if(et){
+      const ex=tx(et.t),ey=ty(et.p);
       if(ex>=PL&&ex<=PL+CW){
-        ctx.beginPath(); ctx.moveTo(ex,PT); ctx.lineTo(ex,H-PB);
-        ctx.strokeStyle='#f7c948'; ctx.lineWidth=1.5*dpr; ctx.setLineDash([3*dpr,3*dpr]); ctx.stroke(); ctx.setLineDash([]);
-        ctx.beginPath(); ctx.arc(ex,ey,4*dpr,0,Math.PI*2); ctx.fillStyle='#f7c948'; ctx.fill();
+        ctx.save();
+        ctx.beginPath();ctx.moveTo(ex,PT);ctx.lineTo(ex,H-PB);
+        ctx.strokeStyle='#f7c94860';ctx.lineWidth=1.5*dpr;
+        ctx.setLineDash([4*dpr,3*dpr]);ctx.stroke();ctx.setLineDash([]);
+        ctx.beginPath();ctx.arc(ex,ey,5*dpr,0,Math.PI*2);
+        ctx.fillStyle='#f7c948';ctx.fill();
+        ctx.font=`bold ${7.5*dpr}px 'Courier New'`;
+        ctx.fillStyle='#f7c948';
+        ctx.fillText('EXIT',ex+7*dpr,ey-4*dpr);
+        ctx.restore();
       }
     }
   }
+
+  // ── Update header badges ──
+  const srcBadge=document.getElementById('chart-src-badge');
+  if(srcBadge) srcBadge.textContent=source||'';
+  const spread=document.getElementById('chart-spread');
+  if(spread&&pts.length>1){
+    const hi=Math.max(...pts),lo=Math.min(...pts);
+    spread.textContent=`H:$${Math.round(hi).toLocaleString()}  L:$${Math.round(lo).toLocaleString()}`;
+  }
+
+  ctx.restore();
+}
+
+// Legacy wrapper — kept for callers that set priceChartDirty=true
+function drawPriceChart(){
+  priceChartDirty = true;
+  startChartLoop();
 }
 
 function drawArc(pct,dir){
@@ -1719,6 +2014,17 @@ function renderActiveTradeFast(){
   if(win){win.textContent=winNow?'✓ YES':'✗ NO';win.style.color=winNow?'#00e5a0':'#ff4566';}
   const cy=document.getElementById('at-cur-yes');
   if(cy){cy.textContent='$'+currentYES.toFixed(2);cy.style.color=currentYES>active.entryYESPrice?'#00e5a0':'#ff4566';}
+  const fastDelta=currentYES-active.entryYESPrice;
+  const fastDeltaPct=active.entryYESPrice>0?(fastDelta/active.entryYESPrice*100):0;
+  const fastCol=fastDelta>=0?'#00e5a0':'#ff4566';
+  const fde=document.getElementById('at-yes-delta');
+  if(fde){fde.textContent=`${fastDelta>=0?'+':''}${(fastDelta*100).toFixed(1)}¢ (${fastDeltaPct>=0?'+':''}${fastDeltaPct.toFixed(1)}%)`;fde.style.color=fastCol+'99';}
+  const fcm=document.getElementById('at-contract-move');
+  if(fcm&&active.contracts){
+    const tot=fastDelta*active.contracts;
+    fcm.textContent=`${fastDelta>=0?'+':''}${(fastDelta*100).toFixed(1)}¢/contract · ${tot>=0?'+':''}${fmtUSD(tot)} total`;
+    fcm.style.color=fastCol;
+  }
 }
 
 function renderPrice(){
@@ -1868,18 +2174,16 @@ function resetDailyIfNeeded(){
 }
 
 function getRiskAccountBalance(){
-  // Prefer live Kalshi balance; fall back to amtInput×50 heuristic
+  // Prefer live Kalshi balance (only source that's real)
   const el=document.getElementById('pf-bal');
   if(el&&el.textContent&&el.textContent!=='—'){
     const n=parseFloat(el.textContent.replace(/[^0-9.]/g,''));
-    if(n>0)return n;
+    if(n>0) return n;
   }
-  // Estimate from recent trade amounts
-  if(trades.length>0){
-    const avgBet=trades.reduce((s,t)=>s+t.amount,0)/trades.length;
-    return avgBet*50;
-  }
-  return 100; // fallback: $100
+  // No live balance — use conservative fixed fallback
+  // Do NOT multiply bet size — that inflates Kelly sizing dangerously
+  // $200 default gives reasonable Kelly sizing for small accounts
+  return 200;
 }
 
 function computeKellyBet(prob, yesPrice, balance){
@@ -2196,9 +2500,10 @@ function updateRiskOnTradeClosed(result, finalPnL){
     riskState.consecutiveLosses++;
     riskState.lastLossTime=Date.now();
   } else if(result==='WIN'){
-    riskState.consecutiveLosses=0; // reset streak on win
+    riskState.consecutiveLosses=0;
   }
   resetDailyIfNeeded();
+  persistState(); // persist risk state after every outcome
 }
 
 function checkRiskAutoExit(unrealizedPnL){
@@ -2324,7 +2629,20 @@ function renderActiveTrade(clock){
 
   // Contract detail box
   document.getElementById('at-entry-yes').textContent=`$${entryYES.toFixed(2)}`;
-  document.getElementById('at-cur-yes').textContent=`$${currentYES.toFixed(2)}`; document.getElementById('at-cur-yes').style.color=currentYES>entryYES?'#00e5a0':'#ff4566';
+  const yesDelta=currentYES-entryYES;
+  const yesDeltaPct=entryYES>0?(yesDelta/entryYES*100):0;
+  const yesCol=yesDelta>=0?'#00e5a0':'#ff4566';
+  document.getElementById('at-cur-yes').textContent=`$${currentYES.toFixed(2)}`; document.getElementById('at-cur-yes').style.color=yesCol;
+  const deltaEl=document.getElementById('at-yes-delta');
+  if(deltaEl){deltaEl.textContent=`${yesDelta>=0?'+':''}${(yesDelta*100).toFixed(1)}¢ (${yesDeltaPct>=0?'+':''}${yesDeltaPct.toFixed(1)}%)`;deltaEl.style.color=yesCol+'99';}
+  // Contract move: how much each individual contract gained/lost vs entry
+  const contractMove=document.getElementById('at-contract-move');
+  if(contractMove){
+    const perContract=yesDelta; // each contract moves $1 per $1 of YES price
+    const totalMove=perContract*contracts;
+    contractMove.textContent=`${perContract>=0?'+':''}${(perContract*100).toFixed(1)}¢/contract · ${totalMove>=0?'+':''}${fmtUSD(totalMove)} total`;
+    contractMove.style.color=yesCol;
+  }
   document.getElementById('at-contracts').textContent=contracts.toFixed(0);
   document.getElementById('at-maxpay').textContent=fmtUSD(kalshiMaxPayout(contracts));
 
@@ -2430,6 +2748,12 @@ function renderLog(){
 
 function updateBrainPanel(){
   document.getElementById('nn-s').textContent=nnData.length;
+  const idbEl=document.getElementById('idb-status');
+  if(idbEl){ idbEl.textContent = idb
+    ? `💾 Auto-saved · ${nnData.length} samples · ${trades.length} trades stored`
+    : '⚠️ Storage unavailable — export JSON to save';
+    idbEl.style.color = idb ? '#2a2a4080' : '#f7c94860';
+  }
   const acc=nnAcc();
   const ae=document.getElementById('nn-a');
   if(acc!==null){ae.textContent=`${(acc*100).toFixed(0)}%`;ae.style.color=acc>.62?'#00e5a0':acc>.45?'#f7c948':'#ff4566';document.getElementById('nn-acc-bar').style.width=`${acc*100}%`;}
@@ -2488,7 +2812,18 @@ async function closeTradeWithSell(exitReason='manual_sell'){
   const exitResult=finalPnL>=0?'WIN':'LOSS';
   const exitLabel=exitReason==='profit_capture'?'sold (profit capture)':exitReason==='take_profit'?'sold (TP)':exitReason==='stop_loss'?'sold (SL)':'sold (manual)';
   trades=trades.map(t=>t.id!==active.id?t:{...t,result:exitResult,exit:livePrice,finalPnL,earlyExit:true,exitReason});
-  recordTrade({...active,result:exitResult,exitReason});
+  const tradeToRecord={...active,result:exitResult,exitReason,earlyExit:true,exitYES:currentYES};
+  recordTrade(tradeToRecord);
+  // Smart close boost: if we closed profitably on a sell, train NN extra
+  // on this sample with higher weight (more epochs) so it learns the pattern
+  if(isSell && finalPnL > 0){
+    const f=buildFeatures(active.ep||prices, active.bet, parseFloat(active.strike));
+    if(f){
+      // Extra 20 epochs on this winning-close sample to reinforce the exit pattern
+      for(let e=0;e<20;e++) nnTrain(f, 1); // label 1 = good outcome
+      console.log('Smart close boost: +20 epochs on profitable sell pattern');
+    }
+  }
   updateRiskOnTradeClosed(exitResult,finalPnL);
   active=null; peakROI=null; priceChartDirty=true; projChartDirty=true;
 
@@ -2575,7 +2910,17 @@ function clockTick(){
     // Full active trade rebuild every 5s; fast P&L update every second
     if(now-clockFull>=5000){clockFull=now;if(livePrice)renderActiveTrade(c);}
     else if(livePrice) renderActiveTradeFast();
-    // Auto-close check
+    // ── Fast auto-exit check — runs every second for volatile BTC ──
+    // Computes current YES price and checks sell/SL thresholds immediately
+    if(livePrice && active){
+      const _sv=parseFloat(active.strike)||0;
+      const _currentYES=kalshiYESPrice!==null
+        ?(active.bet==='UP'?kalshiYESPrice:Math.max(0.05,Math.min(0.95,1-kalshiYESPrice)))
+        :(()=>{const _sm=computeStrikeModel(prices,_sv);return _sm?estimateYESPrice(_sm,active.bet):active.entryYESPrice;})();
+      const _unrlzd=kalshiUnrealizedPnL(active.contracts,active.entryYESPrice,_currentYES);
+      checkRiskAutoExit(_unrlzd);
+    }
+    // Advisory auto-close (high urgency signals)
     if(lastAdvisory) maybeAutoClose(lastAdvisory);
   }
   renderHeader();
@@ -2758,15 +3103,11 @@ async function kalshiClosePosition(){
 
 // Called by exit advisor when SELL NOW fires with autoClose armed
 async function maybeAutoClose(advisory){
-  if(!autoCloseArmed) return;
-  if(!advisory) return;
-  if(advisory.level==='high' && advisory.action==='SELL'){
-    console.log('Auto-close triggered by advisor:', advisory.text);
+  if(!autoCloseArmed||!advisory) return;
+  // advisory uses: urgency ('high'/'medium'/'low'), action ('SELL_NOW'/'CONSIDER_EXIT'/'HOLD'/'WATCH')
+  if(advisory.urgency==='high' && advisory.action==='SELL_NOW'){
     autoCloseArmed = false;
-    await kalshiClosePosition();
-    // Also trigger local trade close
-    if(active) closeTrade();
-    refreshPortfolio();
+    await closeTradeWithSell('profit_capture');
   }
 }
 
@@ -2956,6 +3297,9 @@ function showToast(msg, color='#f7c948'){
 // ═══════════════════════════════════════════════════
 async function init(){
   nnInit();
+  // Load persisted state FIRST — before any render or network calls
+  await loadPersistedState();
+
   setInterval(clockTick,1000);
   setInterval(priceTick,5000); // REST watchdog — only fires if WS dead
 
@@ -2984,7 +3328,8 @@ async function init(){
     if(livePrice&&prices.length>0) prices=[...prices.slice(-59),livePrice];
   },60000);
   priceChartDirty=true;
-  renderPrice(); renderSignalPanel(); renderTradeSetup(); drawPriceChart(); renderHeader(); updateBrainPanel();
+  renderPrice(); renderSignalPanel(); renderTradeSetup(); renderHeader(); updateBrainPanel();
+  startChartLoop(); // kick off the rAF render loop — runs forever
 }
 init();
 
