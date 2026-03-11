@@ -671,6 +671,7 @@ input[type=number]{-moz-appearance:textfield}
 // ═══════════════════════════════════════════════════
 let prices=[], livePrice=null, pred=null, source='', mode='loading';
 let active=null, trades=[], peakROI=null, exitIdx=null;
+let peakCapture=null, trailArmed=false; // trailing capture state
 let prevSecsLeft=null, blinking=false;
 let strikeInput=0, amtInput=0;
 // dirty flags for chart redraws
@@ -710,8 +711,8 @@ const RISK_CONSEC_BRAKE= 3;    // halve bet after N consecutive losses
 const RISK_TP_ROI      = 0.60; // take profit at 60% of max potential profit
 const RISK_SL_ROI      =-0.50; // stop loss at 50% of bet (unrealized -50%)
 const RISK_COOLDOWN_MS = 60000;// 1-minute cooldown after loss
-const SELL_CAPTURE_THRESH_DEFAULT = 0.72;
-const SELL_SIGNAL_THRESH_DEFAULT  = 0.55;
+const SELL_CAPTURE_THRESH_DEFAULT = 0.60; // lowered from 0.72 — fires sooner, dynamic engine extends when conditions warrant
+const SELL_SIGNAL_THRESH_DEFAULT  = 0.45; // lowered from 0.55
 // Runtime-tunable — user can adjust via the risk panel sliders
 let sellCaptureThresh = SELL_CAPTURE_THRESH_DEFAULT;
 let sellSignalThresh  = SELL_SIGNAL_THRESH_DEFAULT;
@@ -781,14 +782,19 @@ async function loadPersistedState(){
     const savedRisk  = await idbGet('riskState');
 
     if(savedNN && Array.isArray(savedNN) && savedNN.length > 0){
-      nnData = savedNN;
-      console.log(`IDB: loaded ${nnData.length} NN training samples`);
+      // Migrate old 6-feature samples → 9 by padding zeros (candle features neutral)
+      nnData = savedNN.map(s=>({
+        ...s,
+        f: s.f&&s.f.length===6 ? [...s.f, 0, 0, 0] :
+           s.f&&s.f.length===9 ? s.f : null
+      })).filter(s=>s.f!==null);
+      console.log(`IDB: loaded ${nnData.length} NN training samples (migrated to 9 features if needed)`);
     }
-    // Validate weight shape before restoring
-    if(savedW && savedW.w1 && savedW.w1.length===8 && savedW.w1[0] && savedW.w1[0].length===6
+    // Validate weight shape — accept 8×9 only; old 8×6 triggers re-init
+    if(savedW && savedW.w1 && savedW.w1.length===8 && savedW.w1[0] && savedW.w1[0].length===9
        && savedW.w1[0][0]!==null && savedW.w1[0][0]!==undefined){
       nnW = savedW;
-      console.log('IDB: restored NN weights (8×6)');
+      console.log('IDB: restored NN weights (8×9)');
     } else if(nnData.length >= 2){
       // Have data but no valid weights — re-train from scratch
       nnW = nnRand();
@@ -815,17 +821,17 @@ const sig=x=>1/(1+Math.exp(-Math.max(-10,Math.min(10,x))));
 
 function nnInit(){nnW=nnRand();}
 function nnRand(){const r=()=>(Math.random()-.5)*.4;
-  // Architecture: 6 inputs → 8 hidden neurons → 1 output
-  // w1: 8×6 (8 hidden neurons, each with 6 input weights)
+  // Architecture: 9 inputs → 8 hidden neurons → 1 output
+  // w1: 8×9 (8 hidden neurons, each with 9 input weights)
   // w2: 1×8 (output neuron, 8 inputs from hidden layer)
-  return{w1:Array.from({length:8},()=>Array.from({length:6},r)),b1:Array.from({length:8},r),
+  return{w1:Array.from({length:8},()=>Array.from({length:9},r)),b1:Array.from({length:8},r),
     w2:Array.from({length:1},()=>Array.from({length:8},r)),b2:[r()]};}
 
 function nnFwd(inp){
   if(!nnW)return .5;
-  if(!inp||inp.length!==6||inp.some(v=>!isFinite(v)||isNaN(v)))return .5;
+  if(!inp||inp.length!==9||inp.some(v=>!isFinite(v)||isNaN(v)))return .5;
   // Guard null/mismatched weights — re-init if corrupted
-  if(!nnW.w1||nnW.w1.length!==8||nnW.w1[0].length!==6||nnW.w1[0][0]===null||nnW.w1[0][0]===undefined){
+  if(!nnW.w1||nnW.w1.length!==8||nnW.w1[0].length!==9||nnW.w1[0][0]===null||nnW.w1[0][0]===undefined){
     nnW=nnRand(); return .5;
   }
   try{
@@ -835,8 +841,8 @@ function nnFwd(inp){
   }catch(e){return .5;}
 }
 function nnTrain(inp,lbl,lr=.06){
-  if(!nnW||!inp||inp.length!==6)return;
-  if(!nnW.w1||nnW.w1.length!==8||nnW.w1[0][0]===null){nnW=nnRand();}
+  if(!nnW||!inp||inp.length!==9)return;
+  if(!nnW.w1||nnW.w1.length!==8||nnW.w1[0].length!==9||nnW.w1[0][0]===null){nnW=nnRand();}
   if(inp.some(v=>!isFinite(v)||isNaN(v)))return; // skip corrupt samples
   const h=nnW.w1.map((row,i)=>sig(row.reduce((s,w,j)=>s+(w||0)*inp[j],0)+(nnW.b1[i]||0)));
   const out=sig(nnW.w2[0].reduce((s,w,i)=>s+(w||0)*h[i],0)+(nnW.b2[0]||0));
@@ -851,11 +857,33 @@ function nnAcc(){
   if(nnData.length<5)return null;
   return nnData.filter(d=>((nnFwd(d.f)>.5)?1:0)===d.l).length/nnData.length;
 }
+// Aggregate raw price ticks (~5s each) into synthetic candles
+// candleSize=12 ticks ≈ 1 minute per candle
+function buildCandles(arr, candleSize=12){
+  const candles=[];
+  for(let i=0;i+candleSize<=arr.length;i+=candleSize){
+    const slice=arr.slice(i,i+candleSize);
+    const o=slice[0], c=slice[slice.length-1];
+    const h=Math.max(...slice), l=Math.min(...slice);
+    candles.push({o,c,h,l});
+  }
+  // Also include the partial current candle if meaningful
+  const rem=arr.length%candleSize;
+  if(rem>=3){
+    const slice=arr.slice(-rem);
+    const o=slice[0],c=slice[slice.length-1],h=Math.max(...slice),l=Math.min(...slice);
+    candles.push({o,c,h,l});
+  }
+  return candles;
+}
+
 function buildFeatures(arr,bet,strike){
   if(!arr||arr.length<15)return null;
   const last=arr[arr.length-1];
   if(!last||last<=0)return null;
   const safe=v=>(!isFinite(v)||isNaN(v))?0:v; // NaN/Inf guard
+
+  // ── Original 6 features ──
   const rsi=safe(calcRSI(arr)||50);
   const e12=safe(calcEMA(arr,12)||last), e26=safe(calcEMA(arr,26)||last);
   const e9=safe(calcEMA(arr,9)||last), e21=safe(calcEMA(arr,21)||last);
@@ -864,10 +892,103 @@ function buildFeatures(arr,bet,strike){
   const bbp=safe(bb&&bbRange>0?(last-bb.lower)/bbRange:.5);
   const mom=safe((arr.length>=11)?(last-arr[arr.length-11])/last*1000:0);
   const trend5=safe((arr.length>=5)?(last-arr[arr.length-5])/last*1000:0);
-  const f=[safe((rsi-50)/50),safe((e12-e26)/last*1000),safe((e9-e21)/last*1000),safe(bbp*2-1),mom,trend5];
+
+  // ── Candle features (features 7-9) ──
+  const candles=buildCandles(arr);
+  const recentC=candles.slice(-5); // last 5 candles
+  const lastC=recentC[recentC.length-1]||null;
+  const prevC=recentC[recentC.length-2]||null;
+
+  // Feature 7: Pattern score — detects key reversal/continuation patterns numerically
+  // Engulfing (strong reversal): current body fully contains previous body → ±0.8–1.0
+  // Hammer/shooting star (reversal): long lower/upper wick, small body → ±0.5–0.7
+  // Doji (indecision): body < 10% of range → 0
+  // Strong momentum candle: body > 70% of range → ±0.6–0.9
+  let patternScore=0;
+  if(lastC){
+    const range=lastC.h-lastC.l||0.01;
+    const body=Math.abs(lastC.c-lastC.o);
+    const bodyRatio=body/range;
+    const bullish=lastC.c>lastC.o;
+    const direction=bullish?1:-1;
+
+    if(bodyRatio<0.10){
+      // Doji — indecision, near zero
+      patternScore=0;
+    } else if(prevC){
+      const prevBody=Math.abs(prevC.c-prevC.o);
+      const prevRange=prevC.h-prevC.l||0.01;
+      const prevBull=prevC.c>prevC.o;
+      // Bullish engulfing: current bullish, wraps previous bearish body
+      if(bullish && !prevBull && lastC.o<prevC.c && lastC.c>prevC.o)
+        patternScore=0.9;
+      // Bearish engulfing: current bearish, wraps previous bullish body
+      else if(!bullish && prevBull && lastC.o>prevC.c && lastC.c<prevC.o)
+        patternScore=-0.9;
+      // Continuation: same direction, body getting larger
+      else if(bullish===prevBull && bodyRatio>(prevBody/prevRange))
+        patternScore=direction*0.6;
+      // Hammer: lower wick > 2x body, bullish close
+      else if(bullish && (Math.min(lastC.o,lastC.c)-lastC.l)>2*body)
+        patternScore=0.7;
+      // Shooting star: upper wick > 2x body, bearish close
+      else if(!bullish && (lastC.h-Math.max(lastC.o,lastC.c))>2*body)
+        patternScore=-0.7;
+      // Momentum candle: body > 70% of range
+      else if(bodyRatio>0.70)
+        patternScore=direction*0.8;
+      else
+        patternScore=direction*bodyRatio*0.5;
+    } else {
+      patternScore=direction*bodyRatio*0.5;
+    }
+  }
+
+  // Feature 8: Wick pressure (buying vs selling pressure)
+  // Upper wicks = sellers rejected rally (bearish pressure) → negative
+  // Lower wicks = buyers defended dip (bullish support) → positive
+  // Averaged across last 3 candles for stability
+  let wickPressure=0;
+  const wickC=recentC.slice(-3);
+  if(wickC.length>0){
+    wickPressure=wickC.reduce((sum,c)=>{
+      const range=c.h-c.l||0.01;
+      const upperWick=(c.h-Math.max(c.o,c.c))/range;
+      const lowerWick=(Math.min(c.o,c.c)-c.l)/range;
+      return sum+(lowerWick-upperWick); // positive = lower wick dominant = buying pressure
+    },0)/wickC.length;
+  }
+
+  // Feature 9: Candle momentum — weighted run of last 5 candles
+  // Recent candles count more; large-body candles count more
+  // Range: -1 (strong bear run) to +1 (strong bull run)
+  let candleMom=0;
+  if(recentC.length>0){
+    let weightSum=0;
+    candleMom=recentC.reduce((sum,c,i)=>{
+      const range=c.h-c.l||0.01;
+      const body=Math.abs(c.c-c.o)/range; // body as pct of range
+      const dir=c.c>c.o?1:c.c<c.o?-1:0;
+      const weight=(i+1); // more recent = higher weight
+      weightSum+=weight;
+      return sum+dir*body*weight;
+    },0)/weightSum;
+  }
+
+  const f=[
+    safe((rsi-50)/50),
+    safe((e12-e26)/last*1000),
+    safe((e9-e21)/last*1000),
+    safe(bbp*2-1),
+    mom,
+    trend5,
+    safe(patternScore),   // feature 7: pattern recognition (engulfing/hammer/doji/momentum)
+    safe(wickPressure),   // feature 8: wick buying vs selling pressure
+    safe(candleMom),      // feature 9: weighted candle momentum run
+  ];
   // Final safety: if any feature is NaN, bail out
   if(f.some(v=>!isFinite(v)||isNaN(v)))return null;
-  return f;
+  return f; // length 9
 }
 function exportNN(){
   // Ensure weights are valid before export — re-init if any nulls crept in
@@ -881,14 +1002,21 @@ function importNN(e){
   const r=new FileReader(); r.onload=ev=>{
     try{const d=JSON.parse(ev.target.result);
       if(d.data) nnData=d.data;
-      // Validate imported weights — check shape matches current arch (8×6)
+      // Pad any old 6-feature samples to 9 by appending zeros
+      // (candle features default to 0 = neutral for old data)
+      nnData=nnData.map(s=>({
+        ...s,
+        f: s.f&&s.f.length===6 ? [...s.f, 0, 0, 0] :
+           s.f&&s.f.length===9 ? s.f : null
+      })).filter(s=>s.f!==null);
+      // Validate imported weights — accept 8×9, reject old 8×6 or null
       const w=d.weights;
-      const validShape=w&&w.w1&&w.w1.length===8&&w.w1[0]&&w.w1[0].length===6
+      const validShape=w&&w.w1&&w.w1.length===8&&w.w1[0]&&w.w1[0].length===9
         &&w.w1[0][0]!==null&&w.w1[0][0]!==undefined;
       if(validShape){
         nnW=w;
       } else {
-        nnW=nnRand(); // old export or null weights — re-init; data still loaded
+        nnW=nnRand(); // old arch or null weights — re-init fresh; data still loaded
       }
       // Re-train on imported data so weights reflect the history
       if(nnData.length>=2){
@@ -2540,42 +2668,115 @@ function checkRiskAutoExit(unrealizedPnL){
   const sl=-active.amount*Math.abs(RISK_SL_ROI);
 
   // ── Simulation vs Live mode ──
-  // Sim mode:  no API key / no active Kalshi contract
-  //            → auto-sell fires freely on model price (training data)
-  // Live mode: API key connected + real Kalshi contract open
-  //            → auto-sell requires live order-book price (real money)
-  // simMode: no key, no active Kalshi contract, or WS not live
-  const simMode  = !authConnected || !kalshiOrderId || !kalshiIsLive();
+  const simMode    = !authConnected || !kalshiOrderId || !kalshiIsLive();
   const hasLiveYES = kalshiYESPrice !== null;
 
-  // In sim mode: no price guard needed — we're just training, not sending orders
-  // In live mode: guard stays — only fire on real Kalshi order-book price
-  const sellCapture = maxProfit>0 && unrealizedPnL>=maxProfit*sellCaptureThresh
-                      && (simMode || hasLiveYES);
-  const tpHit       = unrealizedPnL>=tp && (simMode || hasLiveYES);
-  const slHit       = unrealizedPnL<=sl; // stop-loss always fires regardless
+  const clock = getClock();
+  const sm = (prices.length >= 15)
+    ? computeStrikeModel(prices, parseFloat(active.strike||0))
+    : null;
 
-  // Debug: visible in DevTools → Console while trade is active
-  if(active){
-    const pct=maxProfit>0?Math.round(unrealizedPnL/maxProfit*100):0;
-    console.log(`[AutoExit] ${simMode?'SIM':'LIVE'} | P&L:$${unrealizedPnL.toFixed(2)} | ${pct}% captured | need:${Math.round(sellCaptureThresh*100)}% | liveYES:${hasLiveYES} | fire:${sellCapture||tpHit||slHit}`);
+  // ── Current capture % ──
+  const pctCaptured = maxProfit>0 ? unrealizedPnL/maxProfit : 0;
+
+  // ── Always update peak capture ──
+  if(pctCaptured > (peakCapture||0)) peakCapture = pctCaptured;
+
+  // ── Hold extension: raises effectiveCapture before trail arms ──
+  // Velocity + consensus + time checks. If all 3 strong → hold to 88%.
+  // This means the trail only arms at a higher peak — more profit locked in.
+  let effectiveCapture = sellCaptureThresh;
+  let holdReason = '';
+
+  if(sm && clock){
+    const secsLeft   = clock.secsLeft;
+    const velAligned = (active.bet==='UP' && sm.velPerSec > 0) ||
+                       (active.bet==='DOWN' && sm.velPerSec < 0);
+    const velStrong  = Math.abs(sm.velPerSec) > 0.30;
+    const velReverse = !velAligned && Math.abs(sm.velPerSec) > 0.30;
+    const agreeCount = sm.indis ? sm.indis.filter(i=>
+      (active.bet==='UP' && i.dir==='BULL') ||
+      (active.bet==='DOWN' && i.dir==='BEAR')
+    ).length : 3;
+    const consensus  = agreeCount / (sm.indis?.length || 6);
+    const timeOk     = secsLeft > 240;
+
+    let holdScore = 0;
+    if(velAligned && velStrong) holdScore++;
+    if(consensus >= 0.67)       holdScore++;
+    if(timeOk)                  holdScore++;
+
+    if(velReverse){
+      effectiveCapture = 0;
+      holdReason = `⚡ Reversal (${sm.velPerSec.toFixed(2)}/s)`;
+    } else if(holdScore === 3){
+      effectiveCapture = Math.min(0.88, sellCaptureThresh + 0.16);
+      holdReason = `🔒 Hold → ${Math.round(effectiveCapture*100)}%`;
+    } else if(holdScore === 2){
+      effectiveCapture = Math.min(0.80, sellCaptureThresh + 0.08);
+      holdReason = `🔒 Hold → ${Math.round(effectiveCapture*100)}%`;
+    }
   }
 
-  if(sellCapture){
+  // ── Arm trail once peak crosses effectiveCapture ──
+  if(!trailArmed && peakCapture !== null && peakCapture >= effectiveCapture && maxProfit > 0){
+    trailArmed = true;
+    console.log(`[Trail] ARMED at peak ${Math.round(peakCapture*100)}% — effectiveCapture was ${Math.round(effectiveCapture*100)}%`);
+  }
+
+  // ── Trailing pullback allowance (dynamic by time remaining) ──
+  // More time = more pullback allowed; less time = tighter trail
+  let trailPullback = 0.12; // default: 12% pullback allowed
+  if(clock){
+    if(clock.secsLeft < 240)       trailPullback = 0.05; // < 4 min: tight
+    else if(clock.secsLeft < 480)  trailPullback = 0.08; // 4–8 min: medium
+    // > 8 min: 12% — lots of room to run
+  }
+
+  // ── Trail exit: armed + pulled back more than allowance ──
+  const trailExit = trailArmed
+    && peakCapture !== null
+    && maxProfit > 0
+    && (peakCapture - pctCaptured) >= trailPullback
+    && (simMode || hasLiveYES);
+
+  // ── Standard exits (fallback if trail not yet armed) ──
+  const sellCapture = !trailArmed && maxProfit>0 && pctCaptured >= effectiveCapture
+                      && (simMode || hasLiveYES);
+  const tpHit       = unrealizedPnL >= tp && (simMode || hasLiveYES);
+  const slHit       = unrealizedPnL <= sl;
+
+  // Debug log — visible in DevTools console
+  if(active){
+    const pct  = Math.round(pctCaptured*100);
+    const pkPct= Math.round((peakCapture||0)*100);
+    const pull = peakCapture ? Math.round((peakCapture-pctCaptured)*100) : 0;
+    console.log(`[AutoExit] ${simMode?'SIM':'LIVE'} | now:${pct}% peak:${pkPct}% pull:${pull}% trail:${trailArmed?'ARMED':'waiting'} | fire:${trailExit||sellCapture||tpHit||slHit}`);
+  }
+
+  if(trailExit){
     riskState.tpTriggered=true;
-    const pct=Math.round(unrealizedPnL/maxProfit*100);
+    const pct    = Math.round(pctCaptured*100);
+    const pkPct  = Math.round((peakCapture||0)*100);
+    const tag    = simMode?'📋 SIM':'📉';
+    showToast(`${tag} Trail exit — peak ${pkPct}% → now ${pct}% (+$${unrealizedPnL.toFixed(2)})`,'#00e5a0');
+    setTimeout(()=>closeTradeWithSell('profit_capture'),800);
+  } else if(sellCapture){
+    riskState.tpTriggered=true;
+    const pct=Math.round(pctCaptured*100);
     const tag=simMode?'📋 SIM':'💰';
-    showToast(`${tag} ${pct}% captured (+$${unrealizedPnL.toFixed(2)}) — selling`,'#00e5a0');
+    const detail=holdReason?` · ${holdReason}`:'';
+    showToast(`${tag} ${pct}% captured (+$${unrealizedPnL.toFixed(2)})${detail}`,'#00e5a0');
     setTimeout(()=>closeTradeWithSell('profit_capture'),800);
   } else if(tpHit){
     riskState.tpTriggered=true;
     const tag=simMode?'📋 SIM':'🎯';
-    showToast(`${tag} Take profit +$${unrealizedPnL.toFixed(2)} — selling`,'#00e5a0');
+    showToast(`${tag} Take profit +$${unrealizedPnL.toFixed(2)}`,'#00e5a0');
     setTimeout(()=>closeTradeWithSell('take_profit'),800);
   } else if(slHit){
     riskState.slTriggered=true;
     const tag=simMode?'📋 SIM':'🛑';
-    showToast(`${tag} Stop loss -$${Math.abs(unrealizedPnL).toFixed(2)} — selling`,'#ff4566');
+    showToast(`${tag} Stop loss -$${Math.abs(unrealizedPnL).toFixed(2)}`,'#ff4566');
     setTimeout(()=>closeTradeWithSell('stop_loss'),800);
   }
 }
@@ -2706,17 +2907,51 @@ function renderActiveTrade(clock){
     const sellScore=Math.max(0,Math.min(1,unrealizedPnL/maxProfit));
     const sellPct=Math.round(sellScore*100);
     sellMeter.style.display=unrealizedPnL>0.05?'block':'none';
-    document.getElementById('sell-pct').textContent=`${sellPct}% captured`;
-    document.getElementById('sell-pct').style.color=sellScore>=sellCaptureThresh?'#00e5a0':sellScore>=sellSignalThresh?'#f7c948':'#888';
+
+    // Trail status in label
+    let captureLabel = `${sellPct}% captured`;
+    if(trailArmed && peakCapture!==null){
+      const pkPct=Math.round(peakCapture*100);
+      const pullPct=Math.round((peakCapture-sellScore)*100);
+      captureLabel=`${sellPct}% · peak ${pkPct}% · pull ${pullPct}%`;
+    }
+    document.getElementById('sell-pct').textContent=captureLabel;
+    document.getElementById('sell-pct').style.color=
+      (trailArmed && peakCapture!==null && (peakCapture-sellScore)>=0.05) ? '#f7c948' :
+      sellScore>=sellCaptureThresh?'#00e5a0':sellScore>=sellSignalThresh?'#f7c948':'#888';
+
     const bar=document.getElementById('sell-meter-bar');
     bar.style.width=`${Math.min(99,sellPct)}%`;
-    bar.style.background=sellScore>=sellCaptureThresh?'#00e5a0':sellScore>=sellSignalThresh?'#f7c948':'#555';
-    // Show sell vs hold comparison
+    bar.style.background=trailArmed?'#00e5a0':sellScore>=sellCaptureThresh?'#00e5a0':sellScore>=sellSignalThresh?'#f7c948':'#555';
+
+    // Peak marker on sell meter — small gold tick at peak position
+    let pkMarker=document.getElementById('sell-meter-peak');
+    if(!pkMarker){
+      pkMarker=document.createElement('div');
+      pkMarker.id='sell-meter-peak';
+      pkMarker.style.cssText='position:absolute;top:0;width:2px;height:100%;background:#f7c948;opacity:0;transition:left .3s,opacity .3s;pointer-events:none;';
+      bar.parentElement.style.position='relative';
+      bar.parentElement.appendChild(pkMarker);
+    }
+    if(trailArmed && peakCapture!==null){
+      pkMarker.style.left=`${Math.min(98,Math.round(peakCapture*100))}%`;
+      pkMarker.style.opacity='1';
+    } else {
+      pkMarker.style.opacity='0';
+    }
+
+    // Sell vs hold text
     const holdUpside=maxProfit-unrealizedPnL;
     const svh=document.getElementById('sell-vs-hold');
     if(svh){
-      if(sellScore>=sellCaptureThresh){
-        svh.innerHTML=`<span style="color:#00e5a0">Sell now +${fmtUSD(unrealizedPnL)}</span> vs <span style="color:#555">hold for +${fmtUSD(maxProfit)} (needs expiry win)</span>`;
+      if(trailArmed && peakCapture!==null){
+        const pkPct=Math.round(peakCapture*100);
+        const pull=Math.round((peakCapture-sellScore)*100);
+        const trailPull=clock&&clock.secsLeft<240?5:clock&&clock.secsLeft<480?8:12;
+        const remaining=Math.max(0,trailPull-pull);
+        svh.innerHTML=`<span style="color:#f7c948">📉 Trailing peak ${pkPct}% — need ${trailPull}% pull (${pull}% so far, ${remaining}% left)</span>`;
+      } else if(sellScore>=sellCaptureThresh){
+        svh.innerHTML=`<span style="color:#00e5a0">Sell now +${fmtUSD(unrealizedPnL)}</span> vs <span style="color:#555">hold for +${fmtUSD(maxProfit)}</span>`;
       } else if(sellScore>=sellSignalThresh){
         svh.innerHTML=`Sell now <span style="color:#f7c948">+${fmtUSD(unrealizedPnL)}</span> vs hold upside <span style="color:#555">+${fmtUSD(holdUpside)}</span> more`;
       } else {
@@ -2818,7 +3053,7 @@ function placeTrade(bet){
     entryYESPrice,contracts,ep:[...prices],
     time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}),
     result:null,exit:null,finalPnL:null};
-  trades.push(t); active=t; peakROI=null; exitIdx=null; priceChartDirty=true; projChartDirty=true;
+  trades.push(t); active=t; peakROI=null; peakCapture=null; trailArmed=false; exitIdx=null; priceChartDirty=true; projChartDirty=true;
   riskState.tpTriggered=false; riskState.slTriggered=false;
   showActive(); renderLog();
 
@@ -2898,7 +3133,7 @@ async function closeTradeWithSell(exitReason='manual_sell'){
     }
   }
   updateRiskOnTradeClosed(exitResult,finalPnL);
-  active=null; peakROI=null; priceChartDirty=true; projChartDirty=true;
+  active=null; peakROI=null; peakCapture=null; trailArmed=false; priceChartDirty=true; projChartDirty=true;
   persistState();
   showSetup(); renderLog(); renderRiskPanel(); renderTradeSetup();
 }
@@ -2916,7 +3151,7 @@ function closeTrade(){
   trades=trades.map(t=>t.id!==active.id?t:{...t,result:winNow?'WIN':'LOSS',exit:livePrice,finalPnL,earlyExit:true});
   recordTrade({...active,result:winNow?'WIN':'LOSS'});
   updateRiskOnTradeClosed(winNow?'WIN':'LOSS', finalPnL);
-  active=null; peakROI=null; priceChartDirty=true; projChartDirty=true;
+  active=null; peakROI=null; peakCapture=null; trailArmed=false; priceChartDirty=true; projChartDirty=true;
 
   // Close real Kalshi position if connected
   if(authConnected&&kalshiOrderId){
@@ -2957,7 +3192,7 @@ function clockTick(){
     trades=trades.map(t=>t.id!==active.id?t:{...t,result:won?'WIN':'LOSS',exit,finalPnL});
     recordTrade({...active,result:won?'WIN':'LOSS'});
     updateRiskOnTradeClosed(won?'WIN':'LOSS', finalPnL);
-    active=null; peakROI=null; showSetup(); renderLog(); updateBrainPanel();
+    active=null; peakROI=null; peakCapture=null; trailArmed=false; showSetup(); renderLog(); updateBrainPanel();
     // Reset tick buffer for new window
     tickBuffer=[]; tickWindowStart=get15mWindowStart();
   }
