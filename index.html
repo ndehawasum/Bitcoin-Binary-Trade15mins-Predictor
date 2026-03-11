@@ -1367,8 +1367,26 @@ function getClock(){
 // ═══════════════════════════════════════════════════
 // PRICE APIs — WebSocket primary, REST fallback
 // ═══════════════════════════════════════════════════
-async function krakenCandles(){const r=await fetch('https://api.kraken.com/0/public/OHLC?pair=XBTUSD&interval=1');const d=await r.json();const c=d.result.XXBTZUSD||d.result.XBTUSD;return c.slice(-60).map(x=>parseFloat(x[4]));}
-async function binanceCandles(){const r=await fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=60');return(await r.json()).map(c=>parseFloat(c[4]));}
+async function krakenCandles(asset){
+  const a=asset||activeAsset;
+  const pair=ASSET_CFG[a].krakenPair;
+  // Kraken pair → OHLC symbol mapping
+  const sym = a==='ETH' ? 'XETHZUSD' : 'XXBTZUSD';
+  const sym2= a==='ETH' ? 'ETHUSD'   : 'XBTUSD';
+  const r=await fetch(`https://api.kraken.com/0/public/OHLC?pair=${encodeURIComponent(pair)}&interval=1`);
+  const d=await r.json();
+  const cv=d.result[sym]||d.result[sym2]||d.result[Object.keys(d.result).filter(k=>k!=='last')[0]];
+  if(!cv) throw new Error('no data');
+  const minP=ASSET_CFG[a].priceMin;
+  return cv.slice(-60).map(x=>parseFloat(x[4])).filter(x=>x>minP);
+}
+async function binanceCandles(asset){
+  const a=asset||activeAsset;
+  const sym=a==='ETH'?'ETHUSDT':'BTCUSDT';
+  const minP=ASSET_CFG[a].priceMin;
+  const r=await fetch(`https://api.binance.com/api/v3/klines?symbol=${sym}&interval=1m&limit=60`);
+  return(await r.json()).map(c=>parseFloat(c[4])).filter(x=>x>minP);
+}
 async function krakenP(){const r=await fetch('https://api.kraken.com/0/public/Ticker?pair=XBTUSD');return parseFloat((await r.json()).result.XXBTZUSD.c[0]);}
 async function binanceP(){const r=await fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT');return parseFloat((await r.json()).price);}
 async function coinbaseP(){const r=await fetch('https://api.coinbase.com/v2/prices/BTC-USD/spot');return parseFloat((await r.json()).data.amount);}
@@ -2146,7 +2164,7 @@ function chartLoop(ts){
   // Filter out any cross-asset ticks (safety: drop prices outside asset's valid range)
   const _cfg  = window.ASSET_CFG ? ASSET_CFG[activeAsset] : null;
   const _pMin = _cfg ? _cfg.priceMin : 1;
-  const _pMax = _cfg ? (_cfg.priceMin < 500 ? 50000 : 500000) : 500000;
+  const _pMax = _cfg ? (_cfg.priceMin < 500 ? 20000 : 500000) : 500000; // ETH≤$20k, BTC≤$500k
   chartData = chartData.filter(x => x.p >= _pMin && x.p <= _pMax);
   if(chartData.length < 2){ ctx.restore(); return; }
 
