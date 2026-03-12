@@ -787,6 +787,7 @@ function mkAssetSt(){
     krakenWSInst: null,
     lastWSTime: 0,
     tickBuffer: [], tickWindowStart: 0, lastTickPrice: null,
+    cycleOpenPrice: null, // price at start of current 15m window
     priceChartDirty: true, projChartDirty: true, pnlChartDirty: true,
     advisoryDismissed: false,
     pred: null,
@@ -848,6 +849,7 @@ Object.defineProperties(window, {
   chartVelSmooth:  {get(){return A().chartVelSmooth;},  set(v){A().chartVelSmooth=v;},  configurable:true},
   chartPulse:      {get(){return A().chartPulse;},      set(v){A().chartPulse=v;},      configurable:true},
   chartYRange:     {get(){return A().chartYRange;},     set(v){A().chartYRange=v;},     configurable:true},
+  cycleOpenPrice:  {get(){return A().cycleOpenPrice;},  set(v){A().cycleOpenPrice=v;},  configurable:true},
   yesBuf:          {get(){return A().yesBuf;},          set(v){A().yesBuf=v;},          configurable:true},
   yesVel:          {get(){return A().yesVel;},          set(v){A().yesVel=v;},          configurable:true},
   yesVelHistory:   {get(){return A().yesVelHistory;},   set(v){A().yesVelHistory=v;},   configurable:true},
@@ -1443,7 +1445,8 @@ function pushTick(price, asset){
   const st = AST[a];
   const now=Date.now();
   const ws=get15mWindowStart();
-  if(ws!==st.tickWindowStart){st.tickWindowStart=ws; st.tickBuffer=[];}
+  if(ws!==st.tickWindowStart){st.tickWindowStart=ws; st.tickBuffer=[]; st.cycleOpenPrice=price;}
+  if(!st.cycleOpenPrice) st.cycleOpenPrice=price;
   if(st.lastTickPrice===price && st.tickBuffer.length>0 && now-st.tickBuffer[st.tickBuffer.length-1].t<500)return;
   st.lastTickPrice=price;
   st.tickBuffer.push({t:now,p:price});
@@ -1893,7 +1896,14 @@ function computeStrikeModel(arr, strike){
   const clock=getClock();
   const projClose=last + velPerSec*clock.secsLeft*0.55; // dampened: momentum decays
 
-  // 3. Strike distance as % 
+  // 3. Cycle delta — price move from 15m window open price
+  // Strong signal: if BTC opened at $69,400 and is now $69,490, that's +0.13% UP momentum
+  const cycleOpen = cycleOpenPrice || arr[0]; // fallback to oldest candle
+  const cycleDelta = cycleOpen > 0 ? (last - cycleOpen) / cycleOpen * 100 : 0;
+  const cycleAbsMin = last * 0.0003; // 0.03% minimum to be meaningful (~$20 for BTC, ~$0.60 for ETH)
+  const cycleDeltaStrong = Math.abs(cycleDelta * cycleOpen / 100) > cycleAbsMin;
+
+  // 4. Strike distance as %
   const strikePct=(last-strike)/strike*100;
   const projPct=(projClose-strike)/strike*100;
 
@@ -1923,6 +1933,13 @@ function computeStrikeModel(arr, strike){
   // 6. Velocity bias — strong recent momentum overweights tech
   if(vel5>last*.001) techUpPct=Math.min(90, techUpPct+8);
   else if(vel5<-last*.001) techUpPct=Math.max(10, techUpPct-8);
+
+  // 6b. Cycle delta bias — directional drift from window open (Forsaken_Driver insight)
+  // Strong sustained move from window open is a reliable signal
+  if(cycleDeltaStrong){
+    if(cycleDelta > 0) techUpPct = Math.min(90, techUpPct + Math.min(10, cycleDelta * 15));
+    else               techUpPct = Math.max(10, techUpPct + Math.max(-10, cycleDelta * 15));
+  }
 
   // 7. Strike proximity adjustment
   // If price is already well above strike → UP more likely to hold
@@ -1958,12 +1975,13 @@ function computeStrikeModel(arr, strike){
     {label:'BB',score:bb?(last<bb.lower?.9:last>bb.upper?.1:(last-bb.lower)/(bb.upper-bb.lower)):0.5, dir:bb&&last<bb.middle?'BULL':'BEAR'},
     {label:'MOMENTUM',score:Math.min(1,Math.max(0,.5+vel5/last*200)), dir:vel5>0?'BULL':'BEAR'},
     {label:'VELOCITY',score:Math.min(1,Math.max(0,.5+velPerSec/(last*.0001)*.5)), dir:velPerSec>0?'BULL':'BEAR'},
+    {label:'CYCLE Δ',score:Math.min(1,Math.max(0,0.5+cycleDelta*8)), dir:cycleDelta>0?'BULL':'BEAR', val:`${cycleDelta>=0?'+':''}${cycleDelta.toFixed(3)}%`},
   ];
 
   return{
     aboveProb:Math.round(finalAboveProb),
     belowProb:Math.round(100-finalAboveProb),
-    projClose, velPerSec, strikePct, pctAbove, momentumBias,
+    projClose, velPerSec, strikePct, pctAbove, momentumBias, cycleDelta, cycleOpen,
     bullScore, bearScore, techUpPct, nnInfluence, indis,
     clock,
     // raw layer contributions for model breakdown
@@ -2176,9 +2194,16 @@ function chartLoop(ts){
   let chartData;
   if(tickBuffer.length >= 2){
     chartData = tickBuffer.filter(x => x.t >= windowStart);
+    // If live ticks are sparse, backfill from prices[] so line starts from real data
+    if(chartData.length < 10 && prices.length >= 2){
+      const pricePoints = prices.slice(-60).map((p,i,arr) => ({
+        t: now - (arr.length-1-i) * 1500, p
+      })).filter(x => x.t < (chartData[0]?.t || now));
+      chartData = [...pricePoints, ...chartData];
+    }
     if(chartData.length < 2) chartData = tickBuffer.slice(-80);
   } else if(prices.length >= 2){
-    chartData = prices.map((p,i) => ({t: now-(prices.length-1-i)*1000, p}));
+    chartData = prices.map((p,i) => ({t: now-(prices.length-1-i)*1500, p}));
   } else {
     const demoBase = livePrice || (activeAsset==='ETH' ? 2029 : 83000);
     chartData = Array.from({length:45}, (_,i) => ({
@@ -2286,27 +2311,43 @@ function chartLoop(ts){
     if(sy >= PT && sy <= H-PB){
       ctx.save();
 
-      // Dashed line
-      ctx.beginPath();
-      ctx.setLineDash([4*dpr, 4*dpr]);
-      ctx.moveTo(PL, sy); ctx.lineTo(PL+CW, sy);
-      ctx.strokeStyle = '#ffffff35';
-      ctx.lineWidth = dpr;
-      ctx.stroke();
-      ctx.setLineDash([]);
+      // Zone fills — above and below strike
+      if(sy > PT){
+        const zg = ctx.createLinearGradient(0, PT, 0, sy);
+        zg.addColorStop(0, curAbove ? '#00e5a018' : '#00e5a008');
+        zg.addColorStop(1, curAbove ? '#00e5a005' : '#00e5a003');
+        ctx.fillStyle = zg;
+        ctx.fillRect(PL, PT, CW, Math.max(0, sy-PT));
+      }
+      if(sy < H-PB){
+        const rg = ctx.createLinearGradient(0, sy, 0, H-PB);
+        rg.addColorStop(0, !curAbove ? '#ff456618' : '#ff456608');
+        rg.addColorStop(1, !curAbove ? '#ff456605' : '#ff456603');
+        ctx.fillStyle = rg;
+        ctx.fillRect(PL, sy, CW, Math.max(0, H-PB-sy));
+      }
 
-      // Centered inline text label — Kalshi style
+      // Strike line — solid white, full opacity, always visible
+      ctx.beginPath();
+      ctx.moveTo(PL, sy); ctx.lineTo(PL+CW, sy);
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1*dpr;
+      ctx.globalAlpha = 0.85;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      // Inline text label centered on the line
       const strikeLbl = `$${sv.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})} or ${curAbove ? 'above' : 'below'}`;
       ctx.font = `${7*dpr}px -apple-system, sans-serif`;
       ctx.textAlign = 'center';
       const lw = ctx.measureText(strikeLbl).width;
-      // Small gap in the dashed line for the text
       const cx = PL + CW*0.5;
-      const tp2 = 3*dpr;
-      ctx.fillStyle = '#0d1225'; // bg color to "erase" line behind text
-      ctx.fillRect(cx - lw/2 - tp2, sy - 8*dpr, lw + tp2*2, 9*dpr);
-      ctx.fillStyle = '#ffffff80';
-      ctx.fillText(strikeLbl, cx, sy - 1*dpr);
+      const tp2 = 4*dpr;
+      // Small dark pill behind text so it's readable over the line
+      ctx.fillStyle = '#0d1225ee';
+      ctx.fillRect(cx - lw/2 - tp2, sy - 9*dpr, lw + tp2*2, 11*dpr);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(strikeLbl, cx, sy - 0.5*dpr);
 
       ctx.restore();
     }
@@ -2715,8 +2756,9 @@ function renderSignalPanel(){
     const isBull=ind.dir==='BULL';
     const w=isBull?ind.score*100:(1-ind.score)*100;
     const col=isBull?'#00e5a0':'#ff4566';
+    const valStr = ind.val ? `<span style="font-size:6px;color:${col};margin-left:2px">${ind.val}</span>` : '';
     return `<div class="sb-row">
-      <div class="sb-label">${ind.label}</div>
+      <div class="sb-label">${ind.label}${valStr}</div>
       <div class="sb-bar-bg"><div class="sb-bar-fill" style="width:${w.toFixed(0)}%;background:${col}"></div></div>
       <div class="sb-pct" style="color:${col}">${isBull?'▲':'▼'}</div>
     </div>`;
@@ -3321,6 +3363,24 @@ function renderTradeSetup(){
     document.getElementById('bup').style.background=upWins?'#00e5a015':'transparent';
     document.getElementById('bdn').style.background=!upWins?'#ff456815':'transparent';
     document.getElementById('kh').textContent=`Model: BTC ${upWins?'ABOVE':'BELOW'} strike with ${Math.max(sm.aboveProb,sm.belowProb)}% confidence`;
+
+    // ── Auto-fill recommended bet size ──
+    // Silently fills the bet input when: no active trade, balance known, input is empty or zero
+    if(!active && strikeInput > 0 && livePrice){
+      const bal = getRiskAccountBalance();
+      if(bal > 0){
+        const recBet = sm.aboveProb>sm.belowProb?'UP':'DOWN';
+        const yesP   = estimateYESPriceLive(sm, recBet);
+        const kelly  = computeKellyBet(Math.max(sm.aboveProb,sm.belowProb), yesP, bal);
+        const sized  = Math.max(0.50, Math.round(kelly * 100)/100); // min $0.50, round to cents
+        const aiEl   = document.getElementById('ai');
+        // Only update if currently empty/zero — don't override user edits
+        if(aiEl && (!amtInput || amtInput <= 0)){
+          aiEl.value = sized.toFixed(2);
+          amtInput   = sized;
+        }
+      }
+    }
   }
   const sbw=document.getElementById('sbw');
   if(strikeInput>0&&livePrice){
