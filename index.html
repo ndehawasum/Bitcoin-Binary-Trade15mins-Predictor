@@ -31,6 +31,39 @@ input[type=number]{-moz-appearance:textfield}
 /* demo */
 #demo-ban{background:#1a1200;border:1px solid #f7c94830;border-radius:9px;padding:6px 11px;margin-bottom:9px;font-size:9px;color:#f7c948;display:none}
 
+/* sim wallet */
+#sim-wallet{background:#0c0c1c;border:1px solid #7b9fff30;border-radius:12px;padding:9px 13px;margin-bottom:9px;display:none}
+#sim-wallet.show{display:block}
+.sim-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.sim-title{font-size:8px;letter-spacing:3px;color:#7b9fff;font-weight:900}
+.sim-toggle{background:#7b9fff;color:#07070f;border:none;border-radius:5px;padding:2px 8px;font-size:7px;font-weight:900;letter-spacing:1px;cursor:pointer;font-family:inherit}
+.sim-bal-row{display:flex;align-items:baseline;gap:6px}
+.sim-bal{font-size:22px;font-weight:900;color:#7b9fff;letter-spacing:-1px}
+.sim-pnl{font-size:10px;font-weight:700}
+.sim-input-row{display:flex;gap:6px;margin-top:7px;align-items:center}
+.sim-input{flex:1;background:#07070f;border:1px solid #7b9fff30;border-radius:7px;padding:5px 9px;font-size:12px;font-weight:700;color:#7b9fff;font-family:inherit;outline:none}
+.sim-set-btn{background:#7b9fff20;border:1px solid #7b9fff40;border-radius:7px;padding:5px 10px;font-size:8px;font-weight:900;letter-spacing:1px;color:#7b9fff;cursor:pointer;font-family:inherit}
+.sim-mode-badge{display:inline-block;background:#7b9fff20;border:1px solid #7b9fff40;border-radius:4px;padding:1px 6px;font-size:7px;font-weight:900;letter-spacing:1px;color:#7b9fff;margin-left:6px}
+
+/* farm mode */
+.farm-arm-btn{width:100%;padding:12px 0;border-radius:11px;border:2px solid #f7c94860;background:linear-gradient(135deg,#1a1400,#0f0f00);color:#f7c948;font-family:inherit;font-size:12px;font-weight:900;letter-spacing:3px;cursor:pointer;transition:all .2s;margin-top:8px}
+.farm-arm-btn.armed{border-color:#00e5a0;background:linear-gradient(135deg,#001a0f,#000f07);color:#00e5a0;animation:farmPulse 2s ease-in-out infinite}
+.farm-arm-btn:disabled{opacity:.3;cursor:not-allowed}
+@keyframes farmPulse{0%,100%{box-shadow:0 0 0 0 #00e5a020}50%{box-shadow:0 0 0 8px #00e5a000}}
+.farm-status{background:#07070f;border-radius:9px;padding:9px 12px;margin-top:8px;font-size:9px;line-height:1.7;display:none}
+.farm-status.show{display:block}
+.farm-live-row{display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-bottom:1px solid #0d0d1f}
+.farm-live-row:last-child{border-bottom:none}
+.farm-live-lbl{color:#444;font-size:8px}
+.farm-live-val{font-weight:700;font-size:9px}
+.frc-dual{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.frc-asset{background:#07070f;border-radius:9px;padding:8px 10px;border:1px solid #1a1a35}
+.frc-asset-lbl{font-size:7px;letter-spacing:2px;color:#444;margin-bottom:3px}
+.frc-asset-val{font-size:13px;font-weight:900}
+.farm-trade-row{display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid #0a0a1e;font-size:8px}
+.farm-trade-row:last-child{border-bottom:none}
+.farm-badge{font-size:6px;padding:1px 5px;border-radius:3px;font-weight:900;letter-spacing:1px}
+
 /* asset toggle */
 #asset-toggle{display:flex;gap:6px;margin-bottom:9px}
 .at-btn{flex:1;padding:7px 0;border-radius:10px;border:1px solid #1a1a35;cursor:pointer;font-family:inherit;font-size:10px;letter-spacing:3px;font-weight:700;background:#0c0c1c;color:#444;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:5px}
@@ -252,10 +285,39 @@ body.dual-active #app{padding-bottom:74px}
 
   <div id="demo-ban">⚡ Demo mode — APIs unreachable. Real UTC clock active.</div>
 
+  <!-- mode-toggle hidden — auto-managed by connectKey/disconnectKey -->
+  <div id="mode-toggle" style="display:none">
+    <button class="mode-btn active-sim" id="btn-sim" onclick="setTradingMode('sim')">📋 SIM</button>
+    <button class="mode-btn" id="btn-live" onclick="setTradingMode('live')">⚡ LIVE</button>
+  </div>
+  <!-- SIM CASH WALLET — shown in trade tab header, not here -->
+  <div id="sim-bal-row" style="display:none">
+    <span class="sim-bal-lbl">SIM $</span>
+    <input id="sim-bal-input" type="number" min="1" max="100000" step="10" value="500" onchange="updateSimBalance(this.value)" onblur="updateSimBalance(this.value)"/>
+    <span class="sim-bal-unit">CASH</span>
+    <span id="sim-pnl-chip" style="background:#00e5a015;color:#00e5a0;border:1px solid #00e5a030">+$0.00</span>
+  </div>
+
   <!-- ASSET TOGGLE -->
   <div id="asset-toggle">
     <button class="at-btn at-active" id="at-btc" onclick="switchAsset('BTC')"><span class="at-icon">₿</span> BTC<span class="at-live" id="at-btc-live">● LIVE</span><span class="at-pnl" id="at-btc-pnl"></span></button>
     <button class="at-btn" id="at-eth" onclick="switchAsset('ETH')"><span class="at-icon">Ξ</span> ETH<span class="at-live" id="at-eth-live">● LIVE</span><span class="at-pnl" id="at-eth-pnl"></span></button>
+  </div>
+
+  <!-- SIM WALLET BANNER -->
+  <div id="sim-wallet">
+    <div class="sim-header">
+      <span class="sim-title">🧪 SIM WALLET</span>
+      <button class="sim-toggle" id="sim-toggle-btn" onclick="toggleSimMode()">GO LIVE</button>
+    </div>
+    <div class="sim-bal-row">
+      <span class="sim-bal" id="sim-bal">$500.00</span>
+      <span class="sim-pnl" id="sim-pnl" style="color:#555">+$0.00</span>
+    </div>
+    <div class="sim-input-row">
+      <input class="sim-input" id="sim-input" type="number" min="1" max="99999" placeholder="Set balance..." />
+      <button class="sim-set-btn" onclick="setSimBalance()">SET</button>
+    </div>
   </div>
 
   <!-- SWITCH ADVISORY -->
@@ -266,7 +328,26 @@ body.dual-active #app{padding-bottom:74px}
     <button id="switch-adv-x" onclick="dismissAdvisory()">✕</button>
   </div>
 
-  <div id="top-row">
+  <!-- FARM STATUS STRIP — compact, above chart, only shows when armed -->
+  <div id="farm-bar" style="display:none;background:#09090f;border:1px solid #1a1025;border-radius:8px;padding:6px 12px;margin-bottom:6px;display:none">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:7px;letter-spacing:2px;color:#a78bfa">🌾 FARM</span>
+        <span id="farm-status-badge" style="font-size:8px;font-weight:700;color:#444">IDLE</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:8px;color:#555">Rounds: <span id="farm-rounds" style="color:#a78bfa;font-weight:700">0/3</span></span>
+        <span style="font-size:8px;color:#555">P&L: <span id="farm-session-pnl" style="color:#00e5a0;font-weight:700">$0.00</span></span>
+        <span id="farm-target-pct" style="font-size:8px;color:#f7c948;font-weight:700"></span>
+      </div>
+    </div>
+    <div id="farm-reason-text" style="font-size:7px;color:#333;margin-top:3px"></div>
+  </div>
+
+  <!-- DUAL ACTIVE POSITIONS -->
+  <div id="dual-active"></div>
+
+    <div id="top-row">
     <div id="pc">
       <div style="font-size:8px;letter-spacing:4px;color:#333;margin-bottom:2px" id="price-lbl">BTC/USD</div>
       <div id="lp">…</div>
@@ -394,9 +475,16 @@ body.dual-active #app{padding-bottom:74px}
     <div id="sw" class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <div class="lbl gold" style="margin:0">TRADE SETUP</div>
-        <div style="display:flex;align-items:center;gap:6px">
-          <div id="ks-dot" style="width:6px;height:6px;border-radius:50%;background:#555"></div>
-          <span id="ks-label" style="font-size:8px;color:#333;letter-spacing:1px">KALSHI —</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <!-- Sim/Live mode pill + balance -->
+          <div id="trade-mode-pill" style="display:flex;align-items:center;gap:5px">
+            <span id="trade-mode-label" style="font-size:7px;padding:2px 7px;border-radius:20px;font-weight:900;letter-spacing:1px;background:#f7c94815;border:1px solid #f7c94830;color:#f7c948">SIM</span>
+            <span id="trade-balance-display" style="font-size:9px;font-weight:700;color:#f7c948">$500.00</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <div id="ks-dot" style="width:6px;height:6px;border-radius:50%;background:#555"></div>
+            <span id="ks-label" style="font-size:8px;color:#333;letter-spacing:1px">KALSHI —</span>
+          </div>
         </div>
       </div>
       <div id="kalshi-market-bar">
@@ -439,6 +527,35 @@ body.dual-active #app{padding-bottom:74px}
         <button class="bbtn" id="bdn" disabled style="border-color:#ff4566;color:#ff4566;background:transparent">DOWN<div class="bh" id="dnh"></div></button>
       </div>
       <button id="auto-buy-btn" onclick="armAutoBuy()" style="width:100%;margin-top:7px;padding:7px;border-radius:9px;border:1px solid #2a2a50;background:#1a1a35;color:#7b9fff;font-family:inherit;font-size:8px;letter-spacing:2px;font-weight:700;cursor:pointer">⚡ ARM AUTO-BUY</button>
+
+      <!-- FARM BOT — embedded in trade tab -->
+      <div id="farm-trade-card" style="margin-top:8px;background:#09090f;border:1px solid #1a1025;border-radius:10px;padding:10px 12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div>
+            <div style="font-size:7px;letter-spacing:3px;color:#a78bfa;margin-bottom:1px">FARM BOT</div>
+            <div id="farm-inline-status" style="font-size:9px;font-weight:700;color:#444">IDLE — tap ARM to activate</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <div id="farm-mode-pill" style="font-size:7px;padding:2px 7px;border-radius:20px;font-weight:700;letter-spacing:1px;background:#f7c94815;border:1px solid #f7c94830;color:#f7c948">SIM</div>
+            <button id="farm-arm-inline-btn" onclick="toggleFarmBot()" style="padding:5px 12px;border-radius:7px;border:1px solid #a78bfa40;background:#1a0f2a;color:#a78bfa;font-family:inherit;font-size:8px;font-weight:900;letter-spacing:2px;cursor:pointer">ARM</button>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px">
+          <div style="background:#07070f;border-radius:6px;padding:5px 7px;text-align:center">
+            <div style="font-size:7px;color:#444;letter-spacing:1px;margin-bottom:2px">ROUNDS</div>
+            <div id="farm-inline-rounds" style="font-size:11px;font-weight:900;color:#a78bfa">0/3</div>
+          </div>
+          <div style="background:#07070f;border-radius:6px;padding:5px 7px;text-align:center">
+            <div style="font-size:7px;color:#444;letter-spacing:1px;margin-bottom:2px">TARGET</div>
+            <div id="farm-inline-target" style="font-size:11px;font-weight:900;color:#f7c948">—</div>
+          </div>
+          <div style="background:#07070f;border-radius:6px;padding:5px 7px;text-align:center">
+            <div style="font-size:7px;color:#444;letter-spacing:1px;margin-bottom:2px">SESSION</div>
+            <div id="farm-inline-pnl" style="font-size:11px;font-weight:900;color:#00e5a0">$0.00</div>
+          </div>
+        </div>
+        <div id="farm-inline-reason" style="font-size:8px;color:#333;min-height:12px;text-align:center"></div>
+      </div>
       <div id="contract-preview">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
           <div style="font-size:8px;color:#2a2a40;letter-spacing:3px">KALSHI CONTRACT</div>
@@ -630,6 +747,38 @@ body.dual-active #app{padding-bottom:74px}
       <div id="log-rows"></div>
       <button id="cl" onclick="clearLog()">CLEAR LOG</button>
     </div>
+
+    <!-- FARM TRADE LOG — sub-section in log tab -->
+    <div style="margin-top:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-size:7px;letter-spacing:3px;color:#a78bfa">🌾 FARM TRADES</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span id="farm-log-count" style="font-size:8px;color:#333">0 rounds</span>
+          <button onclick="clearFarmLog()" style="background:none;border:1px solid #1a1a35;border-radius:4px;color:#333;font-family:inherit;font-size:7px;padding:2px 7px;cursor:pointer;letter-spacing:1px">CLEAR</button>
+        </div>
+      </div>
+      <!-- Farm session stats strip -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:8px">
+        <div style="background:#09090f;border-radius:7px;padding:6px 0;text-align:center">
+          <div style="font-size:7px;color:#444">WINS</div>
+          <div id="farm-wins" style="font-size:12px;font-weight:900;color:#00e5a0">0</div>
+        </div>
+        <div style="background:#09090f;border-radius:7px;padding:6px 0;text-align:center">
+          <div style="font-size:7px;color:#444">LOSSES</div>
+          <div id="farm-losses" style="font-size:12px;font-weight:900;color:#ff4566">0</div>
+        </div>
+        <div style="background:#09090f;border-radius:7px;padding:6px 0;text-align:center">
+          <div style="font-size:7px;color:#444">WIN %</div>
+          <div id="farm-wr" style="font-size:12px;font-weight:900;color:#f7c948">—</div>
+        </div>
+        <div style="background:#09090f;border-radius:7px;padding:6px 0;text-align:center">
+          <div style="font-size:7px;color:#444">P&amp;L</div>
+          <div id="farm-total-pnl" style="font-size:12px;font-weight:900;color:#00e5a0">$0</div>
+        </div>
+      </div>
+      <div id="farm-log-rows" style="max-height:260px;overflow-y:auto"></div>
+      <div id="farm-log-empty" style="text-align:center;color:#333;font-size:9px;padding:16px 0">No farm rounds yet</div>
+    </div>
   </div>
 
   <!-- BRAIN TAB -->
@@ -687,6 +836,19 @@ body.dual-active #app{padding-bottom:74px}
     </div>
   </div>
 
+  <!-- FARM TAB — content moved to TRADE tab and LOG tab -->
+  <div class="pnl" id="p-farm">
+    <div style="text-align:center;padding:30px 20px">
+      <div style="font-size:32px;margin-bottom:12px">🌾</div>
+      <div style="font-size:11px;font-weight:900;letter-spacing:2px;color:#a78bfa;margin-bottom:8px">FARM BOT</div>
+      <div style="font-size:9px;color:#444;line-height:1.8;margin-bottom:16px">
+        Farm controls are now in the <span style="color:#f7c948;font-weight:700">TRADE</span> tab<br>
+        Farm trade history is in the <span style="color:#f7c948;font-weight:700">LOG</span> tab
+      </div>
+      <button onclick="document.querySelector('[data-p=trade]').click()" style="padding:10px 20px;border-radius:9px;border:1px solid #a78bfa40;background:#1a0f2a;color:#a78bfa;font-family:inherit;font-size:9px;font-weight:900;letter-spacing:2px;cursor:pointer">GO TO TRADE TAB →</button>
+    </div>
+  </div>
+
   <!-- API KEY MODAL -->
   <div id="key-modal" style="display:none;position:fixed;inset:0;background:#07070fdd;z-index:999;padding:20px;overflow-y:auto">
     <div style="max-width:420px;margin:40px auto;background:#0c0c1c;border:1px solid #1a1a35;border-radius:16px;padding:20px">
@@ -734,6 +896,265 @@ body.dual-active #app{padding-bottom:74px}
 <div id="toast"></div>
 
 <script>
+// ════════════════════════════════════════════════════════════════════════════
+// K-PREDICTOR FEATURE CHECKLIST — v5.0 (March 2026)
+// ════════════════════════════════════════════════════════════════════════════
+// INSTRUCTIONS FOR CLAUDE:
+//   Before making ANY edit to this file:
+//     1. Search for every item marked [PROTECTED] below
+//     2. Confirm it exists and is functional
+//     3. After edits, re-verify all [PROTECTED] items still exist
+//   NEVER remove a feature unless the user explicitly asks for it.
+//   If a rewrite of a large function is needed, READ the old function
+//   fully first and carry forward all behaviour not being changed.
+// ════════════════════════════════════════════════════════════════════════════
+//
+// ── TRADE LOG [PROTECTED] ────────────────────────────────────────────────
+//   renderLog()          — combined BTC+ETH log, newest first
+//   clearLog()           — CLEAR LOG button wipes trades + resets sessionLoss
+//   entryBadge           — ⚡ AUTO (auto_buy) | ✋ MANUAL per trade row
+//   exitBadge            — ⚡ AUTO-SOLD | 🎯 AUTO-TP | 🛑 AUTO-SL | ✋ MANUAL
+//   assetBadge           — shows BTC/ETH label on trades from non-active asset
+//   tradeType field      — 'auto_buy' | 'manual' stored on every trade object
+//   exitReason field     — 'profit_capture'|'take_profit'|'stop_loss'|'manual_sell'
+//
+// ── CHART [PROTECTED] ────────────────────────────────────────────────────
+//   chartLoop()          — 60fps rAF loop, Kalshi-style tight zoom
+//   startChartLoop()     — called FIRST in init() before any await
+//   chartYRange          — per-asset spring-smoothed Y window (proxy + mkAssetSt)
+//   cycleOpenPrice       — per-asset 15m window open price (proxy + mkAssetSt)
+//   Kalshi chart style:  — dark navy bg, dashed grid, white strike line,
+//                          inline strike label, zone fills, price pill right rail,
+//                          real clock times on X axis, glow on price line
+//   Strike line          — always visible (white, solid, 85% opacity)
+//   Zone fills           — green above strike, red below, gradient
+//   Price line           — green if above strike, red if below, Catmull-Rom spline
+//   Startup continuity   — backfills from prices[] when tickBuffer sparse
+//
+// ── RISK MANAGEMENT [PROTECTED] ──────────────────────────────────────────
+//   RISK_CONF_MIN=58     — minimum model confidence for auto-buy
+//   RISK_EV_MIN=0.05     — minimum expected value
+//   RISK_MAX_ACCT_PCT=0.20 — max 20% of balance per trade
+//   RISK_DAILY_CAP=0.08  — 8% daily loss cap
+//   RISK_CONSEC_BRAKE=3  — pause after 3 consecutive losses
+//   RISK_TP_ROI=0.60     — take profit at 60% ROI
+//   RISK_SL_ROI=-0.15    — base stop loss -15% (overridden by dynamic SL)
+//   RISK_COOLDOWN_MS=45s — cooldown between auto-buys
+//   sessionLoss          — cumulative loss this browser session
+//   SESSIONKILL gate     — blocks auto-buy if sessionLoss >= 5% of balance
+//
+// ── DYNAMIC SL + MARKET CONDITIONS [PROTECTED] ───────────────────────────
+//   computeDynamicSL()   — CALM→-15% | NORMAL→-12% | CHOPPY→-10%
+//   getLiquidityRating() — LOW|MEDIUM|HIGH per asset per ET hour
+//   getVolatilityRating()— CALM|NORMAL|CHOPPY from 5min tick stdDev
+//   getTradeRecommendation() — ok/warn/block based on vol+liquidity
+//   renderMarketConditions() — card above UP/DOWN buttons, updates every tick
+//   MKTCOND gate         — blocks auto-buy when LOW liquidity
+//   active.sl            — dynamic SL locked at trade open (not RISK_SL_ROI)
+//
+// ── AUTO-BUY [PROTECTED] ─────────────────────────────────────────────────
+//   armAutoBuy()         — arms/disarms, shows countdown UI
+//   checkAutoBuy()       — called every second from clockTick
+//   computeRegimeFilter()— 9 gates: SPREAD|DEADZONE|EARLY|LATE|FLATLINE|
+//                          DAILYCAP|COOLDOWN|STREAK|SESSIONKILL|MKTCOND
+//   placeTrade(bet, tradeType) — tradeType='auto_buy'|'manual'
+//   auto-fill bet amount — Kelly-sized bet auto-fills when input empty
+//
+// ── SIGNAL MODEL [PROTECTED] ─────────────────────────────────────────────
+//   computeStrikeModel() — RSI|MACD|EMA|BB|MOMENTUM|VELOCITY|CYCLE Δ
+//   cycleDelta           — (currentPrice - windowOpen) / windowOpen * 100
+//   cycleOpenPrice       — reset on window change AND on asset switch
+//   CYCLE Δ indicator    — shows % drift from window open in signal bars
+//   NN layer             — nnTrain | nnFwd | buildFeatures | nnInit
+//   checkRiskAutoExit()  — TP|SL|trail|velocity|time-floor exits
+//
+// ── ASSET SWITCHING [PROTECTED] ──────────────────────────────────────────
+//   switchAsset()        — BTC↔ETH, resets chart state + cycleOpenPrice
+//   per-asset state      — AST.BTC / AST.ETH via mkAssetSt() + proxy
+//   Background feeds     — both BTC+ETH WS run simultaneously
+//   krakenCandles(asset) — asset-aware, XETHZUSD / XXBTZUSD
+//   binanceCandles(asset)— asset-aware, ETHUSDT / BTCUSDT
+//   krakenP(asset)       — asset-aware spot price with range validation
+//   binanceP(asset)      — asset-aware spot price
+//   coinbaseP(asset)     — asset-aware spot price
+//   ETH seed validation  — rejects ethData if max price > $20k (BTC contamination guard)
+//
+// ── KALSHI INTEGRATION [PROTECTED] ───────────────────────────────────────
+//   kalshiInit()         — fetches market, auto-populates strike
+//   kalshiPlaceOrder()   — live order placement
+//   kalshiSellPosition() — live sell, called from closeTradeWithSell
+//   closeTradeWithSell() — async, all setTimeout callers use .catch()
+//   kalshiWSConnectForAsset() — per-asset YES price WebSocket
+//   applyAutoStrike()    — applies Kalshi-detected strike to input
+//
+// ── UI PANELS [PROTECTED] ────────────────────────────────────────────────
+//   renderRiskPanel()    — daily loss | session loss | streak | balance
+//   renderDualBar()      — BTC+ETH side-by-side position bar
+//   updateBrainPanel()   — NN training stats
+//   evalAdvisory()       — suggests asset switch when conditions warrant
+//   renderActiveTrade()  — live P&L during open trade
+//   renderSignalPanel()  — indicator bars + model breakdown
+//   renderMarketConditions() — volatility + liquidity + dynamic SL card
+//
+// ── SIM WALLET [PROTECTED] ───────────────────────────────────────────────
+//   simState             — {mode,balance,startBalance,pnl}
+//   setTradingMode(mode) — 'sim'|'live', updates UI and farm bar visibility
+//   updateSimBalance(v)  — user sets custom sim cash amount
+//   simDebitBet(amt)     — deducted on trade entry in sim mode
+//   simCreditPnL(pnl,bet)— credited on trade close in sim mode
+//   getEffectiveBalance()— returns sim balance or real Kalshi balance
+//
+// ── FARM MODE [PROTECTED] ─────────────────────────────────────────────────
+//   farmState            — {armed,roundsBTC,roundsETH,lastExitTime*,trades,sessionPnL,windowId}
+//   computeFarmDecision()— decides farm vs hold, returns {shouldFarm,targetPct,stopPct,betSize,reason}
+//   toggleFarmArm()      — arm/disarm the farm bot
+//   checkFarmBot()       — called every second, enters farm trade when conditions met
+//   checkFarmExit()      — monitors open farm trade for TP/SL exit
+//   recordFarmExit()     — logs farm trade, credits sim wallet
+//   renderFarmBar()      — updates farm status bar above price chart
+//   renderFarmTab()      — renders farm tab with trade history
+//   resetFarmWindowIfNeeded() — resets round counter on new 15m window
+//   Farm constants: FARM_MAX_ROUNDS=3, FARM_REENTRY_WAIT_MS=30s
+//   Farm targets: CALM=12%, NORMAL=18%, CHOPPY=25% (from YES entry price)
+//   Farm stops: CALM=6%, NORMAL=9%, CHOPPY=12%
+//
+// ── DUAL SIMULTANEOUS POSITIONS [PROTECTED] ──────────────────────────────
+//   renderDualActivePositions() — shows BTC+ETH cards when both active
+//   Combined exposure bar — total $ at risk + combined unrealized P&L
+//
+// ── SIM WALLET [PROTECTED] ───────────────────────────────────────────────────
+//   AUTO-DETECTION: setTradingMode('live') called in connectKey on success
+//                  setTradingMode('sim') called in disconnectKey
+//   NO MANUAL TOGGLE — mode-toggle div is hidden, auto-managed
+//   simWallet global     — {enabled,balance,startBalance,totalPnL}; starts in SIM mode
+//   toggleSimMode()      — flips sim/live, updates all UI incl farm mode banner
+//   setSimBalance()      — user sets any amount; also seeds Kelly sizer
+//   renderSimWallet()    — sim wallet banner, shows balance + session P&L
+//   getEffectiveBalance()— returns sim.balance or live Kalshi balance for all sizing
+//   Persisted:           — idbKey "simWallet" saves balance+enabled across sessions
+//
+// ── FARM BOT [PROTECTED] ─────────────────────────────────────────────────────
+//   farmBot global       — {armed, activeFarm{BTC,ETH}, rounds, assetPnL, cooldown}
+//   toggleFarmBot()      — arms/disarms bot; resets rounds on arm
+//   computeFarmTargets() — CALM:12%/6% NORMAL:18%/9% CHOPPY:25%/12%; time+YES adjusted
+//   farmDecision()       — hold|wait|farm decision per asset each second
+//   openFarmTrade()      — Kelly-sized entry, debits sim OR places live Kalshi order
+//   closeFarmTrade()     — exits, credits sim, logs trade, starts cooldown
+//   checkFarmExits()     — target hit / stop hit / <30s expiry → close
+//   checkFarmBot()       — main 1Hz loop: reset rounds, check exits, open entries
+//   renderFarmPanel()    — farm tab: arm btn, round counters, session stats
+//   renderFarmStatus()   — live status: decision per asset, active trades, targets
+//   renderFarmLog()      — trade history with SIM/LIVE badge, ¢ entry→exit, P&L
+//   clearFarmLog()       — wipe farm history; keeps balance intact
+//   Dual simultaneous    — BTC + ETH hold independent farm trades at the same time
+//   Hold-to-expiry logic — auto when YES>65¢ OR <4min left in window
+//   Max 3 rounds/window  — resets at each 15m window boundary
+//   Persisted:           — idbKeys "farmTrades" + "farmSessionPnL"
+//
+// ── PERSISTENCE [PROTECTED] ──────────────────────────────────────────────
+//   persistState()       — saves trades+NN weights to localStorage
+//   loadPersistedState() — restores on load
+//
+// ── FARM MODE [PROTECTED] ────────────────────────────────────────────────────
+//   ARCHITECTURE: Farm is NOT a separate tab. It is:
+//     - ARM button + inline status card → TRADE tab (below ARM AUTO-BUY)
+//     - Farm trade log + stats → LOG tab (below trade log)
+//     - Farm bar strip (compact) → above chart, only visible when armed
+//   computeFarmDecision()— decides shouldFarm, targetPct, stopPct, betSize
+//   checkFarmBot()       — called every second from clockTick, enters farm trade
+//   checkFarmExit()      — called every second from clockTick when farm active
+//   recordFarmExit()     — logs farm trade, credits/debits sim wallet
+//   toggleFarmBot()      — arms/disarms farm bot (ARM FARM BOT button)
+//   toggleSimMode()      — toggles sim/live mode from farm tab GO LIVE button
+//   renderFarmBar()      — updates farm status bar (IDLE/HUNTING/IN TRADE/BLOCKED)
+//   renderFarmTab()      — renders farm trade log in farm tab
+//   tradeType='farm'     — set on all farm-placed trades
+//   FARM constants:      — TARGET: CALM=12% NORMAL=18% CHOPPY=25%
+//                          STOP:   CALM=6%  NORMAL=9%  CHOPPY=12%
+//                          MAX_ROUNDS=3, REENTRY_WAIT=30s
+//                          HOLD if YES>=65c or YES<=20c or <4min left
+//
+// ── SIM WALLET [PROTECTED] ───────────────────────────────────────────────────
+//   simState             — { mode, balance, startBalance, pnl }
+//   simDebitBet(amt)     — deducts bet on trade entry (sim mode only)
+//   simCreditPnL(pnl,amt)— credits P&L on trade close (sim mode only)
+//   updateSimBalance(val)— user inputs custom starting balance (any amount ≥ $1)
+//   renderSimWallet()    — updates sim balance input + P&L chip
+//   getEffectiveBalance()— simState.balance (sim) | Kalshi balance (live)
+//   setTradingMode(mode) — 'sim'|'live', shows/hides sim row + farm bar
+//
+// ── DUAL SIMULTANEOUS POSITIONS [PROTECTED] ──────────────────────────────────
+//   BTC + ETH can BOTH have active trades at the same time
+//   renderDualActivePositions() — dual position card when both assets active
+//   renderDualBar()      — compact BTC+ETH bar below chart
+//   combined exposure    — total $ at risk + combined unrealized P&L shown
+//
+// ════════════════════════════════════════════════════════════════════════════
+
+
+// ── FARM MODE CONSTANTS ──────────────────────────────────────
+const FARM_MAX_ROUNDS      = 3;      // max farm trades per 15m window
+const FARM_REENTRY_WAIT_MS = 30000;  // 30s cooldown between farm re-entries
+const FARM_MIN_TIME_LEFT   = 240;    // seconds — don't farm if <4min left
+const FARM_HOLD_YES_HIGH   = 0.65;   // hold to expiry if YES ≥ 65¢
+const FARM_HOLD_YES_LOW    = 0.20;   // hold to expiry if YES ≤ 20¢ (too risky)
+// Dynamic target % by volatility tier
+const FARM_TARGET_CALM     = 0.12;   // 12% gain target when CALM
+const FARM_TARGET_NORMAL   = 0.18;   // 18% gain target when NORMAL
+const FARM_TARGET_CHOPPY   = 0.25;   // 25% gain target when CHOPPY
+// Dynamic stop % by volatility tier
+const FARM_STOP_CALM       = 0.06;   // 6% stop when CALM
+const FARM_STOP_NORMAL     = 0.09;   // 9% stop when NORMAL
+const FARM_STOP_CHOPPY     = 0.12;   // 12% stop when CHOPPY
+// Spread must be < this fraction of YES price to farm (liquidity guard)
+const FARM_MAX_SPREAD_PCT  = 0.25;   // 25% of YES price max spread
+
+// ── SIM WALLET STATE ─────────────────────────────────────────
+window.simState = {
+  mode: 'sim',              // 'sim' | 'live'
+  balance: 500.00,          // user-editable starting balance
+  startBalance: 500.00,     // tracks original balance for P&L %
+  pnl: 0,                   // cumulative sim P&L this session
+};
+
+// ── FARM STATE (global, shared across assets) ─────────────────
+window.farmState = {
+  armed: false,             // user armed the bot
+  roundsBTC: 0,             // farm rounds used this window for BTC
+  roundsETH: 0,             // farm rounds used this window for ETH
+  lastExitTimeBTC: 0,       // timestamp of last BTC farm exit
+  lastExitTimeETH: 0,       // timestamp of last ETH farm exit
+  trades: [],               // all farm trade records
+  sessionPnL: 0,            // cumulative farm P&L this session
+  windowId: 0,              // tracks 15m window to reset rounds
+};
+
+// ── SIM WALLET STATE ─────────────────────────────────────────────────────────
+window.simWallet = {
+  enabled: true,            // start in sim mode until user explicitly goes live
+  balance: 500.00,          // current sim cash
+  startBalance: 500.00,     // session starting balance (for P&L calc)
+  totalPnL: 0,              // cumulative session P&L
+};
+
+// ── FARM BOT STATE ───────────────────────────────────────────────────────────
+window.farmBot = {
+  armed: false,
+  // per-asset active farm trade
+  activeFarm: { BTC: null, ETH: null },
+  // per-asset round counters (reset each window)
+  rounds: { BTC: 0, ETH: 0 },
+  // per-asset session P&L
+  assetPnL: { BTC: 0, ETH: 0 },
+  // cooldown: don't re-enter immediately after exit
+  cooldown: { BTC: 0, ETH: 0 },
+  MAX_ROUNDS: 3,
+  RE_ENTRY_WAIT_MS: 30000,  // 30s between farm entries per asset
+  HOLD_YES_THRESH: 0.65,    // above this YES price → hold to expiry
+  HOLD_TIME_SECS: 240,      // <4min left → hold to expiry
+};
+
+
 'use strict';
 // ═══════════════════════════════════════════════════
 // ASSET MANAGEMENT — BTC / ETH
@@ -945,6 +1366,12 @@ async function persistState(asset){
     await idbSet(p+'trades',   st.trades.slice(-200));
     await idbSet(p+'riskState',st.riskState);
   }catch(e){ console.warn('IDB save failed:', e); }
+  // Persist sim wallet + farm state (global, not per-asset)
+  try{
+    await idbSet('simWallet', {balance:simWallet.balance, startBalance:simWallet.startBalance, totalPnL:simWallet.totalPnL, enabled:simWallet.enabled});
+    await idbSet('farmTrades', farmState.trades.slice(-100));
+    await idbSet('farmSessionPnL', farmState.sessionPnL||0);
+  }catch(e){ console.warn('IDB farm save failed:', e); }
 }
 
 // Load persisted state — both assets, with BTC legacy key migration
@@ -988,6 +1415,21 @@ async function loadPersistedState(){
       }
     }
   }catch(e){ console.warn('IDB load failed:', e); }
+  // Restore sim wallet + farm state
+  try{
+    const savedSim = await idbGet('simWallet');
+    if(savedSim && typeof savedSim.balance === 'number'){
+      simWallet.balance = savedSim.balance;
+      simWallet.startBalance = savedSim.startBalance || savedSim.balance;
+      simWallet.totalPnL = savedSim.totalPnL || 0;
+      simWallet.enabled = savedSim.enabled !== false;
+    }
+    const savedFarmTrades = await idbGet('farmTrades');
+    if(Array.isArray(savedFarmTrades)) farmState.trades = savedFarmTrades;
+    const savedFarmPnL = await idbGet('farmSessionPnL');
+    if(typeof savedFarmPnL === 'number') farmState.sessionPnL = savedFarmPnL;
+    renderSimWallet(); renderFarmPanel(); renderFarmLog();
+  }catch(e){ console.warn('loadFarmState failed:', e.message); }
 }
 
 const sig=x=>1/(1+Math.exp(-Math.max(-10,Math.min(10,x))));
@@ -1264,6 +1706,8 @@ async function switchAsset(asset){
   A().chartDisplayPrice = null;
   A().chartPriceVel = 0;
   A().chartTickVel  = 0;
+  A().chartYRange   = 0; // reset zoom so it re-calibrates to new asset's volatility
+  A().cycleOpenPrice = null; // re-seed from first tick of new asset's window
 
   // Inject background price immediately if available
   if(A().livePrice) onNewPrice(A().livePrice,'SWITCH');
@@ -2843,6 +3287,10 @@ function getRiskAccountBalance(){
   }
   // No live balance — use conservative fixed fallback
   // Do NOT multiply bet size — that inflates Kelly sizing dangerously
+  // Use sim wallet or live balance
+  if(typeof simWallet !== 'undefined' && simWallet.balance > 0){
+    return simWallet.enabled ? simWallet.balance : (riskState.accountBalance > 0 ? riskState.accountBalance : simWallet.balance);
+  }
   // $200 default gives reasonable Kelly sizing for small accounts
   return 200;
 }
@@ -3321,18 +3769,18 @@ function checkRiskAutoExit(unrealizedPnL){
   if(tpHit){
     riskState.tpTriggered = true;
     showToast(`${simMode?'📋 SIM':'🎯'} Take profit +$${unrealizedPnL.toFixed(2)}`, '#00e5a0');
-    setTimeout(()=>closeTradeWithSell('take_profit'), 800);
+    setTimeout(()=>{ closeTradeWithSell('take_profit').catch(e=>console.error('[autoExit] closeTradeWithSell failed:',e)); }, 800);
 
   } else if(slHit){
     riskState.slTriggered = true;
     showToast(`${simMode?'📋 SIM':'🛑'} Stop loss -$${Math.abs(unrealizedPnL).toFixed(2)}`, '#ff4566');
-    setTimeout(()=>closeTradeWithSell('stop_loss'), 800);
+    setTimeout(()=>{ closeTradeWithSell('stop_loss').catch(e=>console.error('[autoExit] closeTradeWithSell failed:',e)); }, 800);
 
   } else if(velExit){
     riskState.tpTriggered = true;
     const yStr = yesC !== null ? ` · YES ${yesC.toFixed(1)}¢` : '';
     showToast(`${simMode?'📋 SIM':'⚡'} YES reversal exit${yStr} (+$${unrealizedPnL.toFixed(2)})`, '#f7c948');
-    setTimeout(()=>closeTradeWithSell('profit_capture'), 800);
+    setTimeout(()=>{ closeTradeWithSell('profit_capture').catch(e=>console.error('[autoExit] closeTradeWithSell failed:',e)); }, 800);
 
   } else if(trailFire){
     riskState.tpTriggered = true;
@@ -3340,14 +3788,16 @@ function checkRiskAutoExit(unrealizedPnL){
     const pkPct= Math.round((peakCapture || 0) * 100);
     const yStr = yesC !== null ? ` · YES ${yesC.toFixed(1)}¢ (peak ${peakYesC.toFixed(1)}¢)` : '';
     showToast(`${simMode?'📋 SIM':'📉'} Trail exit — ${pkPct}%→${pct}%${yStr} (+$${unrealizedPnL.toFixed(2)})`, '#00e5a0');
-    setTimeout(()=>closeTradeWithSell('profit_capture'), 800);
+    setTimeout(()=>{ closeTradeWithSell('profit_capture').catch(e=>console.error('[autoExit] closeTradeWithSell failed:',e)); }, 800);
 
   } else if(timeFloorExit){
     riskState.tpTriggered = true;
     const pct = Math.round(pctCaptured * 100);
     showToast(`${simMode?'📋 SIM':'⏱'} Time floor — ${timeFloorReason} ${pct}% (+$${unrealizedPnL.toFixed(2)})`, '#7b9fff');
-    setTimeout(()=>closeTradeWithSell('profit_capture'), 800);
+    setTimeout(()=>{ closeTradeWithSell('profit_capture').catch(e=>console.error('[autoExit] closeTradeWithSell failed:',e)); }, 800);
   }
+  // Farm trade exit check (farm has own TP/SL thresholds, checked here every second)
+  if(active && active.tradeType==='farm') checkFarmExit();
 }
 
 function renderTradeSetup(){
@@ -3710,7 +4160,14 @@ function renderLog(){
       const pnl=t.finalPnL!=null?t.finalPnL:null;
       const rc=t.result==='WIN'?'#00e5a0':t.result==='LOSS'?'#ff4566':'#f7c948', res=t.result||(active&&t.id===active.id?'OPEN':'—');
       const yesStr=t.entryYESPrice?` · YES $${t.entryYESPrice.toFixed(2)}`:'';
+      const assetBadge=t.asset&&t.asset!==activeAsset?`<span style="color:#444;font-size:7px">${t.asset}</span> `:'';
       // Exit type badge
+      // Entry type badge
+      const entryBadge=(()=>{
+        if(t.tradeType==='auto_buy') return '<span style="background:#7b9fff12;border:1px solid #7b9fff40;color:#7b9fff;padding:1px 5px;border-radius:3px;font-size:7px;letter-spacing:1px">⚡ AUTO</span> ';
+        if(t.tradeType==='farm')     return '<span style="background:#a78bfa12;border:1px solid #a78bfa40;color:#a78bfa;padding:1px 5px;border-radius:3px;font-size:7px;letter-spacing:1px">🌾 FARM</span> ';
+        return '<span style="background:#ffffff08;border:1px solid #ffffff15;color:#444;padding:1px 5px;border-radius:3px;font-size:7px;letter-spacing:1px">✋ MANUAL</span> ';
+      })();
       const exitBadge=(()=>{
         if(!t.exitReason&&!t.earlyExit) return ''; // expired at close
         const r=t.exitReason;
@@ -3718,6 +4175,8 @@ function renderLog(){
         if(r==='take_profit')    return '<span style="background:#00e5a012;border:1px solid #00e5a030;color:#00e5a080;padding:1px 5px;border-radius:3px;font-size:7px;letter-spacing:1px">🎯 AUTO-TP</span>';
         if(r==='stop_loss')      return '<span style="background:#ff456612;border:1px solid #ff456630;color:#ff456680;padding:1px 5px;border-radius:3px;font-size:7px;letter-spacing:1px">🛑 AUTO-SL</span>';
         if(r==='manual_sell')    return '<span style="background:#7b9fff12;border:1px solid #7b9fff30;color:#7b9fff80;padding:1px 5px;border-radius:3px;font-size:7px;letter-spacing:1px">✋ MANUAL</span>';
+        if(r==='farm_profit')    return '<span style="background:#a78bfa12;border:1px solid #a78bfa40;color:#a78bfa;padding:1px 5px;border-radius:3px;font-size:7px;letter-spacing:1px">🌾 FARM TP</span>';
+        if(r==='farm_stop')      return '<span style="background:#ff456612;border:1px solid #ff456630;color:#ff456680;padding:1px 5px;border-radius:3px;font-size:7px;letter-spacing:1px">🌾 FARM SL</span>';
         if(t.earlyExit)          return '<span style="background:#f7c94812;border:1px solid #f7c94830;color:#f7c94870;padding:1px 5px;border-radius:3px;font-size:7px;letter-spacing:1px">⚡ EARLY</span>';
         return '';
       })();
@@ -3725,7 +4184,7 @@ function renderLog(){
       const assetTag = t.asset
         ? `<span style="background:${t.asset==='BTC'?'#f7c94818':'#a78bfa18'};border:1px solid ${t.asset==='BTC'?'#f7c94835':'#a78bfa35'};color:${t.asset==='BTC'?'#f7c948aa':'#a78bfaaa'};padding:1px 5px;border-radius:3px;font-size:7px;letter-spacing:1px">${t.asset}</span>`
         : '';
-      return `<div class="tr"><div class="trt"><span style="color:#2a2a40;font-size:8px">${t.time}</span>${assetTag}<span style="font-weight:700;color:${t.bet==='UP'?'#00e5a0':'#ff4566'}">${t.bet}</span><span style="color:#444;font-size:9px">${fmtK(parseFloat(t.strike))}</span><span style="font-weight:900;color:${rc}">${res}</span></div>${pnl!==null?`<div class="trb"><span style="color:${pnl>=0?'#00e5a0':'#ff4566'}">${pnl>=0?'+':''}${fmtUSD(pnl)}</span><span style="color:#333">${yesStr}</span>${exitBadge}</div>`:''}</div>`;
+      return `<div class="tr"><div class="trt"><span style="color:#2a2a40;font-size:8px">${t.time}</span>${assetTag}${assetBadge}${entryBadge}<span style="font-weight:700;color:${t.bet==='UP'?'#00e5a0':'#ff4566'}">${t.bet}</span><span style="color:#444;font-size:9px">${fmtK(parseFloat(t.strike))}</span><span style="font-weight:900;color:${rc}">${res}</span></div>${pnl!==null?`<div class="trb"><span style="color:${pnl>=0?'#00e5a0':'#ff4566'}">${pnl>=0?'+':''}${fmtUSD(pnl)}</span><span style="color:#333">${yesStr}</span>${exitBadge}</div>`:''}</div>`;
     }).join('');}
   pnlChartDirty=true;
   // Use rAF so the DOM has laid out the canvas before we read offsetWidth
@@ -3918,7 +4377,7 @@ function renderMarketConditions(){
   }
 }
 
-function placeTrade(bet){
+function placeTrade(bet, tradeType='manual'){
   if(active||!livePrice||!amtInput||amtInput<=0||!strikeInput||strikeInput<=0)return;
   const sm=computeStrikeModel(prices,strikeInput);
   const entryYESPrice=estimateYESPriceLive(sm,bet);
@@ -3927,9 +4386,12 @@ function placeTrade(bet){
   const t={id:Date.now(),bet,entry:livePrice,strike:String(strikeInput),amount:amtInput,
     entryYESPrice,contracts,ep:[...prices],asset:activeAsset,sl:_dynSL,
     time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}),
+    tradeType:tradeType,
     result:null,exit:null,finalPnL:null};
   trades.push(t); active=t; peakROI=null; peakCapture=null; trailArmed=false; exitIdx=null; active._peakYesC=0; priceChartDirty=true; projChartDirty=true;
   riskState.tpTriggered=false; riskState.slTriggered=false;
+  // Sim wallet debit on trade entry
+  if(simState.mode==='sim') simDebitBet(amtInput);
   showActive(); renderLog(); renderDualBar();
 
   // Only place a real Kalshi order when API key is connected AND market is live
@@ -4011,6 +4473,10 @@ async function closeTradeWithSell(exitReason='manual_sell'){
   trades=trades.map(t=>t.id!==active.id?t:{...t,result:exitResult,exit:livePrice,finalPnL,earlyExit:true,exitReason});
   const tradeToRecord={...active,result:exitResult,exitReason,earlyExit:true,exitYES:currentYES};
   recordTrade(tradeToRecord);
+  // Farm-specific exit tracking
+  if(tradeToRecord.tradeType==='farm') recordFarmExit(tradeToRecord, finalPnL);
+  // Sim wallet credit on any trade close
+  if(simState.mode==='sim' && tradeToRecord.tradeType!=='farm') simCreditPnL(finalPnL, tradeToRecord.amount||0);
   if(isSell && finalPnL > 0){
     const f=buildFeatures(active.ep||prices, active.bet, parseFloat(active.strike));
     if(f){
@@ -4305,7 +4771,7 @@ function checkAutoBuy(){
     // ── FIRE ──
     ab.cooldownUntil = Date.now() + 60000; // loosened: 60s auto-buy cooldown (was 90s)
     ab.countdownBet  = null;
-    placeTrade(bestBet);
+    placeTrade(bestBet, 'auto_buy');
     showToast(
       `⚡ Fired ${bestBet} · edge ${(edge.rawEdge*100).toFixed(1)}% · EV ${edge.ev.toFixed(2)} · spread $${edge.spread.toFixed(2)}`,
       ASSET_CFG[activeAsset].color
@@ -4335,6 +4801,9 @@ function clockTick(){
     trades=trades.map(t=>t.id!==active.id?t:{...t,result:won?'WIN':'LOSS',exit,finalPnL});
     recordTrade({...active,result:won?'WIN':'LOSS'});
     updateRiskOnTradeClosed(won?'WIN':'LOSS', finalPnL);
+    const _expiredTrade = active; // capture before null
+    if(simState.mode==='sim') simCreditPnL(finalPnL, _expiredTrade.amount||0);
+    if(_expiredTrade.tradeType==='farm') recordFarmExit(_expiredTrade, finalPnL);
     active=null; peakROI=null; peakCapture=null; trailArmed=false; showSetup(); renderLog(); updateBrainPanel(); renderDualBar();
     // Reset tick buffer for this asset's new window
     AST[activeAsset].tickBuffer=[]; AST[activeAsset].tickWindowStart=get15mWindowStart();
@@ -4355,6 +4824,13 @@ function clockTick(){
     recordTrade({...bgTrade,result:bgWon?'WIN':'LOSS'});
     updateRiskOnTradeClosed(bgWon?'WIN':'LOSS', bgPnL);
     activeAsset=_prev;
+    // Track farm + sim for background asset
+    if(bgSt.mode==='sim' || simState.mode==='sim') simCreditPnL(bgPnL, bgTrade.amount||0);
+    if(bgTrade.tradeType==='farm'){
+      const _prevAsset=activeAsset; activeAsset=bgAsset;
+      recordFarmExit(bgTrade, bgPnL);
+      activeAsset=_prevAsset;
+    }
     bgSt.active=null; bgSt.peakROI=null; bgSt.peakCapture=null; bgSt.trailArmed=false;
     bgSt.tickBuffer=[]; bgSt.tickWindowStart=get15mWindowStart();
     renderDualBar();
@@ -4374,7 +4850,7 @@ function clockTick(){
     wt.style.color=c.secsLeft<120?'#ff4566':c.secsLeft<300?'#f7c948':'#888';
     ptl.textContent=`${Math.floor(c.secsLeft/60)}m remaining`;
     // Full active trade rebuild every 5s; fast P&L update every second
-    if(now-clockFull>=5000){clockFull=now;if(livePrice)renderActiveTrade(c);}
+    if(now-clockFull>=5000){clockFull=now;if(livePrice)renderActiveTrade(c);renderFarmBar();}
     else if(livePrice) renderActiveTradeFast();
     // ── Fast auto-exit check — runs every second for volatile BTC ──
     // Computes current YES price and checks sell/SL thresholds immediately
@@ -4392,6 +4868,18 @@ function clockTick(){
   renderHeader();
   // Auto-buy check every second
   checkAutoBuy();
+  // Farm bar refresh every second when idle
+  if(!active && now-clockFull>=1000) renderFarmBar();
+  // Farm bot check every second (only fires if armed and conditions met)
+  checkFarmBot();
+  // Farm exit check every second (monitors open farm trade for TP/SL)
+  if(active && active.tradeType==='farm') checkFarmExit();
+  // Reset farm rounds on new window
+  resetFarmWindowIfNeeded();
+  // Dual active positions display (both assets trading simultaneously)
+  renderDualActivePositions();
+  // Farm bot check every second
+  checkFarmBot();
 }
 
 // ═══════════════════════════════════════════════════
@@ -4711,6 +5199,7 @@ async function connectKey(){
   try{
     const res = await testConnection();
     authConnected = true;
+    setTradingMode('live'); // auto-switch to live when API connected
     hideKeyModal();
     document.getElementById('auth-gate').style.display='none';
     document.getElementById('portfolio-content').style.display='block';
@@ -4738,6 +5227,7 @@ function disconnectKey(){
   document.getElementById('portfolio-content').style.display='none';
   document.getElementById('ptab').textContent='🔑 KEY';
   setKalshiStatus('partial','KALSHI REST');
+  setTradingMode('sim'); // auto-switch to sim when disconnected
 }
 
 
@@ -4763,8 +5253,758 @@ function showToast(msg, color='#f7c948'){
 // ═══════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════
+async 
+// ════════════════════════════════════════════════════════════════════════════
+// SIM / LIVE MODE FUNCTIONS [PROTECTED]
+// ════════════════════════════════════════════════════════════════════════════
+
+function setTradingMode(mode){
+  simState.mode = mode;
+  const simBtn  = document.getElementById('btn-sim');
+  const liveBtn = document.getElementById('btn-live');
+  const simRow  = document.getElementById('sim-bal-row');
+  const farmBar = document.getElementById('farm-bar');
+  if(mode === 'sim'){
+    simBtn.className  = 'mode-btn active-sim';
+    liveBtn.className = 'mode-btn';
+    simRow.classList.remove('hidden');
+    farmBar.style.display = 'block';
+    showToast('📋 Sim mode — virtual cash, no real orders','#f7c948');
+  } else {
+    simBtn.className  = 'mode-btn';
+    liveBtn.className = 'mode-btn active-live';
+    simRow.classList.add('hidden');
+    farmBar.style.display = authConnected ? 'block' : 'none';
+    showToast('⚡ Live mode — real Kalshi orders will be placed','#00e5a0');
+  }
+  renderSimWallet();
+  renderFarmBar();
+}
+
+function updateSimBalance(val){
+  const n = parseFloat(val);
+  if(!isNaN(n) && n >= 1){
+    simState.balance      = n;
+    simState.startBalance = n;
+    simState.pnl          = 0;
+    renderSimWallet();
+    showToast('💰 Sim balance set to $'+n.toFixed(2),'#f7c948');
+  }
+}
+
+function renderSimWallet(){
+  const chip = document.getElementById('sim-pnl-chip');
+  const inp  = document.getElementById('sim-bal-input');
+  if(chip){
+    const pnl = simState.pnl;
+    chip.textContent      = (pnl>=0?'+':'') + '$' + Math.abs(pnl).toFixed(2);
+    chip.style.background = pnl>=0?'#00e5a015':'#ff456615';
+    chip.style.color      = pnl>=0?'#00e5a0':'#ff4566';
+    chip.style.border     = '1px solid '+(pnl>=0?'#00e5a030':'#ff456630');
+  }
+  if(inp) inp.value = simState.balance.toFixed(2);
+  // Update trade tab balance display
+  const tradeBal = document.getElementById('trade-balance-display');
+  if(tradeBal){
+    const bal = getEffectiveBalance();
+    const pnl = simState.pnl;
+    tradeBal.textContent = bal>0 ? '$'+bal.toFixed(2) + (pnl!==0?' ('+(pnl>=0?'+':'')+'$'+Math.abs(pnl).toFixed(2)+')':'') : '';
+  }
+}
+
+function simDebitBet(amount){
+  if(simState.mode!=='sim') return;
+  simState.balance = Math.max(0, simState.balance - amount);
+  renderSimWallet();
+}
+
+function simCreditPnL(finalPnL, betAmount){
+  if(simState.mode!=='sim') return;
+  simState.balance += betAmount + finalPnL;
+  simState.pnl     += finalPnL;
+  simState.balance  = Math.max(0, simState.balance);
+  renderSimWallet();
+}
+
+function getEffectiveBalance(){
+  if(simState.mode==='sim') return simState.balance;
+  return getRiskAccountBalance();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// FARM MODE ENGINE [PROTECTED]
+// ════════════════════════════════════════════════════════════════════════════
+
+function computeFarmDecision(){
+  const clock  = getClock();
+  const yesP   = kalshiYESPrice;
+  const vol    = getVolatilityRating();
+  const liq    = getLiquidityRating();
+
+  const spreadOk = (()=>{
+    if(!kalshiMarket) return false;
+    const bid = parseFloat(kalshiMarket.yes_bid_dollars)||0;
+    const ask = parseFloat(kalshiMarket.yes_ask_dollars)||0;
+    if(!bid||!ask||!yesP) return false;
+    return ((ask-bid)/yesP) < FARM_MAX_SPREAD_PCT;
+  })();
+
+  const targetPct = vol==='CALM'?FARM_TARGET_CALM:vol==='CHOPPY'?FARM_TARGET_CHOPPY:FARM_TARGET_NORMAL;
+  const stopPct   = vol==='CALM'?FARM_STOP_CALM:vol==='CHOPPY'?FARM_STOP_CHOPPY:FARM_STOP_NORMAL;
+  let effectiveTarget = targetPct;
+  const secsLeft = clock.secsLeft;
+
+  if(secsLeft < FARM_MIN_TIME_LEFT)
+    return {shouldFarm:false,reason:'<4 min left — hold to expiry',targetPct,stopPct,betSize:0};
+
+  if(secsLeft < 480) effectiveTarget *= 0.75;
+
+  if(yesP===null)
+    return {shouldFarm:false,reason:'No YES price data',targetPct,stopPct,betSize:0};
+  if(yesP >= FARM_HOLD_YES_HIGH)
+    return {shouldFarm:false,reason:'YES '+Math.round(yesP*100)+'c >=65c — hold to expiry',targetPct,stopPct,betSize:0};
+  if(yesP <= FARM_HOLD_YES_LOW)
+    return {shouldFarm:false,reason:'YES '+Math.round(yesP*100)+'c <=20c — too risky',targetPct,stopPct,betSize:0};
+  if(liq==='LOW')
+    return {shouldFarm:false,reason:'Low liquidity — spread too wide',targetPct,stopPct,betSize:0};
+  if(!spreadOk)
+    return {shouldFarm:false,reason:'Spread >'+Math.round(FARM_MAX_SPREAD_PCT*100)+'% of YES price',targetPct,stopPct,betSize:0};
+
+  const rounds = activeAsset==='BTC'?farmState.roundsBTC:farmState.roundsETH;
+  if(rounds >= FARM_MAX_ROUNDS)
+    return {shouldFarm:false,reason:'Max '+FARM_MAX_ROUNDS+' rounds used this window',targetPct,stopPct,betSize:0};
+
+  const lastExit = activeAsset==='BTC'?farmState.lastExitTimeBTC:farmState.lastExitTimeETH;
+  const coolLeft = Math.max(0, FARM_REENTRY_WAIT_MS-(Date.now()-lastExit));
+  if(coolLeft>0 && lastExit>0)
+    return {shouldFarm:false,reason:'Re-entry in '+Math.ceil(coolLeft/1000)+'s',targetPct,stopPct,betSize:0};
+
+  const balance = getEffectiveBalance();
+  const sm = computeStrikeModel(prices, strikeInput);
+  let betSize = 0;
+  if(sm && balance>0){
+    const kelly = computeKellyBet(sm.prob, yesP, balance);
+    betSize = Math.max(0.50, Math.min(kelly*0.5, balance*0.08));
+    betSize = Math.round(betSize*100)/100;
+  }
+
+  return {
+    shouldFarm:true,
+    reason:vol+' vol · target +'+Math.round(effectiveTarget*100)+'% · stop -'+Math.round(stopPct*100)+'%',
+    targetPct:effectiveTarget,
+    stopPct,
+    betSize,
+    rawTargetPct:targetPct,
+  };
+}
+
+function toggleFarmArm(){
+  farmState.armed = !farmState.armed;
+  const btn = document.getElementById('farm-arm-btn');
+  if(farmState.armed){
+    btn.textContent = '🟢 FARM BOT ARMED — TAP TO DISARM';
+    btn.classList.add('armed');
+    farmState.roundsBTC=0; farmState.roundsETH=0;
+    farmState.lastExitTimeBTC=0; farmState.lastExitTimeETH=0;
+    showToast('🌾 Farm bot armed — hunting entries','#a78bfa');
+  } else {
+    btn.textContent = 'ARM FARM BOT';
+    btn.classList.remove('armed');
+    showToast('Farm bot disarmed','#555');
+  }
+  renderFarmBar();
+}
+
+function checkFarmBot(){
+  if(!farmState.armed||active) return;
+  if(!livePrice||!strikeInput||strikeInput<=0||!kalshiYESPrice) return;
+
+  resetFarmWindowIfNeeded();
+  const decision = computeFarmDecision();
+  if(!decision.shouldFarm||decision.betSize<=0) return;
+
+  const bal = getEffectiveBalance();
+  if(decision.betSize > bal*0.5) return;
+
+  const sm = computeStrikeModel(prices, strikeInput);
+  if(!sm||sm.conf<55) return;
+  if(Math.abs(sm.prob-50)<5) return;
+
+  const bet = sm.prob>50?'UP':'DOWN';
+
+  const aiEl = document.getElementById('ai');
+  if(aiEl){ aiEl.value=decision.betSize.toFixed(2); aiEl.dispatchEvent(new Event('input')); }
+
+  placeTrade(bet,'farm');
+  if(activeAsset==='BTC') farmState.roundsBTC++;
+  else farmState.roundsETH++;
+
+  showToast('🌾 Farm '+bet+' · YES '+Math.round(kalshiYESPrice*100)+'c · target +'+Math.round(decision.targetPct*100)+'%','#a78bfa');
+}
+
+function checkFarmExit(){
+  if(!active||active.tradeType!=='farm') return;
+  if(!kalshiYESPrice||!active.entryYESPrice) return;
+
+  const entryE   = active.bet==='UP'?active.entryYESPrice:Math.max(0.05,Math.min(0.95,1-active.entryYESPrice));
+  const currentP = active.bet==='UP'?kalshiYESPrice:Math.max(0.05,Math.min(0.95,1-kalshiYESPrice));
+  if(entryE<=0) return;
+
+  const pctChange = (currentP-entryE)/entryE;
+  const decision  = computeFarmDecision();
+  const target    = decision.targetPct;
+  const stop      = -decision.stopPct;
+
+  if(riskState.tpTriggered||riskState.slTriggered) return;
+
+  if(pctChange>=target){
+    riskState.tpTriggered=true;
+    showToast('🌾 Farm TP +'+Math.round(pctChange*100)+'% — exiting','#00e5a0');
+    setTimeout(()=>{ closeTradeWithSell('farm_profit').catch(e=>console.error('[farmExit]',e)); },200);
+  } else if(pctChange<=stop){
+    riskState.slTriggered=true;
+    showToast('🌾 Farm SL '+Math.round(pctChange*100)+'% — exiting','#ff4566');
+    setTimeout(()=>{ closeTradeWithSell('farm_stop').catch(e=>console.error('[farmExit]',e)); },200);
+  }
+}
+
+// ── toggleFarmBot — called by ARM FARM BOT button in trade tab ──────────────
+function toggleFarmBot(){
+  farmState.armed = !farmState.armed;
+  // Keep legacy farm-arm-btn in sync if it exists
+  const btn = document.getElementById('farm-arm-btn');
+  if(btn){ btn.textContent = farmState.armed ? '🌾 DISARM FARM BOT' : '🌾 ARM FARM BOT'; }
+  if(farmState.armed){
+    const mode = simState.mode==='live' ? 'LIVE orders' : 'SIM paper trades';
+    showToast('🌾 Farm bot ARMED · '+mode+' · volatility-scaled exits','#a78bfa');
+  } else {
+    showToast('Farm bot disarmed','#555');
+  }
+  renderFarmBar();
+}
+
+// ── toggleSimMode — manual override (auto-set by connectKey/disconnectKey) ─────
+function toggleSimMode(){
+  const newMode = simState.mode==='sim' ? 'live' : 'sim';
+  setTradingMode(newMode);
+  renderFarmBar();
+}
+
+function recordFarmExit(trade, finalPnL){
+  if(trade.tradeType!=='farm') return;
+  farmState.trades.push({
+    id:trade.id, asset:trade.asset, bet:trade.bet,
+    entryYES:trade.entryYESPrice, exitPnL:finalPnL,
+    time:trade.time, exitReason:trade.exitReason||'unknown',
+    won:finalPnL>0,
+  });
+  farmState.sessionPnL += finalPnL;
+  if(trade.asset==='BTC') farmState.lastExitTimeBTC=Date.now();
+  else farmState.lastExitTimeETH=Date.now();
+  if(simState.mode==='sim') simCreditPnL(finalPnL, trade.amount||0);
+  renderFarmBar();
+  renderFarmTab();
+}
+
+function renderFarmBar(decision){
+  const bar = document.getElementById('farm-bar');
+  if(!bar) return;
+  // Show farm bar strip only when armed (it's compact; no need to show when idle)
+  bar.style.display = farmState.armed ? 'block' : 'none';
+
+  const d = decision||computeFarmDecision();
+  const statusEl = document.getElementById('farm-status-badge');
+  const reasonEl = document.getElementById('farm-reason-text');
+  const targetEl = document.getElementById('farm-target-pct');
+  const roundsEl = document.getElementById('farm-rounds');
+  const pnlEl    = document.getElementById('farm-session-pnl');
+
+  let statusText='IDLE', statusClass='idle';
+  if(!farmState.armed){ statusText='IDLE'; statusClass='idle'; }
+  else if(active&&active.tradeType==='farm'){ statusText='IN TRADE'; statusClass='in-trade'; }
+  else if(d.shouldFarm){ statusText='HUNTING'; statusClass='hunting'; }
+  else { statusText='BLOCKED'; statusClass='blocked'; }
+
+  if(statusEl){ statusEl.textContent=statusText; statusEl.className='farm-status '+statusClass; }
+  if(reasonEl) reasonEl.textContent = farmState.armed?(d.reason||''):'Tap ARM to activate';
+  if(targetEl) targetEl.textContent = d.shouldFarm?'+'+Math.round(d.targetPct*100)+'%':'—';
+
+  const rounds = activeAsset==='BTC'?farmState.roundsBTC:farmState.roundsETH;
+  if(roundsEl) roundsEl.textContent = rounds+'/'+FARM_MAX_ROUNDS;
+
+  const pnl = farmState.sessionPnL;
+  if(pnlEl){ pnlEl.textContent=(pnl>=0?'+':'')+'$'+Math.abs(pnl).toFixed(2); pnlEl.style.color=pnl>=0?'#00e5a0':'#ff4566'; }
+
+  const fsTarget=document.getElementById('fs-target');
+  const fsStop=document.getElementById('fs-stop');
+  const vol=getVolatilityRating();
+  if(fsTarget) fsTarget.textContent='+'+Math.round(d.targetPct*100)+'% ('+vol+' vol)';
+  if(fsStop)   fsStop.textContent='-'+Math.round(d.stopPct*100)+'% ('+vol+' vol)';
+
+  // ── Update inline farm card in trade tab ──
+  const inlineStatus = document.getElementById('farm-inline-status');
+  const inlineRounds = document.getElementById('farm-inline-rounds');
+  const inlineTarget = document.getElementById('farm-inline-target');
+  const inlinePnl    = document.getElementById('farm-inline-pnl');
+  const inlineReason = document.getElementById('farm-inline-reason');
+  const inlineBtn    = document.getElementById('farm-arm-inline-btn');
+  const modePill     = document.getElementById('farm-mode-pill');
+  const tradePill    = document.getElementById('trade-mode-label');
+  const tradeBal     = document.getElementById('trade-balance-display');
+
+  // Mode pill
+  const isLive = simState.mode==='live';
+  const modeText = isLive ? 'LIVE' : 'SIM';
+  const modeColor = isLive ? '#00e5a0' : '#f7c948';
+  const modeBg = isLive ? '#00e5a015' : '#f7c94815';
+  const modeBorder = isLive ? '#00e5a030' : '#f7c94830';
+  [modePill, tradePill].forEach(el => {
+    if(!el) return;
+    el.textContent = modeText;
+    el.style.color = modeColor;
+    el.style.background = modeBg;
+    el.style.borderColor = modeBorder;
+  });
+
+  // Balance display
+  if(tradeBal){
+    const bal = getEffectiveBalance();
+    tradeBal.textContent = bal>0 ? '$'+bal.toFixed(2) : '';
+    tradeBal.style.color = modeColor;
+  }
+
+  // Farm arm button state
+  if(inlineBtn){
+    inlineBtn.textContent = farmState.armed ? 'DISARM' : 'ARM';
+    inlineBtn.style.background = farmState.armed ? '#2a0f0f' : '#1a0f2a';
+    inlineBtn.style.borderColor = farmState.armed ? '#ff456640' : '#a78bfa40';
+    inlineBtn.style.color = farmState.armed ? '#ff4566' : '#a78bfa';
+  }
+
+  // Status text
+  if(inlineStatus){
+    if(!farmState.armed) inlineStatus.textContent='IDLE — tap ARM to activate';
+    else if(active&&active.tradeType==='farm') inlineStatus.textContent='IN FARM TRADE — monitoring exit...';
+    else if(d.shouldFarm){ inlineStatus.textContent='HUNTING — watching for entry...'; inlineStatus.style.color='#a78bfa'; }
+    else { inlineStatus.textContent='WATCHING — '+d.reason; inlineStatus.style.color='#555'; }
+  }
+
+  // Rounds
+  const curRounds=(activeAsset==='BTC'?farmState.roundsBTC:farmState.roundsETH);
+  if(inlineRounds){ inlineRounds.textContent=curRounds+'/'+FARM_MAX_ROUNDS; inlineRounds.style.color=curRounds>=FARM_MAX_ROUNDS?'#ff4566':'#a78bfa'; }
+  if(inlineTarget) inlineTarget.textContent=d.shouldFarm?'+'+Math.round(d.targetPct*100)+'%':'—';
+  if(inlinePnl){
+    const pnl=farmState.sessionPnL;
+    inlinePnl.textContent=(pnl>=0?'+':'')+'$'+Math.abs(pnl).toFixed(2);
+    inlinePnl.style.color=pnl>=0?'#00e5a0':'#ff4566';
+  }
+  if(inlineReason) inlineReason.textContent=farmState.armed?(d.reason||''):'';
+
+  // farm-log-count
+  const flc=document.getElementById('farm-log-count');
+  if(flc) flc.textContent=farmState.trades.length+' round'+(farmState.trades.length!==1?'s':'');
+}
+
+function renderFarmTab(){
+  const trades=farmState.trades;
+  const wins=trades.filter(t=>t.won).length;
+  const losses=trades.length-wins;
+  const total=trades.reduce((s,t)=>s+t.exitPnL,0);
+  const wr=trades.length>0?Math.round(wins/trades.length*100)+'%':'—';
+  const elW=document.getElementById('farm-wins');
+  const elL=document.getElementById('farm-losses');
+  const elR=document.getElementById('farm-wr');
+  const elT=document.getElementById('farm-total-pnl');
+  const elC=document.getElementById('farm-trade-count');
+  if(elW) elW.textContent=wins;
+  if(elL) elL.textContent=losses;
+  if(elR){ elR.textContent=wr; elR.style.color=wins>losses?'#00e5a0':wins<losses?'#ff4566':'#f7c948'; }
+  if(elT){ elT.textContent=(total>=0?'+':'')+'$'+Math.abs(total).toFixed(2); elT.style.color=total>=0?'#00e5a0':'#ff4566'; }
+  if(elC) elC.textContent=trades.length+' farm trade'+(trades.length!==1?'s':'');
+
+  const rows=document.getElementById('farm-log-rows');
+  const empty=document.getElementById('farm-log-empty');
+  if(!rows||!empty) return;
+  if(trades.length===0){ rows.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+  rows.innerHTML=[...trades].reverse().map(t=>{
+    const col=t.won?'#00e5a0':'#ff4566';
+    const pnlStr=(t.exitPnL>=0?'+':'')+'$'+Math.abs(t.exitPnL).toFixed(2);
+    const exitLabel=t.exitReason==='farm_profit'?'TP':t.exitReason==='farm_stop'?'SL':'EXIT';
+    const exitCol=t.exitReason==='farm_profit'?'#00e5a0':t.exitReason==='farm_stop'?'#ff4566':'#f7c948';
+    return '<div class="farm-trade-row">'+
+      '<span style="color:#444">'+t.time+'</span>'+
+      '<span style="color:'+(t.bet==='UP'?'#00e5a0':'#ff4566')+';font-weight:700">'+t.asset+' '+t.bet+'</span>'+
+      '<span style="font-size:8px;color:#555">YES '+(t.entryYES?Math.round(t.entryYES*100)+'c':'—')+'</span>'+
+      '<span class="ftc-chip" style="background:'+exitCol+'15;border:1px solid '+exitCol+'30;color:'+exitCol+'">'+exitLabel+'</span>'+
+      '<span style="color:'+col+';font-weight:900">'+pnlStr+'</span>'+
+    '</div>';
+  }).join('');
+}
+
+function clearFarmLog(){
+  farmState.trades=[];
+  farmState.sessionPnL=0;
+  renderFarmTab();
+  renderFarmBar();
+  showToast('Farm log cleared','#555');
+}
+
+function resetFarmWindowIfNeeded(){
+  const wid=get15mWindowStart();
+  if(wid!==farmState.windowId){
+    farmState.windowId=wid;
+    farmState.roundsBTC=0;
+    farmState.roundsETH=0;
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// DUAL ACTIVE POSITIONS DISPLAY [PROTECTED]
+// ════════════════════════════════════════════════════════════════════════════
+
+function renderDualActivePositions(){
+  const el=document.getElementById('dual-active');
+  if(!el) return;
+  const btcActive=AST.BTC.active;
+  const ethActive=AST.ETH.active;
+  if(!btcActive||!ethActive){ el.style.display='none'; return; }
+  el.style.display='block';
+
+  function posCard(assetKey,trade,assetSt){
+    const cfg=ASSET_CFG[assetKey];
+    const yesP=assetSt.kalshiYESPrice;
+    const currentYES=yesP!==null?(trade.bet==='UP'?yesP:Math.max(0.05,Math.min(0.95,1-yesP))):trade.entryYESPrice;
+    const unrlzd=kalshiUnrealizedPnL(trade.contracts,trade.entryYESPrice,currentYES);
+    const roi=trade.amount>0?(unrlzd/trade.amount)*100:0;
+    const col=unrlzd>=0?'#00e5a0':'#ff4566';
+    const barPct=Math.min(100,Math.max(0,50+roi));
+    return '<div class="dual-pos-card '+assetKey.toLowerCase()+'-pos">'+
+      '<div class="dual-pos-header">'+
+        '<span class="dual-pos-asset" style="color:'+cfg.color+'">'+assetKey+' 15M</span>'+
+        '<span class="dual-pos-bet" style="background:'+(trade.bet==='UP'?'#00e5a020':'#ff456615')+';color:'+(trade.bet==='UP'?'#00e5a0':'#ff4566')+';border:1px solid '+(trade.bet==='UP'?'#00e5a040':'#ff456630')+'">'+trade.bet+'</span>'+
+        '<span class="dual-pos-pnl" style="color:'+col+'">'+(unrlzd>=0?'+':'')+fmtUSD(unrlzd)+'</span>'+
+      '</div>'+
+      '<div class="dual-pos-meta">YES '+(trade.entryYESPrice?Math.round(trade.entryYESPrice*100)+'c':'—')+' · $'+trade.amount.toFixed(2)+' · '+trade.time+'</div>'+
+      '<div class="dual-pos-bar"><div class="dual-pos-fill" style="width:'+barPct+'%;background:'+col+'"></div></div>'+
+    '</div>';
+  }
+
+  const btcCard=posCard('BTC',btcActive,AST.BTC);
+  const ethCard=posCard('ETH',ethActive,AST.ETH);
+  const totalExp=btcActive.amount+ethActive.amount;
+  const btcU=kalshiUnrealizedPnL(btcActive.contracts,btcActive.entryYESPrice,AST.BTC.kalshiYESPrice||btcActive.entryYESPrice);
+  const ethU=kalshiUnrealizedPnL(ethActive.contracts,ethActive.entryYESPrice,AST.ETH.kalshiYESPrice||ethActive.entryYESPrice);
+  const combined=btcU+ethU;
+  const combCol=combined>=0?'#00e5a0':'#ff4566';
+
+  el.innerHTML=btcCard+ethCard+
+    '<div id="combined-exposure">'+
+      '<span class="ce-lbl">TOTAL EXPOSURE</span><span class="ce-val">$'+totalExp.toFixed(2)+'</span>'+
+      '<span class="ce-lbl">COMBINED P&L</span><span class="ce-val" style="color:'+combCol+'">'+(combined>=0?'+':'')+fmtUSD(combined)+'</span>'+
+    '</div>';
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// SIM WALLET ENGINE  [PROTECTED]
+// ════════════════════════════════════════════════════════════════════════════
+
+function getEffectiveBalance(){
+  if(simWallet.enabled) return simWallet.balance;
+  const b = riskState.accountBalance || 0;
+  return b > 0 ? b : simWallet.balance;
+}
+
+function simDebit(amount){
+  if(!simWallet.enabled) return;
+  simWallet.balance = Math.max(0, simWallet.balance - amount);
+  renderSimWallet();
+}
+
+function simCredit(amount){
+  if(!simWallet.enabled) return;
+  simWallet.balance += amount;
+  simWallet.totalPnL = simWallet.balance - simWallet.startBalance;
+  renderSimWallet();
+}
+
+function setSimBalance(){
+  const inp = document.getElementById('sim-input');
+  const val = parseFloat(inp.value);
+  if(isNaN(val) || val < 1){ showToast('Enter a valid amount','#ff4566'); return; }
+  simWallet.balance = val;
+  simWallet.startBalance = val;
+  simWallet.totalPnL = 0;
+  inp.value = '';
+  renderSimWallet();
+  riskState.accountBalance = val;
+  showToast('💰 Sim balance set to $'+val.toFixed(2),'#7b9fff');
+}
+
+function toggleSimMode(){
+  simWallet.enabled = !simWallet.enabled;
+  renderSimWallet();
+  const mod = simWallet.enabled ? 'SIM' : 'LIVE';
+  const col = simWallet.enabled ? '#7b9fff' : '#00e5a0';
+  showToast('Switched to '+mod+' mode', col);
+  renderFarmPanel();
+}
+
+function renderSimWallet(){
+  const sw  = document.getElementById('sim-wallet');
+  const bal = document.getElementById('sim-bal');
+  const pnl = document.getElementById('sim-pnl');
+  const btn = document.getElementById('sim-toggle-btn');
+  const farmBtn = document.getElementById('farm-mode-btn');
+  const farmVal = document.getElementById('farm-mode-val');
+  if(!sw) return;
+  sw.classList.toggle('show', simWallet.enabled);
+  if(bal) bal.textContent = '$'+simWallet.balance.toFixed(2);
+  const p = simWallet.totalPnL;
+  if(pnl){
+    pnl.textContent = (p>=0?'+':'')+' $'+Math.abs(p).toFixed(2);
+    pnl.style.color = p>=0?'#00e5a0':'#ff4566';
+  }
+  if(btn) btn.textContent = simWallet.enabled ? 'GO LIVE' : 'GO SIM';
+  if(farmVal){ farmVal.textContent = simWallet.enabled ? '🧪 SIM — Paper Trading' : '🟢 LIVE — Real Money'; farmVal.style.color = simWallet.enabled?'#7b9fff':'#00e5a0'; }
+  if(farmBtn) farmBtn.textContent = simWallet.enabled ? 'GO LIVE' : 'GO SIM';
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// FARM BOT ENGINE  [PROTECTED]
+// ════════════════════════════════════════════════════════════════════════════
+
+function toggleFarmBot(){
+  farmBot.armed = !farmBot.armed;
+  if(farmBot.armed){
+    farmBot.rounds.BTC = 0; farmBot.rounds.ETH = 0;
+    farmState.windowId = getCurrentWindowId();
+    showToast('🌾 Farm bot ARMED — watching BTC + ETH','#f7c948');
+  } else {
+    showToast('Farm bot disarmed','#555');
+    for(const asset of ['BTC','ETH']){
+      if(farmBot.activeFarm[asset]) closeFarmTrade(asset,'disarmed',true);
+    }
+  }
+  renderFarmPanel();
+}
+
+function getCurrentWindowId(){ return Math.floor(Date.now()/(15*60*1000)); }
+
+function getVolatilityRatingForAsset(asset){
+  const st=AST[asset]; const buf=st.tickBuffer||[];
+  if(buf.length<5) return 'NORMAL';
+  const prices=buf.slice(-10).map(t=>t.p);
+  const avg=prices.reduce((a,b)=>a+b,0)/prices.length;
+  const variance=prices.reduce((s,p)=>s+(p-avg)**2,0)/prices.length;
+  const stdDev=Math.sqrt(variance);
+  const pct=avg>0?stdDev/avg:0;
+  if(pct<0.00003) return 'CALM';
+  if(pct<0.00008) return 'NORMAL';
+  return 'CHOPPY';
+}
+
+function computeFarmTargets(asset){
+  const volRating=getVolatilityRatingForAsset(asset);
+  const clock=getClock(); const secsLeft=clock.secsLeft;
+  const base={CALM:{target:0.12,stop:0.06},NORMAL:{target:0.18,stop:0.09},CHOPPY:{target:0.25,stop:0.12}}[volRating]||{target:0.18,stop:0.09};
+  const st=AST[asset]; const yesPrice=st.kalshiYESPrice||0.5;
+  const timeMult=secsLeft<300?0.7:secsLeft<480?0.85:1.0;
+  const distFrom50=Math.abs(yesPrice-0.5);
+  const yesMult=distFrom50>0.2?0.8:1.0;
+  return { targetPct:base.target*timeMult*yesMult, stopPct:base.stop, mode:volRating,
+           reason:`${volRating} vol · ${secsLeft}s left · YES ${(yesPrice*100).toFixed(0)}¢` };
+}
+
+function farmDecision(asset){
+  const st=AST[asset]; const clock=getClock();
+  const yesPrice=st.kalshiYESPrice||0.5; const secsLeft=clock.secsLeft;
+  if(secsLeft < farmBot.HOLD_TIME_SECS) return {action:'hold',reason:`<${farmBot.HOLD_TIME_SECS}s — hold to expiry`};
+  if(yesPrice > farmBot.HOLD_YES_THRESH) return {action:'hold',reason:`YES ${(yesPrice*100).toFixed(0)}¢ > ${(farmBot.HOLD_YES_THRESH*100).toFixed(0)}¢ — hold`};
+  if(yesPrice < 0.15) return {action:'hold',reason:`YES ${(yesPrice*100).toFixed(0)}¢ too low`};
+  if((farmBot.rounds[asset]||0) >= farmBot.MAX_ROUNDS) return {action:'hold',reason:`${asset} max rounds reached`};
+  if(Date.now() < (farmBot.cooldown[asset]||0)){
+    const wait=Math.ceil(((farmBot.cooldown[asset]||0)-Date.now())/1000);
+    return {action:'wait',reason:`${asset} cooldown ${wait}s`};
+  }
+  const sm=computeStrikeModel(st.prices, st.strikeInput||0);
+  const modelEdge=sm?Math.abs(sm.aboveProb-sm.belowProb):0;
+  const yesVel=st.yesVel||0;
+  if(Math.abs(yesVel)<0.5 && modelEdge<8) return {action:'wait',reason:`${asset} weak signal`};
+  const velBet=yesVel>0?'UP':'DOWN';
+  const modelBet=sm&&sm.aboveProb>=sm.belowProb?'UP':'DOWN';
+  const bet=Math.abs(yesVel)>=2?velBet:modelBet;
+  const targets=computeFarmTargets(asset);
+  return {action:'farm',bet,targets,reason:`${asset} farm ${bet} vel:${yesVel.toFixed(1)}¢/s edge:${modelEdge.toFixed(0)}%`};
+}
+
+function openFarmTrade(asset, bet, targets){
+  const st=AST[asset]; const yesPrice=st.kalshiYESPrice||0.5;
+  const balance=getEffectiveBalance();
+  const sm=computeStrikeModel(st.prices,st.strikeInput||0);
+  const winProb=sm?(bet==='UP'?sm.aboveProb/100:sm.belowProb/100):0.5;
+  const edge=winProb-yesPrice;
+  const kellyFrac=edge>0?(edge/(1-yesPrice))*0.3:0.04;
+  const betAmt=Math.max(0.50,Math.min(balance*0.08,balance*kellyFrac));
+  const betRounded=Math.round(betAmt*100)/100;
+  const entryYES=bet==='UP'?yesPrice:Math.max(0.05,Math.min(0.95,1-yesPrice));
+  const targetYES=Math.min(0.95,entryYES*(1+targets.targetPct));
+  const stopYES=Math.max(0.05,entryYES*(1-targets.stopPct));
+  const contracts=kalshiContracts(betRounded,entryYES);
+  const trade={id:Date.now(),asset,bet,entryYES,targetYES,stopYES,targetPct:targets.targetPct,stopPct:targets.stopPct,amount:betRounded,contracts,entryTime:Date.now(),mode:targets.mode,sim:simWallet.enabled,result:null,exitYES:null,pnl:null};
+  farmBot.activeFarm[asset]=trade;
+  farmBot.rounds[asset]=(farmBot.rounds[asset]||0)+1;
+  if(simWallet.enabled) simDebit(betRounded);
+  if(!simWallet.enabled && authConnected && st.kalshiMarket){
+    kalshiPlaceOrder(bet,betRounded).then(orderId=>{
+      trade.kalshiOrderId=orderId;
+    }).catch(e=>{
+      showToast('❌ Farm order failed: '+e.message,'#ff4566');
+      farmBot.activeFarm[asset]=null;
+      farmBot.rounds[asset]=Math.max(0,(farmBot.rounds[asset]||1)-1);
+      if(simWallet.enabled) simCredit(betRounded);
+    });
+  }
+  const assetCol=asset==='BTC'?'#f7c948':'#a78bfa';
+  showToast(`🌾 ${asset} farm ${bet} · entry ${(entryYES*100).toFixed(0)}¢ · target +${(targets.targetPct*100).toFixed(0)}% · stop -${(targets.stopPct*100).toFixed(0)}%`, assetCol);
+  renderFarmPanel(); renderFarmLog();
+}
+
+function closeFarmTrade(asset, reason, forceSim){
+  const trade=farmBot.activeFarm[asset]; if(!trade) return;
+  const st=AST[asset];
+  const currentYES=(()=>{
+    if(st.kalshiYESPrice!==null) return trade.bet==='UP'?st.kalshiYESPrice:Math.max(0.05,Math.min(0.95,1-st.kalshiYESPrice));
+    return trade.entryYES;
+  })();
+  const pnlPerContract=currentYES-trade.entryYES;
+  const grossPnL=pnlPerContract*trade.contracts;
+  const fee=simWallet.enabled?0:Math.abs(grossPnL)*0.01;
+  const finalPnL=grossPnL-fee;
+  const result=finalPnL>=0?'WIN':'LOSS';
+  trade.result=result; trade.exitYES=currentYES; trade.pnl=finalPnL; trade.exitReason=reason; trade.exitTime=Date.now();
+  if(simWallet.enabled||forceSim) simCredit(Math.max(0,trade.amount+finalPnL));
+  farmBot.assetPnL[asset]=(farmBot.assetPnL[asset]||0)+finalPnL;
+  farmState.sessionPnL=(farmState.sessionPnL||0)+finalPnL;
+  farmState.trades.push({...trade});
+  farmBot.cooldown[asset]=Date.now()+farmBot.RE_ENTRY_WAIT_MS;
+  farmBot.activeFarm[asset]=null;
+  const icon=result==='WIN'?'✅':'❌';
+  showToast(`${icon} Farm ${asset} ${result} · ${reason} · ${finalPnL>=0?'+':''}$${finalPnL.toFixed(2)}`, result==='WIN'?'#00e5a0':'#ff4566');
+  if(!simWallet.enabled&&!forceSim&&trade.kalshiOrderId&&authConnected) kalshiSellPosition(currentYES).catch(e=>console.warn('[Farm] close failed:',e.message));
+  renderFarmPanel(); renderFarmLog();
+  updateRiskOnTradeClosed(result,finalPnL);
+}
+
+function checkFarmExits(){
+  for(const asset of ['BTC','ETH']){
+    const trade=farmBot.activeFarm[asset]; if(!trade) continue;
+    const st=AST[asset];
+    const currentYES=(()=>{
+      if(st.kalshiYESPrice!==null) return trade.bet==='UP'?st.kalshiYESPrice:Math.max(0.05,Math.min(0.95,1-st.kalshiYESPrice));
+      return trade.entryYES;
+    })();
+    if(currentYES>=trade.targetYES){ closeFarmTrade(asset,'target',false); continue; }
+    if(currentYES<=trade.stopYES){   closeFarmTrade(asset,'stop_loss',false); continue; }
+    if(getClock().secsLeft<=30){     closeFarmTrade(asset,'time_expiry',false); continue; }
+  }
+}
+
+function checkFarmBot(){
+  if(!farmBot.armed) return;
+  const winId=getCurrentWindowId();
+  if(winId!==farmState.windowId){ farmState.windowId=winId; farmBot.rounds.BTC=0; farmBot.rounds.ETH=0; }
+  checkFarmExits();
+  for(const asset of ['BTC','ETH']){
+    if(farmBot.activeFarm[asset]) continue;
+    const st=AST[asset];
+    if(!st.livePrice||!st.kalshiMarket) continue;
+    const d=farmDecision(asset);
+    if(d.action==='farm') openFarmTrade(asset,d.bet,d.targets);
+  }
+  renderFarmStatus();
+}
+
+function renderFarmPanel(){
+  const btn=document.getElementById('farm-arm-btn');
+  const status=document.getElementById('farm-status');
+  if(btn){ btn.textContent=farmBot.armed?'🛑 DISARM FARM BOT':'🌾 ARM FARM BOT'; btn.classList.toggle('armed',farmBot.armed); }
+  if(status) status.classList.toggle('show',farmBot.armed);
+  const btcR=document.getElementById('farm-btc-rounds');
+  const ethR=document.getElementById('farm-eth-rounds');
+  const btcP=document.getElementById('farm-btc-pnl');
+  const ethP=document.getElementById('farm-eth-pnl');
+  if(btcR) btcR.textContent=`${farmBot.rounds.BTC||0} / ${farmBot.MAX_ROUNDS}`;
+  if(ethR) ethR.textContent=`${farmBot.rounds.ETH||0} / ${farmBot.MAX_ROUNDS}`;
+  const fmtP=(el,p)=>{ if(!el) return; el.textContent=(p>=0?'+':'')+'$'+Math.abs(p).toFixed(2); el.style.color=p>=0?'#00e5a0':'#ff4566'; };
+  fmtP(btcP, farmBot.assetPnL.BTC||0);
+  fmtP(ethP, farmBot.assetPnL.ETH||0);
+  const all=farmState.trades;
+  const wins=all.filter(t=>t.result==='WIN').length;
+  const losses=all.filter(t=>t.result==='LOSS').length;
+  const wr=all.length?((wins/all.length)*100).toFixed(0)+'%':'—';
+  const tp=farmState.sessionPnL||0;
+  const el=id=>document.getElementById(id);
+  if(el('farm-trade-count')) el('farm-trade-count').textContent=`${all.length} farm trade${all.length!==1?'s':''}`;
+  if(el('farm-wins'))    el('farm-wins').textContent=wins;
+  if(el('farm-losses'))  el('farm-losses').textContent=losses;
+  if(el('farm-wr'))      el('farm-wr').textContent=wr;
+  if(el('farm-total-pnl')){ el('farm-total-pnl').textContent=(tp>=0?'+':'')+'$'+Math.abs(tp).toFixed(2); el('farm-total-pnl').style.color=tp>=0?'#00e5a0':'#ff4566'; }
+  renderSimWallet();
+}
+
+function renderFarmStatus(){
+  const el=id=>document.getElementById(id);
+  if(!el('fst-mode')) return;
+  const targets=computeFarmTargets(activeAsset);
+  const decisions=['BTC','ETH'].map(a=>{
+    const active=farmBot.activeFarm[a];
+    if(active){ const st=AST[a]; const cur=st.kalshiYESPrice||0; const yes=active.bet==='UP'?cur:(1-cur); const pct=((yes-active.entryYES)/active.entryYES*100); return `${a}: IN ${active.bet} ${(pct>=0?'+':'')}${pct.toFixed(1)}%`; }
+    const d=farmDecision(a); return `${a}: ${d.reason.slice(0,25)}`;
+  });
+  if(el('fst-mode')){ el('fst-mode').textContent=simWallet.enabled?'🧪 SIM':'🟢 LIVE'; el('fst-mode').style.color=simWallet.enabled?'#7b9fff':'#00e5a0'; }
+  if(el('fst-decision')) el('fst-decision').textContent=decisions.join(' | ');
+  if(el('fst-target'))   el('fst-target').textContent=`+${(targets.targetPct*100).toFixed(0)}% (${targets.mode})`;
+  if(el('fst-stop'))     el('fst-stop').textContent=`-${(targets.stopPct*100).toFixed(0)}%`;
+  if(el('fst-rounds'))   el('fst-rounds').textContent=`BTC ${farmBot.rounds.BTC||0}/${farmBot.MAX_ROUNDS} · ETH ${farmBot.rounds.ETH||0}/${farmBot.MAX_ROUNDS}`;
+  const activeList=['BTC','ETH'].filter(a=>farmBot.activeFarm[a]).map(a=>`${a} ${farmBot.activeFarm[a].bet}`);
+  if(el('fst-active')){ el('fst-active').textContent=activeList.length?activeList.join(' · '):'NONE'; el('fst-active').style.color=activeList.length?'#f7c948':'#555'; }
+  if(el('fs-mode'))   el('fs-mode').textContent=`AUTO (${targets.mode})`;
+  if(el('fs-target')) el('fs-target').textContent=`+${(targets.targetPct*100).toFixed(0)}%`;
+  if(el('fs-stop'))   el('fs-stop').textContent=`-${(targets.stopPct*100).toFixed(0)}%`;
+}
+
+function renderFarmLog(){
+  const rows=document.getElementById('farm-log-rows');
+  const empty=document.getElementById('farm-log-empty');
+  if(!rows) return;
+  const trades=[...farmState.trades].reverse();
+  if(empty) empty.style.display=trades.length?'none':'block';
+  rows.innerHTML=trades.map(t=>{
+    const col=t.result==='WIN'?'#00e5a0':'#ff4566';
+    const pnl=t.pnl!=null?(t.pnl>=0?'+':'')+'$'+Math.abs(t.pnl).toFixed(2):'—';
+    const assetCol=t.asset==='BTC'?'#f7c948':'#a78bfa';
+    const dur=t.exitTime?Math.round((t.exitTime-t.entryTime)/1000)+'s':'—';
+    const simBadge=t.sim?'<span class="farm-badge" style="background:#7b9fff20;color:#7b9fff;border:1px solid #7b9fff30">SIM</span>':'<span class="farm-badge" style="background:#00e5a020;color:#00e5a0;border:1px solid #00e5a030">LIVE</span>';
+    return `<div class="farm-trade-row"><div style="display:flex;align-items:center;gap:5px">${simBadge}<span style="font-weight:900;color:${assetCol}">${t.asset}</span><span style="color:${t.bet==='UP'?'#00e5a0':'#ff4566'};font-weight:700">${t.bet}</span><span style="color:#444">${(t.entryYES*100).toFixed(0)}¢→${t.exitYES!=null?(t.exitYES*100).toFixed(0)+'¢':'?'}</span><span style="color:#333">${dur}</span></div><div style="display:flex;align-items:center;gap:5px"><span style="color:${col};font-weight:900">${pnl}</span><span style="color:#333;font-size:7px">${t.exitReason||''}</span><span style="font-weight:900;color:${col}">${t.result||'—'}</span></div></div>`;
+  }).join('');
+}
+
+function clearFarmLog(){
+  farmState.trades=[]; farmState.sessionPnL=0;
+  farmBot.assetPnL.BTC=0; farmBot.assetPnL.ETH=0;
+  renderFarmPanel(); renderFarmLog();
+}
+
 async function init(){
   nnInit();
+  // Init sim/live mode display
+  renderSimWallet();
+  renderFarmPanel();
+  setTradingMode('sim'); // default to sim on first load
+  renderSimWallet();
+  renderFarmBar();
 
   // ── Kick off chart rendering immediately — before any network calls ──
   // Synthetic seed data will render right away; real data fills in as it arrives
