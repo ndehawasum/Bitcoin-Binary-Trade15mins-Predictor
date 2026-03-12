@@ -848,6 +848,7 @@ Object.defineProperties(window, {
   chartLastTickPrice:{get(){return A().chartLastTickPrice;},set(v){A().chartLastTickPrice=v;},configurable:true},
   chartVelSmooth:  {get(){return A().chartVelSmooth;},  set(v){A().chartVelSmooth=v;},  configurable:true},
   chartPulse:      {get(){return A().chartPulse;},      set(v){A().chartPulse=v;},      configurable:true},
+  chartYRange:     {get(){return A().chartYRange;},     set(v){A().chartYRange=v;},     configurable:true},
   yesBuf:          {get(){return A().yesBuf;},          set(v){A().yesBuf=v;},          configurable:true},
   yesVel:          {get(){return A().yesVel;},          set(v){A().yesVel=v;},          configurable:true},
   yesVelHistory:   {get(){return A().yesVelHistory;},   set(v){A().yesVelHistory=v;},   configurable:true},
@@ -4743,6 +4744,11 @@ function showToast(msg, color='#f7c948'){
 // ═══════════════════════════════════════════════════
 async function init(){
   nnInit();
+
+  // ── Kick off chart rendering immediately — before any network calls ──
+  // Synthetic seed data will render right away; real data fills in as it arrives
+  startChartLoop();
+
   // Load persisted state FIRST — before any render or network calls
   await loadPersistedState();
 
@@ -4809,7 +4815,7 @@ async function init(){
   },60000);
   priceChartDirty=true;
   renderPrice(); renderSignalPanel(); renderTradeSetup(); renderHeader(); updateBrainPanel();
-  startChartLoop(); // kick off the rAF render loop — runs forever
+  // startChartLoop already called at top of init()
 }
 init();
 
