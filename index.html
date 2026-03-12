@@ -67,8 +67,7 @@ input[type=number]{-moz-appearance:textfield}
 #pcc{
   width:100%;height:220px;display:block;
   border-radius:10px;
-  will-change:transform;   /* promote to GPU compositor layer */
-  image-rendering:pixelated;
+  will-change:transform;
 }
 
 /* tabs */
@@ -2132,16 +2131,14 @@ function chartLoop(ts){
   const cv = document.getElementById('pcc');
   if(!cv) return;
 
-  // ── Detect new tick → inter-tick velocity ──
+  // ── Tick velocity / spring interpolation ──
   if(livePrice && livePrice !== chartLastTickPrice){
-    if(chartLastTickPrice !== null && chartTickTime > 0 && (ts - chartTickTime) > 0)
-      chartTickVel = (livePrice - chartLastTickPrice) / Math.max(50, ts - chartTickTime);
+    if(chartLastTickPrice !== null && chartTickTime > 0 && (ts-chartTickTime) > 0)
+      chartTickVel = (livePrice - chartLastTickPrice) / Math.max(50, ts-chartTickTime);
     chartLastTickPrice = livePrice;
     chartTickTime = ts;
     priceChartDirty = true;
   }
-
-  // ── Sub-tick spring interpolation for price display ──
   if(livePrice && livePrice > 0){
     chartTickVel *= 0.90;
     const msSince = ts - (chartTickTime || ts);
@@ -2151,9 +2148,8 @@ function chartLoop(ts){
     chartPriceVel = chartPriceVel * CHART_SPRING_DAMP + (target - chartDisplayPrice) * CHART_SPRING_STIFF;
     chartDisplayPrice += chartPriceVel;
   }
-
   chartPulse     = (chartPulse + 0.05) % (Math.PI * 2);
-  chartVelSmooth = chartVelSmooth * 0.90 + Math.abs(chartPriceVel || 0) * 0.10;
+  chartVelSmooth = chartVelSmooth * 0.90 + Math.abs(chartPriceVel||0) * 0.10;
   priceChartDirty = false;
 
   // ── Canvas sizing ──
@@ -2167,7 +2163,9 @@ function chartLoop(ts){
   const ctx = cv.getContext('2d');
   ctx.save();
   const W = cv.width, H = cv.height;
-  const PL = 8*dpr, PR = 82*dpr, PT = 18*dpr, PB = 24*dpr;
+
+  // Padding: left minimal, right for price label, top, bottom for time axis
+  const PL = 4*dpr, PR = 78*dpr, PT = 28*dpr, PB = 22*dpr;
   const CW = W - PL - PR, ch = H - PT - PB;
 
   // ── Tick data ──
@@ -2182,20 +2180,19 @@ function chartLoop(ts){
   } else if(prices.length >= 2){
     chartData = prices.map((p,i) => ({t: now-(prices.length-1-i)*1000, p}));
   } else {
-    // No live data yet — seed with flat synthetic so canvas always renders
     const demoBase = livePrice || (activeAsset==='ETH' ? 2029 : 83000);
     chartData = Array.from({length:45}, (_,i) => ({
-      t: now - (44-i)*1000,
-      p: demoBase + (Math.random()-0.5) * (activeAsset==='ETH' ? 0.15 : 20)
+      t: now-(44-i)*1000,
+      p: demoBase + (Math.random()-0.5)*(activeAsset==='ETH'?0.15:20)
     }));
   }
   if(chartData.length < 2){ ctx.restore(); return; }
 
-  // Spring-interpolated live tip
+  // Spring tip
   const dp = chartDisplayPrice || chartData[chartData.length-1].p;
-  chartData = [...chartData.slice(0,-1), {t: now, p: dp}];
+  chartData = [...chartData.slice(0,-1), {t:now, p:dp}];
 
-  // Cross-asset safety filter
+  // Cross-asset filter
   const _cfg  = window.ASSET_CFG ? ASSET_CFG[activeAsset] : null;
   const _pMin = _cfg ? _cfg.priceMin : 1;
   const _pMax = _cfg ? (_cfg.priceMin < 500 ? 20000 : 500000) : 500000;
@@ -2205,60 +2202,49 @@ function chartLoop(ts){
   const pts = chartData.map(x => x.p);
   const sv  = strikeInput > 0 ? strikeInput : 0;
 
-  // ── KALSHI-STYLE TIGHT Y-RANGE ──────────────────────────────────────────
-  // Use realized volatility from recent ticks to set window size.
-  // Window is centered on current price and slides with it.
-  // This keeps slope angle consistent regardless of absolute price level.
-
-  // Step 1: compute stdDev of tick-to-tick moves (last 30 ticks)
+  // ── KALSHI-STYLE Y RANGE ──
+  // Tight window from actual data stdDev, then always expand to include strike
   const volSrc = pts.slice(-30);
   let stdDev = 0;
   if(volSrc.length >= 4){
     const moves = [];
     for(let k=1; k<volSrc.length; k++) moves.push(Math.abs(volSrc[k]-volSrc[k-1]));
     const mean = moves.reduce((a,b)=>a+b,0)/moves.length;
-    const variance = moves.reduce((a,b)=>a+(b-mean)**2,0)/moves.length;
-    stdDev = Math.sqrt(variance);
+    stdDev = Math.sqrt(moves.reduce((a,b)=>a+(b-mean)**2,0)/moves.length);
   }
-
-  // Step 2: target window = 6× stdDev, with asset-specific minimums
-  // ETH min=$0.30 (like Kalshi screenshot), BTC min=$40
   const isETH = _cfg && _cfg.priceMin < 500;
-  const minWindow = isETH ? 0.60 : 80;
-  const maxWindow = isETH ? 80   : 3000; // cap to prevent over-zoom-out
-  const targetWindow = Math.max(minWindow, Math.min(maxWindow, stdDev * 6));
-
-  // Step 3: smooth window transitions — spring interpolate chartYRange toward target
-  // chartYRange stored per-asset in proxy; init to targetWindow if null
+  const minWindow = isETH ? 0.50 : 80;
+  const maxWindow = isETH ? 12   : 3000;
+  const targetWindow = Math.max(minWindow, Math.min(maxWindow, stdDev * 8));
   if(!chartYRange || chartYRange <= 0) chartYRange = targetWindow;
-  chartYRange = chartYRange * 0.94 + targetWindow * 0.06; // slow smooth
+  chartYRange = chartYRange * 0.94 + targetWindow * 0.06;
 
-  // Step 4: center window on current price
   const halfR = chartYRange / 2;
   let mn = dp - halfR;
   let mx = dp + halfR;
-  const rng = mx - mn;
 
-  // ── Should strike be drawn on chart or as label only? ──
-  const strikeInView = sv > 0 && sv >= mn && sv <= mx;
-  const strikeNearby = sv > 0 && Math.abs(sv - dp) < chartYRange * 2; // within 2× window
+  // Always include strike with 15% breathing room
+  if(sv > 0){
+    const pad = (mx - mn) * 0.15;
+    if(sv < mn + pad) mn = sv - pad;
+    if(sv > mx - pad) mx = sv + pad;
+  }
+  const rng = mx - mn || 1;
 
   // ── Coordinate helpers ──
   const tStart = now - WINDOW_MS;
   const tx = t => PL + Math.max(0, Math.min(1, (t - tStart) / WINDOW_MS)) * CW;
   const ty = v => PT + ((mx - v) / rng) * ch;
 
-  // ── Clear ──
-  ctx.clearRect(0, 0, W, H);
+  // ── BACKGROUND — dark navy with subtle gradient ──
+  const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
+  bgGrad.addColorStop(0, '#0d1225');
+  bgGrad.addColorStop(1, '#080b18');
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, W, H);
 
-  const GREEN = '#00e5a0', RED = '#ff4566', AMBER = '#f7c948';
-  const hasStrike = sv > 0;
-  const curAbove  = hasStrike && dp >= sv;
-  const lineCol   = hasStrike ? (curAbove ? GREEN : RED) : AMBER;
-
-  // ── Grid lines — tight, readable ──
-  const visRange   = rng;
-  const rawStep    = visRange / 4;
+  // ── GRID LINES — horizontal dashed, very faint ──
+  const rawStep    = rng / 4;
   const magnitude  = Math.pow(10, Math.floor(Math.log10(rawStep || 1)));
   const normalized = rawStep / magnitude;
   const niceStep   = normalized < 1.5 ? 1 : normalized < 3.5 ? 2 : normalized < 7.5 ? 5 : 10;
@@ -2269,128 +2255,111 @@ function chartLoop(ts){
   for(let v = gridStart; v <= mx + gridStep*0.01; v += gridStep){
     if(v < mn || v > mx) continue;
     const gy = ty(v);
-    if(gy < PT || gy > H - PB) continue;
-    ctx.beginPath(); ctx.moveTo(PL, gy); ctx.lineTo(PL+CW, gy);
-    ctx.strokeStyle = '#ffffff08'; ctx.lineWidth = dpr; ctx.stroke();
-    // Y-axis label
-    ctx.font = `${7*dpr}px 'Courier New'`;
-    ctx.fillStyle = '#2a2a50';
-    ctx.textAlign = 'right';
-    // Show enough decimal places for the visible range
+    if(gy < PT || gy > H-PB) continue;
+
+    // Dashed grid line — Kalshi style
+    ctx.beginPath();
+    ctx.setLineDash([3*dpr, 5*dpr]);
+    ctx.moveTo(PL, gy); ctx.lineTo(PL+CW, gy);
+    ctx.strokeStyle = '#ffffff12'; ctx.lineWidth = dpr; ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Right-side Y label
     const decimals = gridStep < 0.01 ? 4 : gridStep < 0.1 ? 3 : gridStep < 1 ? 2 : gridStep < 10 ? 1 : 0;
-    const label = v >= 1000
-      ? '$' + v.toLocaleString(undefined, {minimumFractionDigits: decimals > 1 ? 0 : 0, maximumFractionDigits: 0})
+    const label = v >= 10000
+      ? '$' + v.toLocaleString(undefined, {maximumFractionDigits:0})
       : '$' + v.toFixed(decimals);
-    ctx.fillText(label, W - 4*dpr, gy + 2.5*dpr);
+    ctx.font = `${6.5*dpr}px -apple-system, sans-serif`;
+    ctx.fillStyle = '#4a5568';
+    ctx.textAlign = 'left';
+    ctx.fillText(label, PL+CW+6*dpr, gy+2.5*dpr);
   }
   ctx.restore();
 
-  // ── Strike band (only if strike is within visible window) ──
-  if(strikeInView){
+  // ── STRIKE LINE — dashed white line with centered text label ──
+  const GREEN = '#00e5a0', RED = '#ff4566';
+  const curAbove = sv > 0 && dp >= sv;
+  const lineCol  = sv > 0 ? (curAbove ? GREEN : RED) : '#4a9eff';
+
+  if(sv > 0){
     const sy = ty(sv);
-    const bandH = Math.max(1.5*dpr, 1.5*dpr);
-    const bandCol = curAbove ? GREEN : RED;
+    if(sy >= PT && sy <= H-PB){
+      ctx.save();
 
-    // Zone fills
-    if(sy > PT){
-      ctx.fillStyle = curAbove ? GREEN+'10' : GREEN+'05';
-      ctx.fillRect(PL, PT, CW, Math.max(0, sy - PT));
+      // Dashed line
+      ctx.beginPath();
+      ctx.setLineDash([4*dpr, 4*dpr]);
+      ctx.moveTo(PL, sy); ctx.lineTo(PL+CW, sy);
+      ctx.strokeStyle = '#ffffff35';
+      ctx.lineWidth = dpr;
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Centered inline text label — Kalshi style
+      const strikeLbl = `$${sv.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})} or ${curAbove ? 'above' : 'below'}`;
+      ctx.font = `${7*dpr}px -apple-system, sans-serif`;
+      ctx.textAlign = 'center';
+      const lw = ctx.measureText(strikeLbl).width;
+      // Small gap in the dashed line for the text
+      const cx = PL + CW*0.5;
+      const tp2 = 3*dpr;
+      ctx.fillStyle = '#0d1225'; // bg color to "erase" line behind text
+      ctx.fillRect(cx - lw/2 - tp2, sy - 8*dpr, lw + tp2*2, 9*dpr);
+      ctx.fillStyle = '#ffffff80';
+      ctx.fillText(strikeLbl, cx, sy - 1*dpr);
+
+      ctx.restore();
     }
-    if(sy < H - PB){
-      ctx.fillStyle = !curAbove ? RED+'0d' : RED+'04';
-      ctx.fillRect(PL, sy, CW, Math.max(0, H - PB - sy));
-    }
-
-    // Solid band
-    ctx.save();
-    ctx.beginPath(); ctx.rect(PL, sy - bandH/2, CW, bandH);
-    ctx.fillStyle = bandCol + 'cc'; ctx.fill();
-    ctx.beginPath(); ctx.rect(PL, sy - bandH*1.5, CW, bandH*3);
-    ctx.fillStyle = bandCol + '18'; ctx.fill();
-    ctx.restore();
-
-    // Strike right-axis label
-    const rightX = PL + CW + 6*dpr;
-    const sc = curAbove ? GREEN : RED;
-    const strikeTxt = '$' + sv.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-    ctx.save();
-    ctx.font = `bold ${8.5*dpr}px 'Courier New'`;
-    ctx.textAlign = 'left';
-    const stw = ctx.measureText(strikeTxt).width;
-    const sH = 15*dpr, sPad = 5*dpr, sR = 3*dpr;
-    let spy = Math.max(PT, Math.min(H - PB - sH, sy - sH/2));
-    ctx.beginPath();
-    if(ctx.roundRect) ctx.roundRect(rightX, spy, stw+sPad*2, sH, sR);
-    else ctx.rect(rightX, spy, stw+sPad*2, sH);
-    ctx.fillStyle = sc+'22'; ctx.fill();
-    ctx.strokeStyle = sc+'aa'; ctx.lineWidth = dpr; ctx.stroke();
-    ctx.fillStyle = sc;
-    ctx.fillText(strikeTxt, rightX+sPad, spy+sH*0.72);
-    ctx.beginPath(); ctx.moveTo(PL+CW, sy); ctx.lineTo(rightX-1*dpr, sy);
-    ctx.strokeStyle = sc+'40'; ctx.lineWidth = dpr;
-    ctx.setLineDash([3*dpr,2*dpr]); ctx.stroke(); ctx.setLineDash([]);
-    ctx.restore();
   }
 
-  // ── Catmull-Rom spline ──
-  function drawSpline(pts2, color, lw){
+  // ── PRICE LINE — smooth Catmull-Rom, single blue color ──
+  // Kalshi uses one consistent color (blue), not split green/red
+  // We keep green/red for above/below but use the Kalshi clean style
+  function drawSpline(pts2, color, lw, glow){
     if(pts2.length < 2) return;
+    if(glow){
+      ctx.save();
+      ctx.globalAlpha = 0.15;
+      ctx.beginPath(); ctx.moveTo(pts2[0].x, pts2[0].y);
+      for(let k=0; k<pts2.length-1; k++){
+        const p0=pts2[Math.max(0,k-1)],p1=pts2[k],p2=pts2[k+1],p3=pts2[Math.min(pts2.length-1,k+2)];
+        ctx.bezierCurveTo(p1.x+(p2.x-p0.x)/6,p1.y+(p2.y-p0.y)/6,p2.x-(p3.x-p1.x)/6,p2.y-(p3.y-p1.y)/6,p2.x,p2.y);
+      }
+      ctx.strokeStyle = color; ctx.lineWidth = lw*3; ctx.stroke();
+      ctx.restore();
+    }
     ctx.beginPath(); ctx.moveTo(pts2[0].x, pts2[0].y);
     for(let k=0; k<pts2.length-1; k++){
-      const p0=pts2[Math.max(0,k-1)], p1=pts2[k], p2=pts2[k+1], p3=pts2[Math.min(pts2.length-1,k+2)];
-      const cp1x=p1.x+(p2.x-p0.x)/6, cp1y=p1.y+(p2.y-p0.y)/6;
-      const cp2x=p2.x-(p3.x-p1.x)/6, cp2y=p2.y-(p3.y-p1.y)/6;
-      ctx.bezierCurveTo(cp1x,cp1y,cp2x,cp2y,p2.x,p2.y);
+      const p0=pts2[Math.max(0,k-1)],p1=pts2[k],p2=pts2[k+1],p3=pts2[Math.min(pts2.length-1,k+2)];
+      ctx.bezierCurveTo(p1.x+(p2.x-p0.x)/6,p1.y+(p2.y-p0.y)/6,p2.x-(p3.x-p1.x)/6,p2.y-(p3.y-p1.y)/6,p2.x,p2.y);
     }
     ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.stroke();
   }
 
-  // ── Velocity glow ──
-  const velI = Math.min(1, chartVelSmooth * 60);
-  if(velI > 0.04){
-    ctx.globalAlpha = velI * 0.12;
-    drawSpline(chartData.map(d=>({x:tx(d.t),y:ty(d.p)})), lineCol, 9*dpr);
-    ctx.globalAlpha = 1;
-  }
-
-  // ── Price line — colour splits at strike ──
+  ctx.save();
   ctx.lineJoin='round'; ctx.lineCap='round';
-  if(hasStrike && strikeInView){
-    const sy = ty(sv);
-    let seg=[], lastAbove=null;
-    for(let k=0; k<chartData.length; k++){
-      const d=chartData[k]; const above=d.p>=sv;
-      if(lastAbove!==null && above!==lastAbove){
-        const prev=chartData[k-1];
-        const frac=(sv-prev.p)/(d.p-prev.p);
-        const crossX=tx(prev.t)+(tx(d.t)-tx(prev.t))*frac;
-        seg.push({x:crossX,y:sy});
-        drawSpline(seg, lastAbove?GREEN:RED, 2.5*dpr);
-        seg=[{x:crossX,y:sy}];
-      }
-      seg.push({x:tx(d.t),y:ty(d.p)}); lastAbove=above;
-    }
-    if(seg.length>=2) drawSpline(seg, lastAbove?GREEN:RED, 2.5*dpr);
-  } else {
-    drawSpline(chartData.map(d=>({x:tx(d.t),y:ty(d.p)})), lineCol, 2.5*dpr);
-  }
 
-  // ── Entry price marker ──
+  // Draw with glow
+  drawSpline(chartData.map(d=>({x:tx(d.t),y:ty(d.p)})), lineCol, 2*dpr, true);
+
+  ctx.restore();
+
+  // ── ENTRY PRICE marker ──
   if(active && active.entry){
     const ey = ty(active.entry);
-    if(ey >= PT && ey <= H - PB){
+    if(ey >= PT && ey <= H-PB){
       ctx.save();
       ctx.beginPath(); ctx.moveTo(PL,ey); ctx.lineTo(PL+CW,ey);
       ctx.strokeStyle='#f7c94840'; ctx.lineWidth=dpr;
       ctx.setLineDash([2*dpr,4*dpr]); ctx.stroke(); ctx.setLineDash([]);
-      ctx.font=`bold ${7*dpr}px 'Courier New'`;
-      ctx.fillStyle='#f7c94880';
+      ctx.font=`bold ${6.5*dpr}px -apple-system,sans-serif`;
+      ctx.fillStyle='#f7c94870'; ctx.textAlign='left';
       ctx.fillText('ENTRY', PL+4*dpr, ey-3*dpr);
       ctx.restore();
     }
   }
 
-  // ── Exit marker ──
+  // ── EXIT marker ──
   if(exitIdx !== null && active){
     const et = tickBuffer[exitIdx];
     if(et){
@@ -2398,7 +2367,7 @@ function chartLoop(ts){
       if(ex>=PL && ex<=PL+CW){
         ctx.save();
         ctx.beginPath(); ctx.moveTo(ex,PT); ctx.lineTo(ex,H-PB);
-        ctx.strokeStyle='#f7c94860'; ctx.lineWidth=1.5*dpr;
+        ctx.strokeStyle='#f7c94850'; ctx.lineWidth=1.5*dpr;
         ctx.setLineDash([4*dpr,3*dpr]); ctx.stroke(); ctx.setLineDash([]);
         ctx.beginPath(); ctx.arc(ex,ey2,4*dpr,0,Math.PI*2);
         ctx.fillStyle='#f7c948'; ctx.fill();
@@ -2407,76 +2376,68 @@ function chartLoop(ts){
     }
   }
 
-  // ── Current price right-axis label ──
+  // ── CURRENT PRICE PILL — Kalshi style, right rail ──
+  // Red if below strike, green if above — solid filled pill
   const rightX = PL + CW + 6*dpr;
-  ctx.save();
-  ctx.textAlign = 'left';
-  const priceTxt = '$' + dp.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-  ctx.font = `bold ${10*dpr}px 'Courier New'`;
-  const ptw = ctx.measureText(priceTxt).width;
-  const pH=18*dpr, pPad=5*dpr, pR=4*dpr;
   const lx2 = tx(chartData[chartData.length-1].t);
   const ly2 = ty(dp);
+
+  // Price pill
+  const priceTxt = '$' + dp.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+  ctx.save();
+  ctx.font = `bold ${9*dpr}px -apple-system, sans-serif`;
+  const ptw = ctx.measureText(priceTxt).width;
+  const pH=16*dpr, pPad=5*dpr, pR=3*dpr;
   let py = Math.max(PT, Math.min(H-PB-pH, ly2-pH/2));
   ctx.beginPath();
   if(ctx.roundRect) ctx.roundRect(rightX, py, ptw+pPad*2, pH, pR);
   else ctx.rect(rightX, py, ptw+pPad*2, pH);
   ctx.fillStyle = lineCol; ctx.fill();
-  ctx.fillStyle = '#07070f';
-  ctx.font = `bold ${10*dpr}px 'Courier New'`;
+  ctx.fillStyle = '#fff';
+  ctx.textAlign = 'left';
   ctx.fillText(priceTxt, rightX+pPad, py+pH*0.70);
-  ctx.beginPath(); ctx.moveTo(lx2,ly2); ctx.lineTo(rightX-1*dpr, py+pH/2);
-  ctx.strokeStyle=lineCol+'40'; ctx.lineWidth=dpr; ctx.stroke();
-  ctx.restore();
 
-  // ── Strike distance label (when strike is OFF the chart) ──
-  if(hasStrike && !strikeInView){
-    const dist = Math.abs(sv - dp);
-    const dir  = sv > dp ? '▲' : '▼';
-    const distTxt = `${dir} $${dist.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})} to strike`;
-    const distCol = curAbove ? GREEN+'99' : RED+'99';
-    ctx.save();
-    ctx.font = `${7.5*dpr}px 'Courier New'`;
-    ctx.fillStyle = distCol;
-    ctx.textAlign = 'right';
-    ctx.fillText(distTxt, PL+CW, PT - 5*dpr);
-    ctx.restore();
-  }
-
-  // ── Pulsing live dot ──
-  const pulse = 0.5 + 0.5*Math.sin(chartPulse);
-  const ringR = (4+pulse*3)*dpr;
-  ctx.beginPath(); ctx.arc(lx2, ly2, ringR, 0, Math.PI*2);
-  ctx.strokeStyle = lineCol+(Math.round((0.08+pulse*0.22)*255).toString(16).padStart(2,'0'));
-  ctx.lineWidth=1.5*dpr; ctx.stroke();
+  // Tiny connector dot on line tip
   ctx.beginPath(); ctx.arc(lx2, ly2, 3*dpr, 0, Math.PI*2);
-  ctx.fillStyle=lineCol; ctx.fill();
+  ctx.fillStyle = lineCol; ctx.fill();
   ctx.beginPath(); ctx.arc(lx2, ly2, 1.5*dpr, 0, Math.PI*2);
-  ctx.fillStyle='#fff'; ctx.globalAlpha=0.7; ctx.fill(); ctx.globalAlpha=1;
+  ctx.fillStyle='#fff'; ctx.globalAlpha=0.8; ctx.fill(); ctx.globalAlpha=1;
 
-  // ── Time axis ──
+  // Pulsing outer ring
+  const pulse = 0.5 + 0.5*Math.sin(chartPulse);
+  ctx.beginPath(); ctx.arc(lx2, ly2, (4+pulse*3)*dpr, 0, Math.PI*2);
+  ctx.strokeStyle = lineCol + Math.round((0.1+pulse*0.25)*255).toString(16).padStart(2,'0');
+  ctx.lineWidth=1.5*dpr; ctx.stroke();
+
+  ctx.restore();
+
+  // ── TIME AXIS — real clock times, Kalshi style ──
   ctx.save();
-  ctx.font=`${7*dpr}px 'Courier New'`;
-  ctx.textAlign='center';
-  const tAxisStart=Math.ceil(tStart/5000)*5000;
+  ctx.font = `${6.5*dpr}px -apple-system, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#4a5568';
+  const tAxisStart = Math.ceil(tStart/5000)*5000;
   for(let t=tAxisStart; t<=now+1000; t+=5000){
-    const x=tx(t);
-    if(x<PL||x>PL+CW) continue;
-    const ago=Math.round((now-t)/1000);
-    ctx.fillStyle='#2a2a40';
-    ctx.fillText(ago===0?'NOW':`-${ago}s`, x, H-6*dpr);
-    ctx.beginPath(); ctx.moveTo(x,H-PB); ctx.lineTo(x,H-PB+2*dpr);
-    ctx.strokeStyle='#1a1a2e'; ctx.lineWidth=dpr; ctx.stroke();
+    const x = tx(t);
+    if(x < PL || x > PL+CW) continue;
+    const d = new Date(t);
+    const hh = d.getHours().toString().padStart(2,'0');
+    const mm = d.getMinutes().toString().padStart(2,'0');
+    const ss = d.getSeconds().toString().padStart(2,'0');
+    // Only show HH:MM:SS — like Kalshi
+    const lbl = ss === '00' ? `${hh}:${mm}` : `${hh}:${mm}:${ss}`;
+    ctx.fillText(lbl, x, H - 6*dpr);
   }
   ctx.restore();
 
-  // ── Source badge + H/L ──
+  // ── SOURCE BADGE + H/L ──
   const srcBadge = document.getElementById('chart-src-badge');
   if(srcBadge) srcBadge.textContent = source||'';
   const spreadEl = document.getElementById('chart-spread');
-  if(spreadEl && pts.length>1){
+  if(spreadEl && pts.length > 1){
     const hi=Math.max(...pts), lo=Math.min(...pts);
-    spreadEl.textContent=`H:$${hi.toLocaleString(undefined,{maximumFractionDigits:2})}  L:$${lo.toLocaleString(undefined,{maximumFractionDigits:2})}`;
+    const dec = isETH ? 2 : 0;
+    spreadEl.textContent = `H:$${hi.toLocaleString(undefined,{minimumFractionDigits:dec,maximumFractionDigits:dec})}  L:$${lo.toLocaleString(undefined,{minimumFractionDigits:dec,maximumFractionDigits:dec})}`;
   }
 
   ctx.restore();
@@ -2697,7 +2658,7 @@ function renderPrice(){
   if(vSrc.length>=5){
     const v5=vSrc[vSrc.length-1]-vSrc[vSrc.length-5];
     const vc=document.getElementById('chip-vel');
-    vc.textContent=`VEL ${v5>=0?'+':''}${v5.toFixed(0)}`; vc.style.background=v5>0?'#00e5a020':'#ff456820'; vc.style.color=v5>0?'#00e5a0':'#ff4566';
+    const velDec=Math.abs(v5)<10?1:0; vc.textContent=`VEL ${v5>=0?'+':''}${v5.toFixed(velDec)}`; vc.style.background=v5>0?'#00e5a020':'#ff456820'; vc.style.color=v5>0?'#00e5a0':'#ff4566';
   }
   const sv=strikeInput;
   const si=document.getElementById('si');
