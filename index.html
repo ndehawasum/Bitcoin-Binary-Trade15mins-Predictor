@@ -1089,7 +1089,7 @@ I_KEY_ID</span> = your Key ID (UUID)<br>
 //   tradeType='farm'     — set on all farm-placed trades
 //   FARM constants:      — TARGET: CALM=12% NORMAL=18% CHOPPY=25%
 //                          STOP:   CALM=6%  NORMAL=9%  CHOPPY=12%
-//                          MAX_ROUNDS=3, REENTRY_WAIT=30s
+//                          MAX_ROUNDS=99 (unlimited), REENTRY_WAIT=8s
 //                          HOLD if YES>=65c or YES<=20c or <4min left
 //
 // ── SIM WALLET [PROTECTED] ───────────────────────────────────────────────────
@@ -1111,11 +1111,11 @@ I_KEY_ID</span> = your Key ID (UUID)<br>
 
 
 // ── FARM MODE CONSTANTS ──────────────────────────────────────
-const FARM_MAX_ROUNDS      = 3;      // max farm trades per 15m window
-const FARM_REENTRY_WAIT_MS = 30000;  // 30s cooldown between farm re-entries
+const FARM_MAX_ROUNDS      = 99;     // unlimited farm trades per window
+const FARM_REENTRY_WAIT_MS = 8000;   // 8s cooldown between farm re-entries
 const FARM_MIN_TIME_LEFT   = 240;    // seconds — don't farm if <4min left
-const FARM_HOLD_YES_HIGH   = 0.65;   // hold to expiry if YES ≥ 65¢
-const FARM_HOLD_YES_LOW    = 0.20;   // hold to expiry if YES ≤ 20¢ (too risky)
+const FARM_HOLD_YES_HIGH   = 0.95;   // skip if YES ≥ 95¢ (no upside left to farm)
+const FARM_HOLD_YES_LOW    = 0.05;   // skip if YES ≤ 5¢ (spread always kills profit)
 // Dynamic target % by volatility tier
 const FARM_TARGET_CALM     = 0.12;   // 12% gain target when CALM
 const FARM_TARGET_NORMAL   = 0.18;   // 18% gain target when NORMAL
@@ -1155,8 +1155,8 @@ const TRAIN_MIN_TIME_LEFT    = 60;   // enter until <60s left (down from 240s)
 const TRAIN_TARGET_PCT       = 0.06; // 6% target — exit fast, collect data
 const TRAIN_STOP_PCT         = 0.04; // 4% stop — tight, don't let losses run
 const TRAIN_BET_FIXED        = 1.00; // $1 flat per trade in training mode
-const TRAIN_HOLD_YES_HIGH    = 0.85; // wider zone than normal farming
-const TRAIN_HOLD_YES_LOW     = 0.10; // wider zone than normal farming
+const TRAIN_HOLD_YES_HIGH    = 0.97;   // train even in extreme zones // wider zone than normal farming
+const TRAIN_HOLD_YES_LOW     = 0.03;   // train even in extreme zones // wider zone than normal farming
 const TRAIN_COUNTDOWN_SECS   = 1;   // auto-buy fires after 1s (down from 3s)
 const TRAIN_COOLDOWN_MS      = 10000;// 10s auto-buy cooldown (down from 60s)
 
@@ -3321,20 +3321,12 @@ function resetDailyIfNeeded(){
 }
 
 function getRiskAccountBalance(){
-  // Prefer live Kalshi balance (only source that's real)
-  const el=document.getElementById('pf-bal');
-  if(el&&el.textContent&&el.textContent!=='—'){
-    const n=parseFloat(el.textContent.replace(/[^0-9.]/g,''));
-    if(n>0) return n;
+  // Live mode: use Kalshi balance (stored when portfolio loaded)
+  if(authConnected && kalshiAccountBalance >= 0){
+    return kalshiAccountBalance; // returns 0 if account is empty — correct
   }
-  // No live balance — use conservative fixed fallback
-  // Do NOT multiply bet size — that inflates Kelly sizing dangerously
-  // Use sim wallet or live balance
-  if(typeof simWallet !== 'undefined' && simWallet.balance > 0){
-    return simWallet.enabled ? simWallet.balance : (riskState.accountBalance > 0 ? riskState.accountBalance : simWallet.balance);
-  }
-  // $200 default gives reasonable Kelly sizing for small accounts
-  return 200;
+  // Sim mode or not connected: use sim balance
+  return simState.balance || 200;
 }
 
 function computeKellyBet(prob, yesPrice, balance){
@@ -3822,6 +3814,12 @@ function checkRiskAutoExit(unrealizedPnL){
     riskState.tpTriggered = true;
     const yStr = yesC !== null ? ` · YES ${yesC.toFixed(1)}¢` : '';
     showToast(`${simMode?'📋 SIM':'⚡'} YES reversal exit${yStr} (+$${unrealizedPnL.toFixed(2)})`, '#f7c948');
+    // After velocity reversal exit, only re-arm if profit was real
+    const ab2 = autoBuyState[activeAsset];
+    if(ab2.armed && unrealizedPnL > 0){
+      ab2.cooldownUntil = Date.now() + 15000;
+      console.log('[AutoBuy] Smart re-entry after velocity exit — 15s cooldown');
+    }
     setTimeout(()=>{ closeTradeWithSell('profit_capture').catch(e=>console.error('[autoExit] closeTradeWithSell failed:',e)); }, 800);
 
   } else if(trailFire){
@@ -3830,6 +3828,13 @@ function checkRiskAutoExit(unrealizedPnL){
     const pkPct= Math.round((peakCapture || 0) * 100);
     const yStr = yesC !== null ? ` · YES ${yesC.toFixed(1)}¢ (peak ${peakYesC.toFixed(1)}¢)` : '';
     showToast(`${simMode?'📋 SIM':'📉'} Trail exit — ${pkPct}%→${pct}%${yStr} (+$${unrealizedPnL.toFixed(2)})`, '#00e5a0');
+    // Smart re-entry: after a profitable trail exit, cut cooldown to 12s
+    // so the bot can re-enter if conditions are still good
+    const ab = autoBuyState[activeAsset];
+    if(ab.armed && unrealizedPnL > 0){
+      ab.cooldownUntil = Date.now() + 12000;
+      console.log('[AutoBuy] Smart re-entry armed after trail exit — 12s cooldown');
+    }
     setTimeout(()=>{ closeTradeWithSell('profit_capture').catch(e=>console.error('[autoExit] closeTradeWithSell failed:',e)); }, 800);
 
   } else if(timeFloorExit){
@@ -4419,7 +4424,7 @@ function renderMarketConditions(){
   }
 }
 
-function placeTrade(bet, tradeType='manual'){
+function placeTrade(bet, tradeType='manual', farmTarget=null, farmStop=null){
   if(active||!livePrice||!amtInput||amtInput<=0||!strikeInput||strikeInput<=0)return;
   const sm=computeStrikeModel(prices,strikeInput);
   const entryYESPrice=estimateYESPriceLive(sm,bet);
@@ -4429,6 +4434,10 @@ function placeTrade(bet, tradeType='manual'){
     entryYESPrice,contracts,ep:[...prices],asset:activeAsset,sl:_dynSL,
     time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}),
     tradeType:tradeType,
+    // Farm exit thresholds locked at entry — never shift mid-trade
+    farmTarget: farmTarget,
+    farmStop:   farmStop,
+    farmMode:   null, // set by checkFarmBot after placeTrade
     result:null,exit:null,finalPnL:null};
   trades.push(t); active=t; peakROI=null; peakCapture=null; trailArmed=false; exitIdx=null; active._peakYesC=0; priceChartDirty=true; projChartDirty=true;
   riskState.tpTriggered=false; riskState.slTriggered=false;
@@ -4620,16 +4629,51 @@ function computeEdge(sm){
   // Minimum EV gate: must be positive after accounting for spread cost
   const minEV = spread * 0.5; // at minimum, EV must cover half the spread
 
-  const edgeOk = rawEdge >= dynThresh;
+  // ── Momentum alignment boost ─────────────────────────────────────
+  // If yesVel (YES contract velocity) strongly agrees with our bet direction,
+  // lower the required edge threshold — the crowd is moving with us.
+  // For UP bet: positive yesVel = crowd buying YES = good
+  // For DOWN bet: negative yesVel = crowd selling YES = good
+  const velForBet = bestBet === 'UP' ? yesVel : -yesVel; // cents/sec aligned to bet
+  let effectiveThresh = dynThresh;
+  let momentumBoost = false;
+  if(velForBet >= 0.15){
+    // Strong crowd momentum in our direction — lower bar by 30%
+    effectiveThresh = dynThresh * 0.70;
+    momentumBoost = true;
+  } else if(velForBet >= 0.08){
+    // Moderate momentum — lower bar by 15%
+    effectiveThresh = dynThresh * 0.85;
+    momentumBoost = true;
+  }
+
+  // ── Ceiling / Floor check ─────────────────────────────────────────
+  // If YES price is already deep in our direction, upside is limited.
+  // Not worth entering late when risk/reward has flipped.
+  // For UP bet: YES > 80¢ means only 20¢ upside — too late
+  // For DOWN bet: YES < 20¢ means NO only 20¢ upside — too late
+  const yesForEntryBet = bestBet === 'UP' ? yesPrice : (1 - yesPrice);
+  const roomLeft = 1 - yesForEntryBet; // how far from ceiling (0 = at ceiling)
+  let ceilingBlock = false;
+  let ceilingReason = null;
+  if(yesForEntryBet >= 0.82){
+    // Less than 18¢ of upside — too late, risk/reward poor
+    ceilingBlock = true;
+    ceilingReason = `${bestBet} YES already at ${Math.round(yesForEntryBet*100)}¢ — too late (only ${Math.round(roomLeft*100)}¢ left)`;
+  }
+
+  const edgeOk = rawEdge >= effectiveThresh && !ceilingBlock;
   const evOk   = ev >= minEV;
 
   return {
     bestBet, modelProb, marketProb, rawEdge, ev,
-    spread, dynThresh, minEV, edgeOk, evOk,
+    spread, dynThresh, effectiveThresh, minEV,
+    edgeOk, evOk, momentumBoost, ceilingBlock,
     approved: edgeOk && evOk,
-    // human-readable reason if rejected
-    reason: !edgeOk
-      ? `edge ${(rawEdge*100).toFixed(1)}% < ${(dynThresh*100).toFixed(0)}% min`
+    reason: ceilingBlock
+      ? ceilingReason
+      : !edgeOk
+      ? `model edge ${(rawEdge*100).toFixed(1)}% · need ${(effectiveThresh*100).toFixed(0)}%${momentumBoost?' (boosted)':''}`
       : !evOk
       ? `EV ${ev.toFixed(3)} < ${minEV.toFixed(3)} min`
       : null,
@@ -4702,6 +4746,20 @@ function computeRegimeFilter(sm, clock){
   if(_rec.ok === false)
     gates.push({ code:'MKTCOND', msg:_rec.reason, block:true });
 
+  // Crowd opposition gate: if YES velocity has been strongly against the model's
+  // likely bet direction for the last 4 readings, the crowd sees something we don't
+  // Only apply when we have a model signal and enough history
+  if(sm && yesVelHistory.length >= 4 && !farmState.trainingMode){
+    const modelBet = sm.aboveProb >= sm.belowProb ? 'UP' : 'DOWN';
+    const hist4 = yesVelHistory.slice(-4);
+    // For UP bet: crowd opposition = YES price falling (negative vel)
+    // For DOWN bet: crowd opposition = YES price rising (positive vel)
+    const crowdAgainst = hist4.every(v => (modelBet==='UP' ? v : -v) < -0.5);
+    if(crowdAgainst){
+      gates.push({ code:'CROWDBLOCK', msg:`crowd opposing ${modelBet} — YES vel sustained against model`, block:true });
+    }
+  }
+
   const blocked = gates.some(g => g.block);
   const blockReason = gates.find(g => g.block)?.msg || null;
   return { gates, blocked, blockReason };
@@ -4749,7 +4807,8 @@ function renderAutoBuyBtn(){
     return;
   }
   if(e.approved){
-    btn.textContent = `🎯 ARMED ✓ edge ${(e.rawEdge*100).toFixed(1)}% · EV ${e.ev.toFixed(2)} · spread $${e.spread.toFixed(2)} — tap to disarm`;
+    const boostTag = e.momentumBoost ? ' ⚡CROWD' : '';
+    btn.textContent = `🎯 ARMED ✓ edge ${(e.rawEdge*100).toFixed(1)}%${boostTag} · EV ${e.ev.toFixed(2)} · spread $${e.spread.toFixed(2)} — tap to disarm`;
     btn.style.cssText = 'width:100%;margin-top:7px;padding:7px;border-radius:9px;font-family:inherit;font-size:8px;letter-spacing:1px;font-weight:700;cursor:pointer;background:#00e5a020;border:1px solid #00e5a060;color:#00e5a0';
   } else {
     const regime = ab.lastRegime;
@@ -4965,6 +5024,7 @@ window.addEventListener('resize',()=>{priceChartDirty=true;projChartDirty=true;p
 // ═══════════════════════════════════════════════════
 let authConnected = false;
 let authRefreshTimer = null;
+let kalshiAccountBalance = 0;  // live balance in dollars, set by renderBalance()
 
 // All authenticated calls go through the Vercel function
 // /api/kalshi?path=<kalshi_path>&method=GET&<extra_params>
@@ -5121,16 +5181,18 @@ async function maybeAutoClose(advisory){
 // ── Render portfolio ──
 function renderBalance(res){
   if(!res) return;
-  // Kalshi returns {balance: N, portfolio_value: N} in cents (N is always a number)
-  // Never try .balance.balance — just read the top-level fields directly
   const b = (typeof res.balance === 'number' ? res.balance : 0) / 100;
   const p = (typeof res.portfolio_value === 'number' ? res.portfolio_value : 0) / 100;
+  // Store in variable so getRiskAccountBalance() can read it reliably
+  kalshiAccountBalance = b;
   const el = document.getElementById('pf-bal');
   if(el) el.textContent = '$'+b.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
   const ep = document.getElementById('pf-port');
   if(ep) ep.textContent = '$'+p.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
   const eu = document.getElementById('pf-upd');
   if(eu) eu.textContent = new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  // Refresh wallet display with real balance
+  renderSimWallet();
 }
 
 function renderPositions(positions){
@@ -5426,9 +5488,8 @@ function renderSimWallet(){
   const liveRow = document.getElementById('live-bal-row');
   const liveDis = document.getElementById('live-bal-display');
   if(isLive && authConnected){
-    const liveBal = getRiskAccountBalance();
     if(liveRow) liveRow.style.display = 'flex';
-    if(liveDis) liveDis.textContent = liveBal>0 ? '$'+liveBal.toFixed(2) : '—';
+    if(liveDis) liveDis.textContent = '$'+kalshiAccountBalance.toFixed(2);
   } else {
     if(liveRow) liveRow.style.display = 'none';
   }
@@ -5449,8 +5510,10 @@ function simCreditPnL(finalPnL, betAmount){
 }
 
 function getEffectiveBalance(){
+  // SIM mode: always use virtual sim balance for bet sizing
   if(simState.mode==='sim') return simState.balance;
-  return getRiskAccountBalance();
+  // LIVE mode: use real Kalshi balance (0 if account empty)
+  return kalshiAccountBalance >= 0 ? kalshiAccountBalance : 0;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -5458,77 +5521,187 @@ function getEffectiveBalance(){
 // ════════════════════════════════════════════════════════════════════════════
 
 function computeFarmDecision(){
-  const clock  = getClock();
-  const yesP   = kalshiYESPrice;
-  const vol    = getVolatilityRating();
-  const liq    = getLiquidityRating();
+  const clock    = getClock();
+  const yesP     = kalshiYESPrice;
+  const vol      = getVolatilityRating();
+  const liq      = getLiquidityRating();
   const secsLeft = clock.secsLeft;
   const training = farmState.trainingMode;
+  const vel      = yesVel;          // cents/sec — YES price velocity (smoothed EMA)
+  const velHist  = yesVelHistory;   // last 5 velocity readings
+  const sm       = computeStrikeModel(prices, strikeInput);
+  const cd       = sm ? sm.cycleDelta   : 0;   // % drift from window open
+  const pctAbove = sm ? sm.pctAbove     : 0.5; // fraction of candles above strike
 
-  // ── TRAINING MODE: relaxed rules, fixed small bet, fast in/out ──
+  // ── TRAINING MODE ────────────────────────────────────────────────
   if(training){
     if(yesP===null) return {shouldFarm:false,reason:'No YES price',targetPct:TRAIN_TARGET_PCT,stopPct:TRAIN_STOP_PCT,betSize:0,training:true};
     if(secsLeft < TRAIN_MIN_TIME_LEFT) return {shouldFarm:false,reason:'<'+TRAIN_MIN_TIME_LEFT+'s left',targetPct:TRAIN_TARGET_PCT,stopPct:TRAIN_STOP_PCT,betSize:0,training:true};
     if(yesP >= TRAIN_HOLD_YES_HIGH) return {shouldFarm:false,reason:'YES >='+Math.round(TRAIN_HOLD_YES_HIGH*100)+'c',targetPct:TRAIN_TARGET_PCT,stopPct:TRAIN_STOP_PCT,betSize:0,training:true};
     if(yesP <= TRAIN_HOLD_YES_LOW)  return {shouldFarm:false,reason:'YES <='+Math.round(TRAIN_HOLD_YES_LOW*100)+'c',targetPct:TRAIN_TARGET_PCT,stopPct:TRAIN_STOP_PCT,betSize:0,training:true};
-    const rounds = activeAsset==='BTC'?farmState.roundsBTC:farmState.roundsETH;
-    const lastExit = activeAsset==='BTC'?farmState.lastExitTimeBTC:farmState.lastExitTimeETH;
-    const coolLeft = Math.max(0, TRAIN_REENTRY_WAIT_MS-(Date.now()-lastExit));
-    if(coolLeft>0 && lastExit>0) return {shouldFarm:false,reason:'wait '+Math.ceil(coolLeft/1000)+'s',targetPct:TRAIN_TARGET_PCT,stopPct:TRAIN_STOP_PCT,betSize:0,training:true};
-    return {
-      shouldFarm:true,
-      reason:'🧠 TRAINING · +'+Math.round(TRAIN_TARGET_PCT*100)+'% target · $'+TRAIN_BET_FIXED+' flat',
-      targetPct:TRAIN_TARGET_PCT,
-      stopPct:TRAIN_STOP_PCT,
-      betSize:TRAIN_BET_FIXED,
-      training:true,
-    };
+    const lastExitT = activeAsset==='BTC'?farmState.lastExitTimeBTC:farmState.lastExitTimeETH;
+    const coolT = Math.max(0, TRAIN_REENTRY_WAIT_MS-(Date.now()-lastExitT));
+    if(coolT>0 && lastExitT>0) return {shouldFarm:false,reason:'wait '+Math.ceil(coolT/1000)+'s',targetPct:TRAIN_TARGET_PCT,stopPct:TRAIN_STOP_PCT,betSize:0,training:true};
+    const trainBet = vel >= 0 ? 'UP' : 'DOWN';
+    return {shouldFarm:true, suggestedBet:trainBet,
+      reason:'🧠 TRAINING · vel '+(vel>=0?'+':'')+vel.toFixed(2)+'¢/s → '+trainBet+' · $'+TRAIN_BET_FIXED,
+      targetPct:TRAIN_TARGET_PCT, stopPct:TRAIN_STOP_PCT, betSize:TRAIN_BET_FIXED, training:true};
   }
 
-  // ── NORMAL FARM MODE ────────────────────────────────────────────
-  const spreadOk = (()=>{
-    if(!kalshiMarket) return false;
-    const bid = parseFloat(kalshiMarket.yes_bid_dollars)||0;
-    const ask = parseFloat(kalshiMarket.yes_ask_dollars)||0;
-    if(!bid||!ask||!yesP) return false;
-    return ((ask-bid)/yesP) < FARM_MAX_SPREAD_PCT;
-  })();
-
-  const targetPct = vol==='CALM'?FARM_TARGET_CALM:vol==='CHOPPY'?FARM_TARGET_CHOPPY:FARM_TARGET_NORMAL;
-  const stopPct   = vol==='CALM'?FARM_STOP_CALM:vol==='CHOPPY'?FARM_STOP_CHOPPY:FARM_STOP_NORMAL;
-  let effectiveTarget = targetPct;
-
+  // ── COMMON CHECKS ────────────────────────────────────────────────
   if(secsLeft < FARM_MIN_TIME_LEFT)
-    return {shouldFarm:false,reason:'<4 min left — hold to expiry',targetPct,stopPct,betSize:0};
-  if(secsLeft < 480) effectiveTarget *= 0.75;
-  if(yesP===null) return {shouldFarm:false,reason:'No YES price data',targetPct,stopPct,betSize:0};
-  if(yesP >= FARM_HOLD_YES_HIGH) return {shouldFarm:false,reason:'YES '+Math.round(yesP*100)+'c >=65c — hold to expiry',targetPct,stopPct,betSize:0};
-  if(yesP <= FARM_HOLD_YES_LOW)  return {shouldFarm:false,reason:'YES '+Math.round(yesP*100)+'c <=20c — too risky',targetPct,stopPct,betSize:0};
-  if(liq==='LOW') return {shouldFarm:false,reason:'Low liquidity — spread too wide',targetPct,stopPct,betSize:0};
-  if(!spreadOk)   return {shouldFarm:false,reason:'Spread >'+Math.round(FARM_MAX_SPREAD_PCT*100)+'% of YES price',targetPct,stopPct,betSize:0};
-
+    return {shouldFarm:false,reason:'<4 min left',targetPct:0.12,stopPct:0.06,betSize:0};
+  if(yesP===null)
+    return {shouldFarm:false,reason:'No YES price',targetPct:0.12,stopPct:0.06,betSize:0};
+  if(yesP <= 0.03 || yesP >= 0.97)
+    return {shouldFarm:false,reason:'YES '+Math.round(yesP*100)+'c — spread kills margin',targetPct:0.12,stopPct:0.06,betSize:0};
+  if(liq==='LOW')
+    return {shouldFarm:false,reason:'Low liquidity',targetPct:0.12,stopPct:0.06,betSize:0};
   const rounds = activeAsset==='BTC'?farmState.roundsBTC:farmState.roundsETH;
   if(rounds >= FARM_MAX_ROUNDS)
-    return {shouldFarm:false,reason:'Max '+FARM_MAX_ROUNDS+' rounds used this window',targetPct,stopPct,betSize:0};
-
+    return {shouldFarm:false,reason:'Max rounds reached',targetPct:0.12,stopPct:0.06,betSize:0};
   const lastExit = activeAsset==='BTC'?farmState.lastExitTimeBTC:farmState.lastExitTimeETH;
   const coolLeft = Math.max(0, FARM_REENTRY_WAIT_MS-(Date.now()-lastExit));
   if(coolLeft>0 && lastExit>0)
-    return {shouldFarm:false,reason:'Re-entry in '+Math.ceil(coolLeft/1000)+'s',targetPct,stopPct,betSize:0};
+    return {shouldFarm:false,reason:'Re-entry in '+Math.ceil(coolLeft/1000)+'s',targetPct:0.12,stopPct:0.06,betSize:0};
 
+  // Shared bet sizing
   const balance = getEffectiveBalance();
-  const sm = computeStrikeModel(prices, strikeInput);
-  let betSize = 0;
-  if(sm && balance>0){
-    const kelly = computeKellyBet(sm.prob, yesP, balance);
-    betSize = Math.max(0.50, Math.min(kelly*0.5, balance*0.08));
-    betSize = Math.round(betSize*100)/100;
+  const betSize = (sm && balance>0)
+    ? Math.round(Math.max(0.50, Math.min(computeKellyBet(sm.prob,yesP,balance)*0.5, balance*0.08))*100)/100
+    : 0;
+
+  // Vol-scaled targets for middle-range modes
+  const targetBase = vol==='CALM'?FARM_TARGET_CALM : vol==='CHOPPY'?FARM_TARGET_CHOPPY : FARM_TARGET_NORMAL;
+  const stopBase   = vol==='CALM'?FARM_STOP_CALM   : vol==='CHOPPY'?FARM_STOP_CHOPPY   : FARM_STOP_NORMAL;
+  const tgt = secsLeft < 480 ? targetBase*0.75 : targetBase;
+
+  // ── MODE 5: TIME DECAY HARVEST ───────────────────────────────────
+  // <3min left + contract strongly one-sided → harvest convergence to 0/100
+  // The contract MUST converge toward certainty as time runs out.
+  // e.g. YES at 88¢ with 2min left will almost certainly hit 95¢+ before expiry.
+  // Tight 4¢ target, 2¢ stop — pure time decay play, no prediction needed.
+  if(secsLeft <= 180 && secsLeft >= 60){
+    if(yesP >= 0.80 && pctAbove >= 0.65){
+      // BTC clearly above strike + YES strongly bullish → harvest UP convergence
+      return {
+        shouldFarm:true, suggestedBet:'UP', farmMode:'DECAY',
+        reason:'⏱ DECAY UP · '+Math.round(secsLeft/60)+'min left · YES '+Math.round(yesP*100)+'¢ → 100¢',
+        targetPct:0.04, stopPct:0.02, betSize,
+      };
+    }
+    if(yesP <= 0.20 && pctAbove <= 0.35){
+      // BTC clearly below strike + YES strongly bearish → harvest DOWN convergence
+      return {
+        shouldFarm:true, suggestedBet:'DOWN', farmMode:'DECAY',
+        reason:'⏱ DECAY DOWN · '+Math.round(secsLeft/60)+'min left · YES '+Math.round(yesP*100)+'¢ → 0¢',
+        targetPct:0.04, stopPct:0.02, betSize,
+      };
+    }
   }
 
+  // ── MODE 3: REVERSAL DETECTION ───────────────────────────────────
+  // yesVelHistory holds last 5 velocity readings.
+  // A reversal = was strongly negative, now turning positive (or vice versa).
+  // We enter at the TURN, before momentum fully builds — best risk/reward.
+  if(velHist.length >= 4){
+    const recent2 = velHist.slice(-2);   // most recent 2
+    const prior2  = velHist.slice(-4,-2); // 2 before that
+    const recentAvg = (recent2[0]+recent2[1])/2;
+    const priorAvg  = (prior2[0]+prior2[1])/2;
+    const REVERSAL_MIN_PRIOR = 0.12; // prior trend must have been meaningful
+    const REVERSAL_MIN_TURN  = 0.06; // turn must be at least this strong
+
+    if(priorAvg <= -REVERSAL_MIN_PRIOR && recentAvg >= REVERSAL_MIN_TURN && yesP > 0.15 && yesP < 0.85){
+      // Was falling, now turning UP
+      return {
+        shouldFarm:true, suggestedBet:'UP', farmMode:'REVERSAL',
+        reason:'↩ REVERSAL UP · was '+priorAvg.toFixed(2)+'¢/s → now '+recentAvg.toFixed(2)+'¢/s',
+        targetPct:tgt, stopPct:stopBase, betSize,
+      };
+    }
+    if(priorAvg >= REVERSAL_MIN_PRIOR && recentAvg <= -REVERSAL_MIN_TURN && yesP > 0.15 && yesP < 0.85){
+      // Was rising, now turning DOWN
+      return {
+        shouldFarm:true, suggestedBet:'DOWN', farmMode:'REVERSAL',
+        reason:'↩ REVERSAL DOWN · was +'+priorAvg.toFixed(2)+'¢/s → now '+recentAvg.toFixed(2)+'¢/s',
+        targetPct:tgt, stopPct:stopBase, betSize,
+      };
+    }
+  }
+
+  // ── MODE 1: CONVICTION FARMING ───────────────────────────────────
+  // YES strongly one-sided → ride the dominant side
+  const CONVICTION_HIGH = 0.70;
+  const CONVICTION_LOW  = 0.30;
+  if(yesP >= CONVICTION_HIGH){
+    return {
+      shouldFarm:true, suggestedBet:'UP', farmMode:'CONVICTION',
+      reason:'🎯 CONVICTION UP · YES '+Math.round(yesP*100)+'¢ ('+Math.round(yesP*100)+'% chance UP wins)',
+      targetPct: secsLeft<480 ? 0.04 : 0.05, stopPct:0.03, betSize,
+    };
+  }
+  if(yesP <= CONVICTION_LOW){
+    return {
+      shouldFarm:true, suggestedBet:'DOWN', farmMode:'CONVICTION',
+      reason:'🎯 CONVICTION DOWN · YES '+Math.round(yesP*100)+'¢ ('+Math.round((1-yesP)*100)+'% chance DOWN wins)',
+      targetPct: secsLeft<480 ? 0.04 : 0.05, stopPct:0.03, betSize,
+    };
+  }
+
+  // ── MODE 4: CYCLE ALIGNMENT ──────────────────────────────────────
+  // Crypto price AND YES contract both moving the same direction.
+  // Two independent signals agreeing = higher confidence entry.
+  // cycleDelta: BTC drift from window open (+% = BTC rising this window)
+  // yesVel:     YES contract price velocity
+  const CYCLE_MIN = 0.02;  // at least 0.02% price drift this window
+  const VEL_MIN   = 0.05;  // at least 0.05¢/s YES velocity
+  if(Math.abs(cd) >= CYCLE_MIN && Math.abs(vel) >= VEL_MIN){
+    const cdUp  = cd > 0;   // BTC drifting UP from window open
+    const velUp = vel > 0;  // YES price rising
+    if(cdUp === velUp){
+      // Both agree
+      const suggestedBet = cdUp ? 'UP' : 'DOWN';
+      // Extra confidence → slightly tighter stop, same target
+      return {
+        shouldFarm:true, suggestedBet, farmMode:'ALIGNED',
+        reason:'✅ ALIGNED '+(cdUp?'UP':'DOWN')+' · crypto Δ '+(cd>=0?'+':'')+cd.toFixed(3)+'% · vel '+(vel>=0?'+':'')+vel.toFixed(2)+'¢/s',
+        targetPct:tgt, stopPct:stopBase*0.8, betSize, // tighter stop because we have more confidence
+      };
+    }
+    // Signals conflict — don't trade, wait for resolution
+    return {
+      shouldFarm:false,
+      reason:'Signals conflict: crypto '+(cdUp?'↑':'↓')+' vs YES '+(velUp?'↑':'↓')+' — waiting',
+      targetPct:tgt, stopPct:stopBase, betSize:0,
+    };
+  }
+
+  // ── MODE 2: MOMENTUM FARMING ─────────────────────────────────────
+  // Check spread before momentum entry
+  const spreadOk = kalshiMarket ? (()=>{
+    const bid=parseFloat(kalshiMarket.yes_bid_dollars)||0;
+    const ask=parseFloat(kalshiMarket.yes_ask_dollars)||0;
+    return bid>0&&ask>0 ? ((ask-bid)/yesP)<FARM_MAX_SPREAD_PCT : false;
+  })() : false;
+  if(!spreadOk)
+    return {shouldFarm:false,reason:'Spread too wide',targetPct:tgt,stopPct:stopBase,betSize:0};
+
+  const velThreshold = 0.08;
+  if(Math.abs(vel) >= velThreshold){
+    const suggestedBet = vel > 0 ? 'UP' : 'DOWN';
+    return {
+      shouldFarm:true, suggestedBet, farmMode:'MOMENTUM',
+      reason:'⚡ MOMENTUM '+(vel>0?'↑':'↓')+' vel '+(vel>=0?'+':'')+vel.toFixed(2)+'¢/s · '+vol+' vol',
+      targetPct:tgt, stopPct:stopBase, betSize,
+    };
+  }
+
+  // No signal — wait
   return {
-    shouldFarm:true,
-    reason:vol+' vol · target +'+Math.round(effectiveTarget*100)+'% · stop -'+Math.round(stopPct*100)+'%',
-    targetPct:effectiveTarget, stopPct, betSize,
+    shouldFarm:false,
+    reason:'No signal · vel '+(vel>=0?'+':'')+vel.toFixed(2)+'¢/s · cycle '+(cd>=0?'+':'')+cd.toFixed(3)+'%',
+    targetPct:tgt, stopPct:stopBase, betSize:0,
   };
 }
 
@@ -5549,25 +5722,42 @@ function checkFarmBot(){
 
   const sm = computeStrikeModel(prices, strikeInput);
   const training = farmState.trainingMode;
-  // Training mode: lower confidence threshold, any signal direction is fine
-  const minConf = training ? 50 : 55;
-  const minEdge = training ? 2  : 5;   // % from 50/50
-  if(!sm || sm.conf < minConf) return;
-  if(!training && Math.abs(sm.prob-50) < minEdge) return;
 
-  const bet = sm.prob>50?'UP':'DOWN';
+  // Determine bet direction:
+  // If farm decision has a suggestedBet (conviction/momentum), use it
+  // Otherwise fall back to the crypto model signal
+  let bet;
+  if(decision.suggestedBet){
+    // Conviction or momentum mode — trust the market/velocity signal
+    bet = decision.suggestedBet;
+  } else {
+    // No direction suggestion — use crypto price model
+    const minConf = training ? 50 : 55;
+    const minEdge = training ? 2  : 5;
+    if(!sm || sm.conf < minConf) return;
+    if(!training && Math.abs(sm.prob-50) < minEdge) return;
+    bet = sm.prob>50?'UP':'DOWN';
+  }
 
   const aiEl = document.getElementById('ai');
   if(aiEl){ aiEl.value=decision.betSize.toFixed(2); aiEl.dispatchEvent(new Event('input')); }
 
-  placeTrade(bet,'farm');
+  placeTrade(bet,'farm', decision.targetPct, decision.stopPct);
+  // Store the farm mode on the active trade so exit log is accurate
+  if(active) active.farmMode = decision.farmMode || 'FARM';
   if(activeAsset==='BTC') farmState.roundsBTC++;
   else farmState.roundsETH++;
 
   if(training){
     showToast('🧠 '+bet+' · $'+decision.betSize.toFixed(2)+' · NN sample '+(nnData.length+1),'#00e5a0');
   } else {
-    showToast('🌾 Farm '+bet+' · YES '+Math.round(kalshiYESPrice*100)+'c · target +'+Math.round(decision.targetPct*100)+'%','#a78bfa');
+    const modeTag = decision.farmMode==='CONVICTION' ? '🎯 CONVICTION'
+      : decision.farmMode==='MOMENTUM'  ? '⚡ MOMENTUM'
+      : decision.farmMode==='REVERSAL'  ? '↩ REVERSAL'
+      : decision.farmMode==='ALIGNED'   ? '✅ ALIGNED'
+      : decision.farmMode==='DECAY'     ? '⏱ DECAY'
+      : '🌾 FARM';
+    showToast(modeTag+' '+bet+' · YES '+Math.round(kalshiYESPrice*100)+'c · target +'+Math.round(decision.targetPct*100)+'%','#a78bfa');
   }
 }
 
@@ -5580,10 +5770,11 @@ function checkFarmExit(){
   if(entryE<=0) return;
 
   const pctChange = (currentP-entryE)/entryE;
-  const decision  = computeFarmDecision();
-  // Training mode: tighter targets so we cycle faster
-  const target = decision.targetPct;
-  const stop   = -decision.stopPct;
+
+  // Use thresholds locked at trade entry — immune to mode shifts mid-trade
+  // Fall back to computeFarmDecision() only if somehow not set (shouldn't happen)
+  const target = active.farmTarget ?? computeFarmDecision().targetPct;
+  const stop   = -(active.farmStop  ?? computeFarmDecision().stopPct);
   // Training mode: also exit if we've been in this trade >90s to free up for next sample
   const training = farmState.trainingMode;
   const tradeAge = Date.now() - (active.id||0);
@@ -5598,11 +5789,13 @@ function checkFarmExit(){
 
   if(pctChange>=target){
     riskState.tpTriggered=true;
-    showToast('🌾 Farm TP +'+Math.round(pctChange*100)+'% — exiting','#00e5a0');
+    const modeLabel = active.farmMode||'FARM';
+    showToast('🌾 '+modeLabel+' TP +'+Math.round(pctChange*100)+'% — exiting','#00e5a0');
     setTimeout(()=>{ closeTradeWithSell('farm_profit').catch(e=>console.error('[farmExit]',e)); },200);
   } else if(pctChange<=stop){
     riskState.slTriggered=true;
-    showToast('🌾 Farm SL '+Math.round(pctChange*100)+'% — exiting','#ff4566');
+    const modeLabelSL = active.farmMode||'FARM';
+    showToast('🌾 '+modeLabelSL+' SL '+Math.round(pctChange*100)+'% — exiting','#ff4566');
     setTimeout(()=>{ closeTradeWithSell('farm_stop').catch(e=>console.error('[farmExit]',e)); },200);
   }
 }
@@ -5698,7 +5891,7 @@ function renderFarmBar(decision){
   if(targetEl) targetEl.textContent = d.shouldFarm?'+'+Math.round(d.targetPct*100)+'%':'—';
 
   const rounds = activeAsset==='BTC'?farmState.roundsBTC:farmState.roundsETH;
-  if(roundsEl) roundsEl.textContent = rounds+'/'+FARM_MAX_ROUNDS;
+  if(roundsEl) roundsEl.textContent = rounds+(FARM_MAX_ROUNDS>=99?' (no limit)':'/'+FARM_MAX_ROUNDS);
 
   const pnl = farmState.sessionPnL;
   if(pnlEl){ pnlEl.textContent=(pnl>=0?'+':'')+'$'+Math.abs(pnl).toFixed(2); pnlEl.style.color=pnl>=0?'#00e5a0':'#ff4566'; }
@@ -5773,7 +5966,9 @@ function renderFarmBar(decision){
 
   // Rounds
   const curRounds=(activeAsset==='BTC'?farmState.roundsBTC:farmState.roundsETH);
-  if(inlineRounds){ inlineRounds.textContent=curRounds+'/'+FARM_MAX_ROUNDS; inlineRounds.style.color=curRounds>=FARM_MAX_ROUNDS?'#ff4566':'#a78bfa'; }
+  const maxR = farmState.trainingMode ? TRAIN_MAX_ROUNDS : FARM_MAX_ROUNDS;
+  const roundsLabel = maxR >= 99 ? curRounds+'  (no limit)' : curRounds+'/'+maxR;
+  if(inlineRounds){ inlineRounds.textContent=roundsLabel; inlineRounds.style.color='#a78bfa'; }
   if(inlineTarget) inlineTarget.textContent=d.shouldFarm?'+'+Math.round(d.targetPct*100)+'%':'—';
   if(inlinePnl){
     const pnl=farmState.sessionPnL;
