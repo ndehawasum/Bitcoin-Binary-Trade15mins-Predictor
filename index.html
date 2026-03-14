@@ -32,7 +32,7 @@ input[type=number]{-moz-appearance:textfield}
 #demo-ban{background:#1a1200;border:1px solid #f7c94830;border-radius:9px;padding:6px 11px;margin-bottom:9px;font-size:9px;color:#f7c948;display:none}
 
 /* sim wallet */
-#sim-wallet{background:#0c0c1c;border:1px solid #7b9fff30;border-radius:12px;padding:9px 13px;margin-bottom:9px;display:none}
+#sim-wallet{background:#0c0c1c;border:1px solid #7b9fff30;border-radius:12px;padding:9px 13px;margin-bottom:9px;display:block}
 #sim-wallet.show{display:block}
 .sim-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
 .sim-title{font-size:8px;letter-spacing:3px;color:#7b9fff;font-weight:900}
@@ -307,14 +307,14 @@ body.dual-active #app{padding-bottom:74px}
   <!-- SIM WALLET BANNER -->
   <div id="sim-wallet">
     <div class="sim-header">
-      <span class="sim-title">🧪 SIM WALLET</span>
+      <span class="sim-title" id="sim-wallet-title">🧪 SIM WALLET</span>
       <button class="sim-toggle" id="sim-toggle-btn" onclick="toggleSimMode()">GO LIVE</button>
     </div>
     <div class="sim-bal-row">
       <span class="sim-bal" id="sim-bal">$500.00</span>
       <span class="sim-pnl" id="sim-pnl" style="color:#555">+$0.00</span>
     </div>
-    <div class="sim-input-row">
+    <div class="sim-input-row" id="sim-input-row-el">
       <input class="sim-input" id="sim-input" type="number" min="1" max="99999" placeholder="Set balance..." />
       <button class="sim-set-btn" onclick="setSimBalance()">SET</button>
     </div>
@@ -5323,23 +5323,27 @@ function setTradingMode(mode){
   const farmBar = document.getElementById('farm-bar');
   const simWalletEl = document.getElementById('sim-wallet');
 
+  // Wallet card is ALWAYS visible — it shows sim or live state
+  if(simWalletEl) simWalletEl.classList.add('show');
+
   if(mode === 'sim'){
     if(simBtn)  simBtn.className  = 'mode-btn active-sim';
     if(liveBtn) liveBtn.className = 'mode-btn';
-    // Show sim wallet card
-    if(simWalletEl) simWalletEl.classList.add('show');
-    // Update GO LIVE / GO SIM toggle button text
     const toggleBtn = document.getElementById('sim-toggle-btn');
-    if(toggleBtn) toggleBtn.textContent = 'GO LIVE';
+    if(toggleBtn){ toggleBtn.textContent='GO LIVE'; toggleBtn.style.background='#7b9fff'; }
     if(farmBar) farmBar.style.display = 'block';
+    // Show sim input row
+    const simInputRow = document.getElementById('sim-input-row-el');
+    if(simInputRow) simInputRow.style.display = 'flex';
   } else {
     if(simBtn)  simBtn.className  = 'mode-btn';
     if(liveBtn) liveBtn.className = 'mode-btn active-live';
-    // Hide sim wallet in live mode
-    if(simWalletEl) simWalletEl.classList.remove('show');
     const toggleBtn = document.getElementById('sim-toggle-btn');
-    if(toggleBtn) toggleBtn.textContent = 'GO SIM';
+    if(toggleBtn){ toggleBtn.textContent='GO SIM'; toggleBtn.style.background='#00e5a0'; }
     if(farmBar) farmBar.style.display = authConnected ? 'block' : 'none';
+    // Hide sim set-balance input in live mode (balance comes from Kalshi)
+    const simInputRow = document.getElementById('sim-input-row-el');
+    if(simInputRow) simInputRow.style.display = 'none';
   }
   renderSimWallet();
   renderFarmBar();
@@ -5403,13 +5407,29 @@ function renderSimWallet(){
     tradePill.style.borderColor = isLive ? '#00e5a030' : '#f7c94830';
   }
 
-  // Update sim-wallet card (the visible card above the chart)
+  // Update sim-wallet card — always visible, shows sim OR live state
   const simBalEl  = document.getElementById('sim-bal');
   const simPnlEl  = document.getElementById('sim-pnl');
-  if(simBalEl) simBalEl.textContent = '$' + bal.toFixed(2);
-  if(simPnlEl){
-    simPnlEl.textContent = (pnl>=0?'+':'') + '$' + Math.abs(pnl).toFixed(2);
-    simPnlEl.style.color = pnl>=0 ? '#00e5a0' : '#ff4566';
+  const simTitle  = document.getElementById('sim-wallet-title');
+  const walletEl  = document.getElementById('sim-wallet');
+
+  // Always show the card
+  if(walletEl) walletEl.classList.add('show');
+
+  if(isLive){
+    // Live mode: show real Kalshi balance in green
+    const liveBal = getEffectiveBalance();
+    if(simBalEl){ simBalEl.textContent = '$' + (liveBal>0 ? liveBal.toFixed(2) : '—'); simBalEl.style.color='#00e5a0'; }
+    if(simPnlEl){ simPnlEl.textContent = 'KALSHI LIVE'; simPnlEl.style.color='#00e5a060'; }
+    if(simTitle){ simTitle.textContent='⚡ LIVE WALLET'; simTitle.style.color='#00e5a0'; }
+  } else {
+    // Sim mode: show virtual balance in blue/yellow
+    if(simBalEl){ simBalEl.textContent = '$' + bal.toFixed(2); simBalEl.style.color='#7b9fff'; }
+    if(simPnlEl){
+      simPnlEl.textContent = (pnl>=0?'+':'') + '$' + Math.abs(pnl).toFixed(2);
+      simPnlEl.style.color = pnl>=0 ? '#00e5a0' : '#ff4566';
+    }
+    if(simTitle){ simTitle.textContent='🧪 SIM WALLET'; simTitle.style.color='#7b9fff'; }
   }
 }
 
