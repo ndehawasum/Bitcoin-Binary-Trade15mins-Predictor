@@ -306,17 +306,27 @@ body.dual-active #app{padding-bottom:74px}
 
   <!-- SIM WALLET BANNER -->
   <div id="sim-wallet">
-    <div class="sim-header">
-      <span class="sim-title" id="sim-wallet-title">🧪 SIM WALLET</span>
-      <button class="sim-toggle" id="sim-toggle-btn" onclick="toggleSimMode()">GO LIVE</button>
+    <!-- SIM row — always visible, shows virtual balance -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
+      <span style="font-size:7px;letter-spacing:2px;color:#7b9fff;font-weight:900">🧪 SIM</span>
+      <div style="display:flex;align-items:baseline;gap:6px">
+        <span class="sim-bal" id="sim-bal" style="font-size:18px;font-weight:900;color:#7b9fff;letter-spacing:-1px">$500.00</span>
+        <span id="sim-pnl" style="font-size:9px;font-weight:700;color:#555">+$0.00</span>
+      </div>
     </div>
-    <div class="sim-bal-row">
-      <span class="sim-bal" id="sim-bal">$500.00</span>
-      <span class="sim-pnl" id="sim-pnl" style="color:#555">+$0.00</span>
+    <!-- Set balance input — always visible -->
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+      <input class="sim-input" id="sim-input" type="number" min="1" max="999999" step="10"
+        placeholder="Enter new balance..." 
+        onkeydown="if(event.key==='Enter')setSimBalance()"
+        style="flex:1;background:#07070f;border:1px solid #7b9fff40;border-radius:7px;padding:5px 9px;font-size:12px;font-weight:700;color:#7b9fff;font-family:inherit;outline:none;width:100%"/>
+      <button onclick="setSimBalance()" 
+        style="background:#7b9fff20;border:1px solid #7b9fff50;border-radius:7px;padding:5px 12px;font-size:9px;font-weight:900;letter-spacing:1px;color:#7b9fff;cursor:pointer;font-family:inherit;white-space:nowrap">SET</button>
     </div>
-    <div class="sim-input-row" id="sim-input-row-el">
-      <input class="sim-input" id="sim-input" type="number" min="1" max="99999" placeholder="Set balance..." onkeydown="if(event.key==='Enter')setSimBalance()" />
-      <button class="sim-set-btn" onclick="setSimBalance()">SET</button>
+    <!-- LIVE row — only shows when Kalshi connected -->
+    <div id="live-bal-row" style="display:none;align-items:center;justify-content:space-between;padding-top:5px;border-top:1px solid #1a1a35">
+      <span style="font-size:7px;letter-spacing:2px;color:#00e5a0;font-weight:900">⚡ LIVE</span>
+      <span id="live-bal-display" style="font-size:14px;font-weight:900;color:#00e5a0">—</span>
     </div>
   </div>
 
@@ -886,7 +896,8 @@ body.dual-active #app{padding-bottom:74px}
       <div style="background:#07070f;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:10px;color:#555;line-height:1.8">
         <div style="color:#f7c948;font-size:8px;letter-spacing:3px;margin-bottom:8px">SETUP (one time)</div>
         1. Go to <span style="color:#7b9fff">Vercel → Project Settings → Environment Variables</span><br>
-        2. Add <span style="color:#00e5a0">KALSHI_KEY_ID</span> = your Key ID (UUID)<br>
+        2. Add <span style="color:#00e5a0">KALSH
+I_KEY_ID</span> = your Key ID (UUID)<br>
         3. Add <span style="color:#00e5a0">KALSHI_PRIVATE_KEY</span> = full PEM key<br>
         4. Redeploy the site<br>
         5. Click Connect below
@@ -902,7 +913,6 @@ body.dual-active #app{padding-bottom:74px}
   <div class="fnote">NOT FINANCIAL ADVICE · SIGNAL UPDATES EVERY 5S · PROBABILISTIC MODEL</div>
 
 </div><!-- /app -->
-
 
 <script>
 // K-PREDICTOR FEATURE CHECKLIST — v5.0 (March 2026)
@@ -5402,29 +5412,25 @@ function renderSimWallet(){
     tradePill.style.borderColor = isLive ? '#00e5a030' : '#f7c94830';
   }
 
-  // Update sim-wallet card — always visible, shows sim OR live state
-  const simBalEl  = document.getElementById('sim-bal');
-  const simPnlEl  = document.getElementById('sim-pnl');
-  const simTitle  = document.getElementById('sim-wallet-title');
-  const walletEl  = document.getElementById('sim-wallet');
+  // ── Sim-wallet card — sim balance is ALWAYS shown independently ──
+  const simBalEl = document.getElementById('sim-bal');
+  const simPnlEl = document.getElementById('sim-pnl');
+  // Sim balance display never changes based on mode — always shows simState.balance
+  if(simBalEl) simBalEl.textContent = '$' + bal.toFixed(2);
+  if(simPnlEl){
+    simPnlEl.textContent = (pnl>=0?'+':'') + '$' + Math.abs(pnl).toFixed(2);
+    simPnlEl.style.color = pnl>=0 ? '#00e5a0' : '#ff4566';
+  }
 
-  // Always show the card
-  if(walletEl) walletEl.classList.add('show');
-
-  if(isLive){
-    // Live mode: show real Kalshi balance in green
-    const liveBal = getEffectiveBalance();
-    if(simBalEl){ simBalEl.textContent = '$' + (liveBal>0 ? liveBal.toFixed(2) : '—'); simBalEl.style.color='#00e5a0'; }
-    if(simPnlEl){ simPnlEl.textContent = 'KALSHI LIVE'; simPnlEl.style.color='#00e5a060'; }
-    if(simTitle){ simTitle.textContent='⚡ LIVE WALLET'; simTitle.style.color='#00e5a0'; }
+  // Live balance row — only shown when Kalshi connected
+  const liveRow = document.getElementById('live-bal-row');
+  const liveDis = document.getElementById('live-bal-display');
+  if(isLive && authConnected){
+    const liveBal = getRiskAccountBalance();
+    if(liveRow) liveRow.style.display = 'flex';
+    if(liveDis) liveDis.textContent = liveBal>0 ? '$'+liveBal.toFixed(2) : '—';
   } else {
-    // Sim mode: show virtual balance in blue/yellow
-    if(simBalEl){ simBalEl.textContent = '$' + bal.toFixed(2); simBalEl.style.color='#7b9fff'; }
-    if(simPnlEl){
-      simPnlEl.textContent = (pnl>=0?'+':'') + '$' + Math.abs(pnl).toFixed(2);
-      simPnlEl.style.color = pnl>=0 ? '#00e5a0' : '#ff4566';
-    }
-    if(simTitle){ simTitle.textContent='🧪 SIM WALLET'; simTitle.style.color='#7b9fff'; }
+    if(liveRow) liveRow.style.display = 'none';
   }
 }
 
@@ -6073,10 +6079,8 @@ async function init(){
   // startChartLoop already called at top of init()
 }
 init();
-
-
-
 </script>
+
 <!-- DUAL TRADE BAR — fixed bottom, shows both BTC+ETH open trades simultaneously -->
 <div id="dual-bar" style="display:none">
   <div class="dual-bar-inner">
