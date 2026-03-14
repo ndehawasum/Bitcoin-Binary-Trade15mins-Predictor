@@ -903,12 +903,6 @@ body.dual-active #app{padding-bottom:74px}
 </div><!-- /app -->
 
 <!-- DUAL TRADE BAR — fixed bottom, shows both BTC+ETH open trades simultaneously -->
-<div id="dual-bar" style="display:none">
-  <div class="dual-bar-inner">
-    <div class="dual-cell" id="dual-btc" onclick="switchAsset('BTC')">
-      <div class="dual-asset">₿ BTC</div>
-      <div class="dual-bet" id="dual-btc-bet
-// ════════════════════════════════════════════════════════════════════════════
 <script>
 // K-PREDICTOR FEATURE CHECKLIST — v5.0 (March 2026)
 // ════════════════════════════════════════════════════════════════════════════
@@ -2040,8 +2034,8 @@ async function priceTick(){
 // ═══════════════════════════════════════════════════
 // KALSHI MARKET API — public endpoints, no auth needed
 // ═══════════════════════════════════════════════════
-const KALSHI_BASE = 'https://api.elections.kalshi.com/trade-api/v2';
-const KALSHI_WS   = 'wss://api.elections.kalshi.com/trade-api/ws/v2';
+const KALSHI_BASE = 'https://trading-api.kalshi.com/trade-api/v2';
+const KALSHI_WS   = 'wss://trading-api.kalshi.com/trade-api/ws/v2';
 const BTC_SERIES  = 'KXBTC15M';
 const ETH_SERIES  = 'KXETH15M';
 function activeSeries(){ return ASSET_CFG[activeAsset].series; }
@@ -5318,7 +5312,6 @@ function showToast(msg, color='#f7c948'){
 // ═══════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════
-async 
 // ════════════════════════════════════════════════════════════════════════════
 // SIM / LIVE MODE FUNCTIONS [PROTECTED]
 // ════════════════════════════════════════════════════════════════════════════
@@ -6053,5 +6046,23 @@ init();
 
 
 </script>
+<!-- DUAL TRADE BAR — fixed bottom, shows both BTC+ETH open trades simultaneously -->
+<div id="dual-bar" style="display:none">
+  <div class="dual-bar-inner">
+    <div class="dual-cell" id="dual-btc" onclick="switchAsset('BTC')">
+      <div class="dual-asset">₿ BTC</div>
+      <div class="dual-bet" id="dual-btc-bet" style="font-weight:900;font-size:11px">—</div>
+      <div class="dual-pnl" id="dual-btc-pnl" style="font-size:10px;color:#555">—</div>
+      <div class="dual-cap" id="dual-btc-cap" style="font-size:7px;color:#333"></div>
+    </div>
+    <div class="dual-cell" id="dual-eth" onclick="switchAsset('ETH')">
+      <div class="dual-asset">Ξ ETH</div>
+      <div class="dual-bet" id="dual-eth-bet" style="font-weight:900;font-size:11px">—</div>
+      <div class="dual-pnl" id="dual-eth-pnl" style="font-size:10px;color:#555">—</div>
+      <div class="dual-cap" id="dual-eth-cap" style="font-size:7px;color:#333"></div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
