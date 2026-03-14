@@ -1305,6 +1305,7 @@ Object.defineProperties(window, {
 let mode='loading';
 let prevSecsLeft=null, blinking=false;
 let amtInput=0;
+let userEditedBet=false; // true when user manually typed in the bet input
 
 // ── Chart animation state ──
 // chartDisplayPrice, chartPriceVel, chartTickVel, chartTickTime, chartLastTickPrice,
@@ -3871,8 +3872,9 @@ function renderTradeSetup(){
         const kelly  = computeKellyBet(Math.max(sm.aboveProb,sm.belowProb), yesP, bal);
         const sized  = Math.max(0.50, Math.round(kelly * 100)/100); // min $0.50, round to cents
         const aiEl   = document.getElementById('ai');
-        // Only update if currently empty/zero — don't override user edits
-        if(aiEl && (!amtInput || amtInput <= 0)){
+        // Auto-fill when: user hasn't manually edited the field
+        // This fires after every trade closes (amtInput reset to 0, userEditedBet cleared)
+        if(aiEl && !userEditedBet){
           aiEl.value = sized.toFixed(2);
           amtInput   = sized;
         }
@@ -4538,6 +4540,8 @@ async function closeTradeWithSell(exitReason='manual_sell'){
   updateRiskOnTradeClosed(exitResult,finalPnL);
   const _closedAsset = activeAsset;
   active=null; peakROI=null; peakCapture=null; trailArmed=false; priceChartDirty=true; projChartDirty=true;
+  userEditedBet = false; // reset so next trade auto-fills bet size
+  amtInput = 0;          // clear stale amount so auto-fill triggers immediately
   persistState();
   showSetup(); renderLog(); renderRiskPanel(); renderTradeSetup(); renderDualBar();
   // If this trade closed on the inactive asset, fire a toast notification
@@ -4999,7 +5003,12 @@ document.getElementById('ki').addEventListener('input',e=>{
   priceChartDirty=true;
   renderTradeSetup(); renderSignalPanel(); renderPrice(); drawPriceChart();
 });
-document.getElementById('ai').addEventListener('input',e=>{amtInput=parseFloat(e.target.value)||0; renderTradeSetup();});
+document.getElementById('ai').addEventListener('input',e=>{
+  amtInput=parseFloat(e.target.value)||0;
+  userEditedBet = true; // user is actively editing — don't auto-fill over this
+  renderTradeSetup();
+});
+document.getElementById('ai').addEventListener('focus',()=>{ userEditedBet = true; });
 document.getElementById('bup').addEventListener('click',()=>placeTrade('UP'));
 document.getElementById('bdn').addEventListener('click',()=>placeTrade('DOWN'));
 
