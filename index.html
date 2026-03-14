@@ -315,7 +315,7 @@ body.dual-active #app{padding-bottom:74px}
       <span class="sim-pnl" id="sim-pnl" style="color:#555">+$0.00</span>
     </div>
     <div class="sim-input-row" id="sim-input-row-el">
-      <input class="sim-input" id="sim-input" type="number" min="1" max="99999" placeholder="Set balance..." />
+      <input class="sim-input" id="sim-input" type="number" min="1" max="99999" placeholder="Set balance..." onkeydown="if(event.key==='Enter')setSimBalance()" />
       <button class="sim-set-btn" onclick="setSimBalance()">SET</button>
     </div>
   </div>
@@ -565,7 +565,8 @@ body.dual-active #app{padding-bottom:74px}
               style="background:none;border:none;outline:none;color:#f7c948;font-family:inherit;font-size:10px;font-weight:900;width:80px"
               placeholder="500.00"
               onchange="updateSimBalance(this.value)"
-              onblur="updateSimBalance(this.value)"/>
+              onblur="updateSimBalance(this.value)"
+              onkeydown="if(event.key==='Enter')updateSimBalance(this.value)"/>
           </div>
           <span id="sim-pnl-trade" style="font-size:9px;font-weight:700;color:#00e5a0;white-space:nowrap">+$0.00</span>
         </div>
@@ -5332,18 +5333,12 @@ function setTradingMode(mode){
     const toggleBtn = document.getElementById('sim-toggle-btn');
     if(toggleBtn){ toggleBtn.textContent='GO LIVE'; toggleBtn.style.background='#7b9fff'; }
     if(farmBar) farmBar.style.display = 'block';
-    // Show sim input row
-    const simInputRow = document.getElementById('sim-input-row-el');
-    if(simInputRow) simInputRow.style.display = 'flex';
   } else {
     if(simBtn)  simBtn.className  = 'mode-btn';
     if(liveBtn) liveBtn.className = 'mode-btn active-live';
     const toggleBtn = document.getElementById('sim-toggle-btn');
     if(toggleBtn){ toggleBtn.textContent='GO SIM'; toggleBtn.style.background='#00e5a0'; }
     if(farmBar) farmBar.style.display = authConnected ? 'block' : 'none';
-    // Hide sim set-balance input in live mode (balance comes from Kalshi)
-    const simInputRow = document.getElementById('sim-input-row-el');
-    if(simInputRow) simInputRow.style.display = 'none';
   }
   renderSimWallet();
   renderFarmBar();
