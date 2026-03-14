@@ -538,6 +538,7 @@ body.dual-active #app{padding-bottom:74px}
           <div style="display:flex;align-items:center;gap:6px">
             <div id="farm-mode-pill" style="font-size:7px;padding:2px 7px;border-radius:20px;font-weight:700;letter-spacing:1px;background:#f7c94815;border:1px solid #f7c94830;color:#f7c948">SIM</div>
             <button id="farm-arm-inline-btn" onclick="toggleFarmBot()" style="padding:5px 12px;border-radius:7px;border:1px solid #a78bfa40;background:#1a0f2a;color:#a78bfa;font-family:inherit;font-size:8px;font-weight:900;letter-spacing:2px;cursor:pointer">ARM</button>
+        <button id="training-mode-btn" onclick="toggleTrainingMode()" style="width:100%;margin-top:6px;padding:7px 0;border-radius:7px;border:1px solid #00e5a040;background:#0a1a0a;color:#00e5a0;font-family:inherit;font-size:8px;font-weight:900;letter-spacing:2px;cursor:pointer">🧠 TRAINING MODE</button>
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px">
@@ -555,6 +556,33 @@ body.dual-active #app{padding-bottom:74px}
           </div>
         </div>
         <div id="farm-inline-reason" style="font-size:8px;color:#333;min-height:12px;text-align:center"></div>
+        <!-- Sim balance editor — only shown in SIM mode -->
+        <div id="sim-edit-row" style="display:flex;align-items:center;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid #1a1025">
+          <span style="font-size:7px;letter-spacing:2px;color:#f7c948;white-space:nowrap">SIM CASH</span>
+          <div style="display:flex;align-items:center;flex:1;background:#07070f;border:1px solid #1a1a35;border-radius:6px;padding:3px 8px">
+            <span style="color:#f7c948;font-size:9px;margin-right:3px">$</span>
+            <input id="sim-bal-input-trade" type="number" min="1" max="999999" step="10"
+              style="background:none;border:none;outline:none;color:#f7c948;font-family:inherit;font-size:10px;font-weight:900;width:80px"
+              placeholder="500.00"
+              onchange="updateSimBalance(this.value)"
+              onblur="updateSimBalance(this.value)"/>
+          </div>
+          <span id="sim-pnl-trade" style="font-size:9px;font-weight:700;color:#00e5a0;white-space:nowrap">+$0.00</span>
+        </div>
+      </div>
+      <!-- Hidden elements for JS compatibility -->
+      <div style="display:none">
+        <span id="farm-arm-btn"></span>
+        <span id="farm-status"></span>
+        <span id="farm-btc-rounds"></span>
+        <span id="farm-eth-rounds"></span>
+        <span id="farm-btc-pnl"></span>
+        <span id="farm-eth-pnl"></span>
+        <span id="fs-target"></span>
+        <span id="fs-stop"></span>
+        <span id="farm-trade-count"></span>
+        <canvas id="arc-cv" width="0" height="0"></canvas>
+        <span id="sell-meter-peak"></span>
       </div>
       <div id="contract-preview">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
@@ -879,24 +907,9 @@ body.dual-active #app{padding-bottom:74px}
   <div class="dual-bar-inner">
     <div class="dual-cell" id="dual-btc" onclick="switchAsset('BTC')">
       <div class="dual-asset">₿ BTC</div>
-      <div class="dual-bet" id="dual-btc-bet">—</div>
-      <div class="dual-pnl" id="dual-btc-pnl">—</div>
-      <div class="dual-cap" id="dual-btc-cap"></div>
-    </div>
-    <div class="dual-divider"></div>
-    <div class="dual-cell" id="dual-eth" onclick="switchAsset('ETH')">
-      <div class="dual-asset">Ξ ETH</div>
-      <div class="dual-bet" id="dual-eth-bet">—</div>
-      <div class="dual-pnl" id="dual-eth-pnl">—</div>
-      <div class="dual-cap" id="dual-eth-cap"></div>
-    </div>
-  </div>
-</div>
-
-<div id="toast"></div>
-
-<script>
+      <div class="dual-bet" id="dual-btc-bet
 // ════════════════════════════════════════════════════════════════════════════
+<script>
 // K-PREDICTOR FEATURE CHECKLIST — v5.0 (March 2026)
 // ════════════════════════════════════════════════════════════════════════════
 // INSTRUCTIONS FOR CLAUDE:
@@ -1127,7 +1140,20 @@ window.farmState = {
   trades: [],               // all farm trade records
   sessionPnL: 0,            // cumulative farm P&L this session
   windowId: 0,              // tracks 15m window to reset rounds
+  trainingMode: false,      // TRAINING MODE: max trades, fast exits, small bets
 };
+
+// ── Training mode constants ──────────────────────────────────────────────────
+const TRAIN_MAX_ROUNDS       = 99;    // effectively unlimited rounds per window
+const TRAIN_REENTRY_WAIT_MS  = 5000; // 5s between farm entries (down from 30s)
+const TRAIN_MIN_TIME_LEFT    = 60;   // enter until <60s left (down from 240s)
+const TRAIN_TARGET_PCT       = 0.06; // 6% target — exit fast, collect data
+const TRAIN_STOP_PCT         = 0.04; // 4% stop — tight, don't let losses run
+const TRAIN_BET_FIXED        = 1.00; // $1 flat per trade in training mode
+const TRAIN_HOLD_YES_HIGH    = 0.85; // wider zone than normal farming
+const TRAIN_HOLD_YES_LOW     = 0.10; // wider zone than normal farming
+const TRAIN_COUNTDOWN_SECS   = 1;   // auto-buy fires after 1s (down from 3s)
+const TRAIN_COOLDOWN_MS      = 10000;// 10s auto-buy cooldown (down from 60s)
 
 // ── SIM WALLET STATE ─────────────────────────────────────────────────────────
 window.simWallet = {
@@ -1138,24 +1164,10 @@ window.simWallet = {
 };
 
 // ── FARM BOT STATE ───────────────────────────────────────────────────────────
-window.farmBot = {
-  armed: false,
-  // per-asset active farm trade
-  activeFarm: { BTC: null, ETH: null },
-  // per-asset round counters (reset each window)
-  rounds: { BTC: 0, ETH: 0 },
-  // per-asset session P&L
-  assetPnL: { BTC: 0, ETH: 0 },
-  // cooldown: don't re-enter immediately after exit
-  cooldown: { BTC: 0, ETH: 0 },
-  MAX_ROUNDS: 3,
-  RE_ENTRY_WAIT_MS: 30000,  // 30s between farm entries per asset
-  HOLD_YES_THRESH: 0.65,    // above this YES price → hold to expiry
-  HOLD_TIME_SECS: 240,      // <4min left → hold to expiry
-};
+// farmBot merged into farmState (single source of truth)
 
 
-'use strict';
+
 // ═══════════════════════════════════════════════════
 // ASSET MANAGEMENT — BTC / ETH
 // ═══════════════════════════════════════════════════
@@ -1458,11 +1470,15 @@ function nnFwd(inp){
 function nnTrain(inp,lbl,lr=.06){
   if(!nnW||!inp||inp.length!==9)return;
   if(!nnW.w1||nnW.w1.length!==8||nnW.w1[0].length!==9||nnW.w1[0][0]===null){nnW=nnRand();}
-  if(inp.some(v=>!isFinite(v)||isNaN(v)))return; // skip corrupt samples
+  if(inp.some(v=>!isFinite(v)||isNaN(v)))return;
   const h=nnW.w1.map((row,i)=>sig(row.reduce((s,w,j)=>s+(w||0)*inp[j],0)+(nnW.b1[i]||0)));
   const out=sig(nnW.w2[0].reduce((s,w,i)=>s+(w||0)*h[i],0)+(nnW.b2[0]||0));
   if(isNaN(out))return;
-  const dO=(out-lbl)*out*(1-out);
+  // FIX #3: Weighted loss — penalise DOWN misses 2× harder to combat UP bias
+  // When actual=DOWN(0) and we predicted UP (out>0.5), loss weight = 2.0
+  // This forces the NN to care about DOWN patterns instead of ignoring them
+  const classWeight = (lbl===0 && out>0.5) ? 2.0 : 1.0;
+  const dO=(out-lbl)*out*(1-out)*classWeight;
   nnW.w2[0]=nnW.w2[0].map((w,i)=>(w||0)-lr*dO*h[i]); nnW.b2[0]=(nnW.b2[0]||0)-lr*dO;
   const dH=h.map((hi,i)=>dO*(nnW.w2[0][i]||0)*hi*(1-hi));
   nnW.w1=nnW.w1.map((row,i)=>row.map((w,j)=>(w||0)-lr*dH[i]*inp[j]));
@@ -1790,11 +1806,32 @@ setInterval(()=>{ AST[activeAsset].advisoryDismissed=false; evalAdvisory(); }, 6
 function recordTrade(t){
   const f=buildFeatures(t.ep||prices,t.bet,parseFloat(t.strike));
   if(!f)return;
-  nnData.push({f,l:t.result==='WIN'?1:0});
-  if(nnData.length>300)nnData=nnData.slice(-300);
-  const recent=nnData.slice(-40);
-  for(let e=0;e<10;e++)recent.forEach(d=>nnTrain(d.f,d.l));
-  persistState(); // auto-save to IndexedDB after every trade
+  const label = t.result==='WIN'?1:0;
+  nnData.push({f,l:label});
+
+  // FIX #2: Balance buffer — keep max 150 of each class (UP/DOWN)
+  // This prevents the NN from being overwhelmed by whichever outcome dominates
+  const MAX_PER_CLASS = 150;
+  const ups   = nnData.filter(d=>d.l===1);
+  const downs = nnData.filter(d=>d.l===0);
+  if(ups.length > MAX_PER_CLASS)   { const over=ups.length-MAX_PER_CLASS;   nnData=nnData.filter(d=>d.l!==1).concat(ups.slice(over)); }
+  if(downs.length > MAX_PER_CLASS) { const over=downs.length-MAX_PER_CLASS; nnData=nnData.filter(d=>d.l!==0).concat(downs.slice(over)); }
+
+  // FIX #2b: Oversample minority class during training so each epoch sees 50/50
+  const minority = ups.length <= downs.length ? ups : downs;
+  const majority = ups.length > downs.length  ? ups : downs;
+  const ratio = majority.length > 0 ? Math.ceil(majority.length / Math.max(1, minority.length)) : 1;
+  const balanced = [...majority];
+  for(let r=0;r<ratio-1;r++) balanced.push(...minority); // repeat minority to match majority
+  balanced.sort(()=>Math.random()-0.5); // shuffle
+
+  // Train on balanced set
+  const recent = balanced.slice(-60);
+  for(let e=0;e<12;e++) recent.forEach(d=>nnTrain(d.f,d.l));
+
+  // Log balance for brain tab
+  console.log('[NN] buffer UP:'+ups.length+' DN:'+downs.length+' ratio='+(ups.length/Math.max(1,downs.length)).toFixed(2));
+  persistState();
 }
 
 // ═══════════════════════════════════════════════════
@@ -3174,7 +3211,7 @@ function renderSignalPanel(){
   vrd.style.border=`1px solid ${mainCol}40`;
   document.getElementById('vrd-main').textContent=willAbove?'ABOVE STRIKE':'BELOW STRIKE';
   document.getElementById('vrd-main').style.color=mainCol;
-  document.getElementById('vrd-strike').textContent=`BTC projected to finish ${willAbove?'ABOVE':'BELOW'} ${fmtK(strikeInput)} at expiry`;
+  document.getElementById('vrd-strike').textContent=`${activeAsset} projected to finish ${willAbove?'ABOVE':'BELOW'} ${fmtK(strikeInput)} at expiry`;
   const conf=Math.max(sm.aboveProb,sm.belowProb);
   const confLabel=conf>=75?'HIGH CONFIDENCE':conf>=62?'MODERATE CONFIDENCE':'LOW CONFIDENCE';
   document.getElementById('vrd-conf').textContent=`${confLabel} · ${conf}%`; document.getElementById('vrd-conf').style.color=mainCol;
@@ -4609,27 +4646,28 @@ function computeRegimeFilter(sm, clock){
       gates.push({ code:'SPREAD', msg:`spread $${spread.toFixed(2)} too wide`, block:true });
   }
 
-  // Gate 2: YES price in dead zone ($0.44–$0.56) — market genuinely uncertain, no fill edge
+  // Gate 2: YES price in dead zone — skip in training mode (we need DOWN data)
   const yesP = kalshiYESPrice;
-  if(yesP !== null && yesP >= 0.44 && yesP <= 0.56)
+  if(!farmState.trainingMode && yesP !== null && yesP >= 0.44 && yesP <= 0.56)
     gates.push({ code:'DEADZONE', msg:`YES $${yesP.toFixed(2)} in 44–56¢ dead zone`, block:true });
 
-  // Gate 3: Too early in window — not enough price history for reliable signal
+  // Gate 3-5 are relaxed in training mode — we want trades in all conditions
+  const training = farmState.trainingMode;
   if(clock){
-    const elapsed = 900 - clock.secsLeft; // seconds into current window
-    if(elapsed < 120)
+    const elapsed = 900 - clock.secsLeft;
+    if(!training && elapsed < 120)
       gates.push({ code:'EARLY', msg:`only ${elapsed}s into window (need 2min)`, block:true });
-
-    // Gate 4: Too late in window — not enough time remaining to capture profit
-    if(clock.secsLeft < 180)
+    // Late gate stays even in training — no point entering with <60s left
+    const lateThresh = training ? 60 : 180;
+    if(clock.secsLeft < lateThresh)
       gates.push({ code:'LATE', msg:`${clock.secsLeft}s remaining — too late`, block:true });
   }
 
-  // Gate 5: Price velocity near zero (consolidation) — breakout direction unknowable
-  if(sm){
+  // Gate 5: Flatline — skip in training mode (we want all market conditions)
+  if(sm && !training){
     const absVel = Math.abs(sm.velPerSec || 0);
     const cfg = ASSET_CFG[activeAsset];
-    const velFloor = cfg.priceMin * 0.000005; // ~$0.42/s for BTC, ~$0.01/s for ETH
+    const velFloor = cfg.priceMin * 0.000005;
     if(absVel < velFloor && clock && (900 - clock.secsLeft) > 180)
       gates.push({ code:'FLATLINE', msg:'price velocity near zero — no momentum', block:true });
   }
@@ -4710,8 +4748,10 @@ function renderAutoBuyBtn(){
     btn.style.cssText = 'width:100%;margin-top:7px;padding:7px;border-radius:9px;font-family:inherit;font-size:8px;letter-spacing:1px;font-weight:700;cursor:pointer;background:#00e5a020;border:1px solid #00e5a060;color:#00e5a0';
   } else {
     const regime = ab.lastRegime;
-    const reason = regime?.blocked ? regime.blockReason : (e.reason || 'no edge');
-    btn.textContent = `🎯 ARMED · waiting — ${reason}`;
+    let reason = regime?.blocked ? regime.blockReason : (e.reason || 'no edge');
+    // Make edge message more readable: "edge -1.0% < 6% min" → "model edge -1.0% · need +6%"
+    reason = reason.replace(/edge ([-\d.]+)% < ([\d.]+)% min/, 'model edge $1% · need +$2%');
+    btn.textContent = `🎯 ARMED · ${reason}`;
     btn.style.cssText = 'width:100%;margin-top:7px;padding:7px;border-radius:9px;font-family:inherit;font-size:8px;letter-spacing:1px;font-weight:700;cursor:pointer;background:#f7c94810;border:1px solid #f7c94830;color:#f7c94880';
   }
 }
@@ -4748,12 +4788,17 @@ function checkAutoBuy(){
 
   const bestBet = edge.bestBet;
 
-  // Start 3-second countdown on first qualifying tick
+  // Training mode: 1s countdown, 10s cooldown — collect data fast
+  const trainMode = farmState.trainingMode;
+  const countdownSecs = trainMode ? TRAIN_COUNTDOWN_SECS : 3;
+  const cooldownMs    = trainMode ? TRAIN_COOLDOWN_MS    : 60000;
+
+  // Start countdown on first qualifying tick
   if(ab.countdown === 0){
-    ab.countdown = 3; ab.countdownBet = bestBet;
+    ab.countdown = countdownSecs; ab.countdownBet = bestBet;
     renderAutoBuyBtn();
-    showToast(
-      `⚡ Auto-buy ${bestBet} in 3s — edge ${(edge.rawEdge*100).toFixed(1)}% · EV ${edge.ev.toFixed(2)}`,
+    if(!trainMode) showToast(
+      `⚡ Auto-buy ${bestBet} in ${countdownSecs}s — edge ${(edge.rawEdge*100).toFixed(1)}% · EV ${edge.ev.toFixed(2)}`,
       '#f7c948'
     );
     return;
@@ -4769,7 +4814,7 @@ function checkAutoBuy(){
 
   if(ab.countdown === 0){
     // ── FIRE ──
-    ab.cooldownUntil = Date.now() + 60000; // loosened: 60s auto-buy cooldown (was 90s)
+    ab.cooldownUntil = Date.now() + cooldownMs;
     ab.countdownBet  = null;
     placeTrade(bestBet, 'auto_buy');
     showToast(
@@ -5172,21 +5217,41 @@ function hideKeyModal(){ document.getElementById('key-modal').style.display='non
 
 // Auto-connect silently on page load — no button needed
 async function autoConnectKey(){
-  try{
+  // Attempt 1 — fires at init time
+  const _attempt = async () => {
     const res = await testConnection();
     authConnected = true;
+    setTradingMode('live');                              // auto-switch — no manual step needed
     document.getElementById('auth-gate').style.display='none';
     document.getElementById('portfolio-content').style.display='block';
     document.getElementById('ptab').textContent='💼 PORT';
-    renderBalance(res); // pass full response — renderBalance handles all shapes
+    renderBalance(res);
     refreshPortfolio();
     if(authRefreshTimer) clearInterval(authRefreshTimer);
     authRefreshTimer = setInterval(refreshPortfolio, 30000);
-    setKalshiStatus('live','KALSHI AUTH');
-    showToast('✅ Kalshi connected','#00e5a0');
-  }catch(e){
-    console.warn('Auto-connect failed:', e.message);
-    showToast('⚠ Auth: '+e.message, '#f7c948');
+    setKalshiStatus('live','KALSHI LIVE');
+    showToast('✅ Kalshi connected — LIVE mode active','#00e5a0');
+  };
+
+  try {
+    await _attempt();
+  } catch(e) {
+    // First attempt failed — could be cold-start latency on Vercel serverless
+    // Wait 5s and retry once silently before giving up
+    console.warn('[autoConnect] attempt 1 failed:', e.message, '— retrying in 5s');
+    setTimeout(async () => {
+      try {
+        await _attempt();
+      } catch(e2) {
+        // Both failed — stay in sim mode, show subtle warning (not a blocking error)
+        console.warn('[autoConnect] attempt 2 failed:', e2.message);
+        setKalshiStatus('partial', 'KALSHI REST');
+        // Only show toast if not a missing-env-vars situation (that's expected in dev)
+        if(!e2.message.includes('Missing env') && !e2.message.includes('500')) {
+          showToast('⚠ Kalshi not connected — running in SIM mode', '#f7c948');
+        }
+      }
+    }, 5000);
   }
 }
 
@@ -5295,20 +5360,48 @@ function updateSimBalance(val){
 function renderSimWallet(){
   const chip = document.getElementById('sim-pnl-chip');
   const inp  = document.getElementById('sim-bal-input');
+  const pnl  = simState.pnl;
+  const bal  = simState.balance;
+  const isLive = simState.mode === 'live';
+
   if(chip){
-    const pnl = simState.pnl;
     chip.textContent      = (pnl>=0?'+':'') + '$' + Math.abs(pnl).toFixed(2);
     chip.style.background = pnl>=0?'#00e5a015':'#ff456615';
     chip.style.color      = pnl>=0?'#00e5a0':'#ff4566';
     chip.style.border     = '1px solid '+(pnl>=0?'#00e5a030':'#ff456630');
   }
-  if(inp) inp.value = simState.balance.toFixed(2);
-  // Update trade tab balance display
+  if(inp) inp.value = bal.toFixed(2);
+
+  // Trade tab sim editor (always keep input synced)
+  const tradeInp = document.getElementById('sim-bal-input-trade');
+  const tradePnl = document.getElementById('sim-pnl-trade');
+  const simEditRow = document.getElementById('sim-edit-row');
+
+  if(tradeInp) tradeInp.value = bal.toFixed(2);
+  if(tradePnl){
+    tradePnl.textContent = (pnl>=0?'+':'') + '$' + Math.abs(pnl).toFixed(2);
+    tradePnl.style.color = pnl>=0?'#00e5a0':'#ff4566';
+  }
+  // Show sim editor only in SIM mode
+  if(simEditRow) simEditRow.style.display = isLive ? 'none' : 'flex';
+
+  // Trade tab mode pill + balance
   const tradeBal = document.getElementById('trade-balance-display');
+  const tradePill = document.getElementById('trade-mode-label');
   if(tradeBal){
-    const bal = getEffectiveBalance();
-    const pnl = simState.pnl;
-    tradeBal.textContent = bal>0 ? '$'+bal.toFixed(2) + (pnl!==0?' ('+(pnl>=0?'+':'')+'$'+Math.abs(pnl).toFixed(2)+')':'') : '';
+    const liveBal = getEffectiveBalance();
+    if(isLive){
+      tradeBal.textContent = liveBal>0 ? '$'+liveBal.toFixed(2) : '';
+    } else {
+      tradeBal.textContent = '$'+bal.toFixed(2) + (pnl!==0?' ('+(pnl>=0?'+':'')+'$'+Math.abs(pnl).toFixed(2)+')':'');
+    }
+    tradeBal.style.color = isLive ? '#00e5a0' : '#f7c948';
+  }
+  if(tradePill){
+    tradePill.textContent = isLive ? 'LIVE' : 'SIM';
+    tradePill.style.color = isLive ? '#00e5a0' : '#f7c948';
+    tradePill.style.background = isLive ? '#00e5a015' : '#f7c94815';
+    tradePill.style.borderColor = isLive ? '#00e5a030' : '#f7c94830';
   }
 }
 
@@ -5340,7 +5433,30 @@ function computeFarmDecision(){
   const yesP   = kalshiYESPrice;
   const vol    = getVolatilityRating();
   const liq    = getLiquidityRating();
+  const secsLeft = clock.secsLeft;
+  const training = farmState.trainingMode;
 
+  // ── TRAINING MODE: relaxed rules, fixed small bet, fast in/out ──
+  if(training){
+    if(yesP===null) return {shouldFarm:false,reason:'No YES price',targetPct:TRAIN_TARGET_PCT,stopPct:TRAIN_STOP_PCT,betSize:0,training:true};
+    if(secsLeft < TRAIN_MIN_TIME_LEFT) return {shouldFarm:false,reason:'<'+TRAIN_MIN_TIME_LEFT+'s left',targetPct:TRAIN_TARGET_PCT,stopPct:TRAIN_STOP_PCT,betSize:0,training:true};
+    if(yesP >= TRAIN_HOLD_YES_HIGH) return {shouldFarm:false,reason:'YES >='+Math.round(TRAIN_HOLD_YES_HIGH*100)+'c',targetPct:TRAIN_TARGET_PCT,stopPct:TRAIN_STOP_PCT,betSize:0,training:true};
+    if(yesP <= TRAIN_HOLD_YES_LOW)  return {shouldFarm:false,reason:'YES <='+Math.round(TRAIN_HOLD_YES_LOW*100)+'c',targetPct:TRAIN_TARGET_PCT,stopPct:TRAIN_STOP_PCT,betSize:0,training:true};
+    const rounds = activeAsset==='BTC'?farmState.roundsBTC:farmState.roundsETH;
+    const lastExit = activeAsset==='BTC'?farmState.lastExitTimeBTC:farmState.lastExitTimeETH;
+    const coolLeft = Math.max(0, TRAIN_REENTRY_WAIT_MS-(Date.now()-lastExit));
+    if(coolLeft>0 && lastExit>0) return {shouldFarm:false,reason:'wait '+Math.ceil(coolLeft/1000)+'s',targetPct:TRAIN_TARGET_PCT,stopPct:TRAIN_STOP_PCT,betSize:0,training:true};
+    return {
+      shouldFarm:true,
+      reason:'🧠 TRAINING · +'+Math.round(TRAIN_TARGET_PCT*100)+'% target · $'+TRAIN_BET_FIXED+' flat',
+      targetPct:TRAIN_TARGET_PCT,
+      stopPct:TRAIN_STOP_PCT,
+      betSize:TRAIN_BET_FIXED,
+      training:true,
+    };
+  }
+
+  // ── NORMAL FARM MODE ────────────────────────────────────────────
   const spreadOk = (()=>{
     if(!kalshiMarket) return false;
     const bid = parseFloat(kalshiMarket.yes_bid_dollars)||0;
@@ -5352,23 +5468,15 @@ function computeFarmDecision(){
   const targetPct = vol==='CALM'?FARM_TARGET_CALM:vol==='CHOPPY'?FARM_TARGET_CHOPPY:FARM_TARGET_NORMAL;
   const stopPct   = vol==='CALM'?FARM_STOP_CALM:vol==='CHOPPY'?FARM_STOP_CHOPPY:FARM_STOP_NORMAL;
   let effectiveTarget = targetPct;
-  const secsLeft = clock.secsLeft;
 
   if(secsLeft < FARM_MIN_TIME_LEFT)
     return {shouldFarm:false,reason:'<4 min left — hold to expiry',targetPct,stopPct,betSize:0};
-
   if(secsLeft < 480) effectiveTarget *= 0.75;
-
-  if(yesP===null)
-    return {shouldFarm:false,reason:'No YES price data',targetPct,stopPct,betSize:0};
-  if(yesP >= FARM_HOLD_YES_HIGH)
-    return {shouldFarm:false,reason:'YES '+Math.round(yesP*100)+'c >=65c — hold to expiry',targetPct,stopPct,betSize:0};
-  if(yesP <= FARM_HOLD_YES_LOW)
-    return {shouldFarm:false,reason:'YES '+Math.round(yesP*100)+'c <=20c — too risky',targetPct,stopPct,betSize:0};
-  if(liq==='LOW')
-    return {shouldFarm:false,reason:'Low liquidity — spread too wide',targetPct,stopPct,betSize:0};
-  if(!spreadOk)
-    return {shouldFarm:false,reason:'Spread >'+Math.round(FARM_MAX_SPREAD_PCT*100)+'% of YES price',targetPct,stopPct,betSize:0};
+  if(yesP===null) return {shouldFarm:false,reason:'No YES price data',targetPct,stopPct,betSize:0};
+  if(yesP >= FARM_HOLD_YES_HIGH) return {shouldFarm:false,reason:'YES '+Math.round(yesP*100)+'c >=65c — hold to expiry',targetPct,stopPct,betSize:0};
+  if(yesP <= FARM_HOLD_YES_LOW)  return {shouldFarm:false,reason:'YES '+Math.round(yesP*100)+'c <=20c — too risky',targetPct,stopPct,betSize:0};
+  if(liq==='LOW') return {shouldFarm:false,reason:'Low liquidity — spread too wide',targetPct,stopPct,betSize:0};
+  if(!spreadOk)   return {shouldFarm:false,reason:'Spread >'+Math.round(FARM_MAX_SPREAD_PCT*100)+'% of YES price',targetPct,stopPct,betSize:0};
 
   const rounds = activeAsset==='BTC'?farmState.roundsBTC:farmState.roundsETH;
   if(rounds >= FARM_MAX_ROUNDS)
@@ -5391,28 +5499,12 @@ function computeFarmDecision(){
   return {
     shouldFarm:true,
     reason:vol+' vol · target +'+Math.round(effectiveTarget*100)+'% · stop -'+Math.round(stopPct*100)+'%',
-    targetPct:effectiveTarget,
-    stopPct,
-    betSize,
-    rawTargetPct:targetPct,
+    targetPct:effectiveTarget, stopPct, betSize,
   };
 }
 
 function toggleFarmArm(){
-  farmState.armed = !farmState.armed;
-  const btn = document.getElementById('farm-arm-btn');
-  if(farmState.armed){
-    btn.textContent = '🟢 FARM BOT ARMED — TAP TO DISARM';
-    btn.classList.add('armed');
-    farmState.roundsBTC=0; farmState.roundsETH=0;
-    farmState.lastExitTimeBTC=0; farmState.lastExitTimeETH=0;
-    showToast('🌾 Farm bot armed — hunting entries','#a78bfa');
-  } else {
-    btn.textContent = 'ARM FARM BOT';
-    btn.classList.remove('armed');
-    showToast('Farm bot disarmed','#555');
-  }
-  renderFarmBar();
+  toggleFarmBot(); // unified — delegates to toggleFarmBot
 }
 
 function checkFarmBot(){
@@ -5427,8 +5519,12 @@ function checkFarmBot(){
   if(decision.betSize > bal*0.5) return;
 
   const sm = computeStrikeModel(prices, strikeInput);
-  if(!sm||sm.conf<55) return;
-  if(Math.abs(sm.prob-50)<5) return;
+  const training = farmState.trainingMode;
+  // Training mode: lower confidence threshold, any signal direction is fine
+  const minConf = training ? 50 : 55;
+  const minEdge = training ? 2  : 5;   // % from 50/50
+  if(!sm || sm.conf < minConf) return;
+  if(!training && Math.abs(sm.prob-50) < minEdge) return;
 
   const bet = sm.prob>50?'UP':'DOWN';
 
@@ -5439,7 +5535,11 @@ function checkFarmBot(){
   if(activeAsset==='BTC') farmState.roundsBTC++;
   else farmState.roundsETH++;
 
-  showToast('🌾 Farm '+bet+' · YES '+Math.round(kalshiYESPrice*100)+'c · target +'+Math.round(decision.targetPct*100)+'%','#a78bfa');
+  if(training){
+    showToast('🧠 '+bet+' · $'+decision.betSize.toFixed(2)+' · NN sample '+(nnData.length+1),'#00e5a0');
+  } else {
+    showToast('🌾 Farm '+bet+' · YES '+Math.round(kalshiYESPrice*100)+'c · target +'+Math.round(decision.targetPct*100)+'%','#a78bfa');
+  }
 }
 
 function checkFarmExit(){
@@ -5452,8 +5552,18 @@ function checkFarmExit(){
 
   const pctChange = (currentP-entryE)/entryE;
   const decision  = computeFarmDecision();
-  const target    = decision.targetPct;
-  const stop      = -decision.stopPct;
+  // Training mode: tighter targets so we cycle faster
+  const target = decision.targetPct;
+  const stop   = -decision.stopPct;
+  // Training mode: also exit if we've been in this trade >90s to free up for next sample
+  const training = farmState.trainingMode;
+  const tradeAge = Date.now() - (active.id||0);
+  if(training && tradeAge > 90000 && !riskState.tpTriggered && !riskState.slTriggered){
+    riskState.tpTriggered=true;
+    showToast('🧠 Training exit — 90s max · collecting sample','#00e5a0');
+    setTimeout(()=>{ closeTradeWithSell('farm_profit').catch(e=>console.error('[trainExit]',e)); },200);
+    return;
+  }
 
   if(riskState.tpTriggered||riskState.slTriggered) return;
 
@@ -5468,12 +5578,41 @@ function checkFarmExit(){
   }
 }
 
+// ── toggleTrainingMode — fast data collection mode ──────────────────────────
+function toggleTrainingMode(){
+  farmState.trainingMode = !farmState.trainingMode;
+  const isTraining = farmState.trainingMode;
+  const btn = document.getElementById('training-mode-btn');
+  if(btn){
+    btn.textContent = isTraining ? '🧠 TRAINING ON — tap to stop' : '🧠 TRAINING MODE';
+    btn.style.background = isTraining ? '#2a0f0f' : '#0f1a0f';
+    btn.style.borderColor = isTraining ? '#ff456660' : '#00e5a040';
+    btn.style.color = isTraining ? '#ff4566' : '#00e5a0';
+  }
+  if(isTraining){
+    // Auto-arm the farm bot when entering training mode
+    if(!farmState.armed){ farmState.armed=true; }
+    showToast('🧠 TRAINING MODE ON — small $1 bets, fast exits, collecting NN data','#00e5a0');
+  } else {
+    showToast('Training mode off — normal farm rules restored','#555');
+  }
+  renderFarmBar();
+}
+
 // ── toggleFarmBot — called by ARM FARM BOT button in trade tab ──────────────
 function toggleFarmBot(){
   farmState.armed = !farmState.armed;
   // Keep legacy farm-arm-btn in sync if it exists
   const btn = document.getElementById('farm-arm-btn');
   if(btn){ btn.textContent = farmState.armed ? '🌾 DISARM FARM BOT' : '🌾 ARM FARM BOT'; }
+  // Also sync the visible inline button in trade tab
+  const inlineBtn2 = document.getElementById('farm-arm-inline-btn');
+  if(inlineBtn2){
+    inlineBtn2.textContent = farmState.armed ? 'DISARM' : 'ARM';
+    inlineBtn2.style.background = farmState.armed ? '#2a0f0f' : '#1a0f2a';
+    inlineBtn2.style.borderColor = farmState.armed ? '#ff456640' : '#a78bfa40';
+    inlineBtn2.style.color = farmState.armed ? '#ff4566' : '#a78bfa';
+  }
   if(farmState.armed){
     const mode = simState.mode==='live' ? 'LIVE orders' : 'SIM paper trades';
     showToast('🌾 Farm bot ARMED · '+mode+' · volatility-scaled exits','#a78bfa');
@@ -5579,6 +5718,20 @@ function renderFarmBar(decision){
     inlineBtn.style.background = farmState.armed ? '#2a0f0f' : '#1a0f2a';
     inlineBtn.style.borderColor = farmState.armed ? '#ff456640' : '#a78bfa40';
     inlineBtn.style.color = farmState.armed ? '#ff4566' : '#a78bfa';
+  }
+  // Training mode button state
+  const trainBtn = document.getElementById('training-mode-btn');
+  if(trainBtn){
+    const isTraining = farmState.trainingMode;
+    const nnCount = nnData ? nnData.length : 0;
+    const upCount = nnData ? nnData.filter(d=>d.l===1).length : 0;
+    const dnCount = nnData ? nnData.filter(d=>d.l===0).length : 0;
+    trainBtn.textContent = isTraining
+      ? `🧠 TRAINING ON — ${nnCount} samples (↑${upCount}/↓${dnCount}) · tap to stop`
+      : `🧠 TRAINING MODE — ${nnCount} samples (↑${upCount}/↓${dnCount})`;
+    trainBtn.style.background = isTraining ? '#2a0f0f' : '#0a1a0a';
+    trainBtn.style.borderColor = isTraining ? '#ff456660' : '#00e5a040';
+    trainBtn.style.color = isTraining ? '#ff4566' : '#00e5a0';
   }
 
   // Status text
@@ -5710,11 +5863,6 @@ function renderDualActivePositions(){
 // SIM WALLET ENGINE  [PROTECTED]
 // ════════════════════════════════════════════════════════════════════════════
 
-function getEffectiveBalance(){
-  if(simWallet.enabled) return simWallet.balance;
-  const b = riskState.accountBalance || 0;
-  return b > 0 ? b : simWallet.balance;
-}
 
 function simDebit(amount){
   if(!simWallet.enabled) return;
@@ -5742,204 +5890,32 @@ function setSimBalance(){
   showToast('💰 Sim balance set to $'+val.toFixed(2),'#7b9fff');
 }
 
-function toggleSimMode(){
-  simWallet.enabled = !simWallet.enabled;
-  renderSimWallet();
-  const mod = simWallet.enabled ? 'SIM' : 'LIVE';
-  const col = simWallet.enabled ? '#7b9fff' : '#00e5a0';
-  showToast('Switched to '+mod+' mode', col);
-  renderFarmPanel();
-}
 
-function renderSimWallet(){
-  const sw  = document.getElementById('sim-wallet');
-  const bal = document.getElementById('sim-bal');
-  const pnl = document.getElementById('sim-pnl');
-  const btn = document.getElementById('sim-toggle-btn');
-  const farmBtn = document.getElementById('farm-mode-btn');
-  const farmVal = document.getElementById('farm-mode-val');
-  if(!sw) return;
-  sw.classList.toggle('show', simWallet.enabled);
-  if(bal) bal.textContent = '$'+simWallet.balance.toFixed(2);
-  const p = simWallet.totalPnL;
-  if(pnl){
-    pnl.textContent = (p>=0?'+':'')+' $'+Math.abs(p).toFixed(2);
-    pnl.style.color = p>=0?'#00e5a0':'#ff4566';
-  }
-  if(btn) btn.textContent = simWallet.enabled ? 'GO LIVE' : 'GO SIM';
-  if(farmVal){ farmVal.textContent = simWallet.enabled ? '🧪 SIM — Paper Trading' : '🟢 LIVE — Real Money'; farmVal.style.color = simWallet.enabled?'#7b9fff':'#00e5a0'; }
-  if(farmBtn) farmBtn.textContent = simWallet.enabled ? 'GO LIVE' : 'GO SIM';
-}
 
 // ════════════════════════════════════════════════════════════════════════════
 // FARM BOT ENGINE  [PROTECTED]
 // ════════════════════════════════════════════════════════════════════════════
 
-function toggleFarmBot(){
-  farmBot.armed = !farmBot.armed;
-  if(farmBot.armed){
-    farmBot.rounds.BTC = 0; farmBot.rounds.ETH = 0;
-    farmState.windowId = getCurrentWindowId();
-    showToast('🌾 Farm bot ARMED — watching BTC + ETH','#f7c948');
-  } else {
-    showToast('Farm bot disarmed','#555');
-    for(const asset of ['BTC','ETH']){
-      if(farmBot.activeFarm[asset]) closeFarmTrade(asset,'disarmed',true);
-    }
-  }
-  renderFarmPanel();
-}
+// (old farmBot system removed — unified into farmState)
 
-function getCurrentWindowId(){ return Math.floor(Date.now()/(15*60*1000)); }
-
-function getVolatilityRatingForAsset(asset){
-  const st=AST[asset]; const buf=st.tickBuffer||[];
-  if(buf.length<5) return 'NORMAL';
-  const prices=buf.slice(-10).map(t=>t.p);
-  const avg=prices.reduce((a,b)=>a+b,0)/prices.length;
-  const variance=prices.reduce((s,p)=>s+(p-avg)**2,0)/prices.length;
-  const stdDev=Math.sqrt(variance);
-  const pct=avg>0?stdDev/avg:0;
-  if(pct<0.00003) return 'CALM';
-  if(pct<0.00008) return 'NORMAL';
-  return 'CHOPPY';
-}
-
-function computeFarmTargets(asset){
-  const volRating=getVolatilityRatingForAsset(asset);
-  const clock=getClock(); const secsLeft=clock.secsLeft;
-  const base={CALM:{target:0.12,stop:0.06},NORMAL:{target:0.18,stop:0.09},CHOPPY:{target:0.25,stop:0.12}}[volRating]||{target:0.18,stop:0.09};
-  const st=AST[asset]; const yesPrice=st.kalshiYESPrice||0.5;
-  const timeMult=secsLeft<300?0.7:secsLeft<480?0.85:1.0;
-  const distFrom50=Math.abs(yesPrice-0.5);
-  const yesMult=distFrom50>0.2?0.8:1.0;
-  return { targetPct:base.target*timeMult*yesMult, stopPct:base.stop, mode:volRating,
-           reason:`${volRating} vol · ${secsLeft}s left · YES ${(yesPrice*100).toFixed(0)}¢` };
-}
-
-function farmDecision(asset){
-  const st=AST[asset]; const clock=getClock();
-  const yesPrice=st.kalshiYESPrice||0.5; const secsLeft=clock.secsLeft;
-  if(secsLeft < farmBot.HOLD_TIME_SECS) return {action:'hold',reason:`<${farmBot.HOLD_TIME_SECS}s — hold to expiry`};
-  if(yesPrice > farmBot.HOLD_YES_THRESH) return {action:'hold',reason:`YES ${(yesPrice*100).toFixed(0)}¢ > ${(farmBot.HOLD_YES_THRESH*100).toFixed(0)}¢ — hold`};
-  if(yesPrice < 0.15) return {action:'hold',reason:`YES ${(yesPrice*100).toFixed(0)}¢ too low`};
-  if((farmBot.rounds[asset]||0) >= farmBot.MAX_ROUNDS) return {action:'hold',reason:`${asset} max rounds reached`};
-  if(Date.now() < (farmBot.cooldown[asset]||0)){
-    const wait=Math.ceil(((farmBot.cooldown[asset]||0)-Date.now())/1000);
-    return {action:'wait',reason:`${asset} cooldown ${wait}s`};
-  }
-  const sm=computeStrikeModel(st.prices, st.strikeInput||0);
-  const modelEdge=sm?Math.abs(sm.aboveProb-sm.belowProb):0;
-  const yesVel=st.yesVel||0;
-  if(Math.abs(yesVel)<0.5 && modelEdge<8) return {action:'wait',reason:`${asset} weak signal`};
-  const velBet=yesVel>0?'UP':'DOWN';
-  const modelBet=sm&&sm.aboveProb>=sm.belowProb?'UP':'DOWN';
-  const bet=Math.abs(yesVel)>=2?velBet:modelBet;
-  const targets=computeFarmTargets(asset);
-  return {action:'farm',bet,targets,reason:`${asset} farm ${bet} vel:${yesVel.toFixed(1)}¢/s edge:${modelEdge.toFixed(0)}%`};
-}
-
-function openFarmTrade(asset, bet, targets){
-  const st=AST[asset]; const yesPrice=st.kalshiYESPrice||0.5;
-  const balance=getEffectiveBalance();
-  const sm=computeStrikeModel(st.prices,st.strikeInput||0);
-  const winProb=sm?(bet==='UP'?sm.aboveProb/100:sm.belowProb/100):0.5;
-  const edge=winProb-yesPrice;
-  const kellyFrac=edge>0?(edge/(1-yesPrice))*0.3:0.04;
-  const betAmt=Math.max(0.50,Math.min(balance*0.08,balance*kellyFrac));
-  const betRounded=Math.round(betAmt*100)/100;
-  const entryYES=bet==='UP'?yesPrice:Math.max(0.05,Math.min(0.95,1-yesPrice));
-  const targetYES=Math.min(0.95,entryYES*(1+targets.targetPct));
-  const stopYES=Math.max(0.05,entryYES*(1-targets.stopPct));
-  const contracts=kalshiContracts(betRounded,entryYES);
-  const trade={id:Date.now(),asset,bet,entryYES,targetYES,stopYES,targetPct:targets.targetPct,stopPct:targets.stopPct,amount:betRounded,contracts,entryTime:Date.now(),mode:targets.mode,sim:simWallet.enabled,result:null,exitYES:null,pnl:null};
-  farmBot.activeFarm[asset]=trade;
-  farmBot.rounds[asset]=(farmBot.rounds[asset]||0)+1;
-  if(simWallet.enabled) simDebit(betRounded);
-  if(!simWallet.enabled && authConnected && st.kalshiMarket){
-    kalshiPlaceOrder(bet,betRounded).then(orderId=>{
-      trade.kalshiOrderId=orderId;
-    }).catch(e=>{
-      showToast('❌ Farm order failed: '+e.message,'#ff4566');
-      farmBot.activeFarm[asset]=null;
-      farmBot.rounds[asset]=Math.max(0,(farmBot.rounds[asset]||1)-1);
-      if(simWallet.enabled) simCredit(betRounded);
-    });
-  }
-  const assetCol=asset==='BTC'?'#f7c948':'#a78bfa';
-  showToast(`🌾 ${asset} farm ${bet} · entry ${(entryYES*100).toFixed(0)}¢ · target +${(targets.targetPct*100).toFixed(0)}% · stop -${(targets.stopPct*100).toFixed(0)}%`, assetCol);
-  renderFarmPanel(); renderFarmLog();
-}
-
-function closeFarmTrade(asset, reason, forceSim){
-  const trade=farmBot.activeFarm[asset]; if(!trade) return;
-  const st=AST[asset];
-  const currentYES=(()=>{
-    if(st.kalshiYESPrice!==null) return trade.bet==='UP'?st.kalshiYESPrice:Math.max(0.05,Math.min(0.95,1-st.kalshiYESPrice));
-    return trade.entryYES;
-  })();
-  const pnlPerContract=currentYES-trade.entryYES;
-  const grossPnL=pnlPerContract*trade.contracts;
-  const fee=simWallet.enabled?0:Math.abs(grossPnL)*0.01;
-  const finalPnL=grossPnL-fee;
-  const result=finalPnL>=0?'WIN':'LOSS';
-  trade.result=result; trade.exitYES=currentYES; trade.pnl=finalPnL; trade.exitReason=reason; trade.exitTime=Date.now();
-  if(simWallet.enabled||forceSim) simCredit(Math.max(0,trade.amount+finalPnL));
-  farmBot.assetPnL[asset]=(farmBot.assetPnL[asset]||0)+finalPnL;
-  farmState.sessionPnL=(farmState.sessionPnL||0)+finalPnL;
-  farmState.trades.push({...trade});
-  farmBot.cooldown[asset]=Date.now()+farmBot.RE_ENTRY_WAIT_MS;
-  farmBot.activeFarm[asset]=null;
-  const icon=result==='WIN'?'✅':'❌';
-  showToast(`${icon} Farm ${asset} ${result} · ${reason} · ${finalPnL>=0?'+':''}$${finalPnL.toFixed(2)}`, result==='WIN'?'#00e5a0':'#ff4566');
-  if(!simWallet.enabled&&!forceSim&&trade.kalshiOrderId&&authConnected) kalshiSellPosition(currentYES).catch(e=>console.warn('[Farm] close failed:',e.message));
-  renderFarmPanel(); renderFarmLog();
-  updateRiskOnTradeClosed(result,finalPnL);
-}
-
-function checkFarmExits(){
-  for(const asset of ['BTC','ETH']){
-    const trade=farmBot.activeFarm[asset]; if(!trade) continue;
-    const st=AST[asset];
-    const currentYES=(()=>{
-      if(st.kalshiYESPrice!==null) return trade.bet==='UP'?st.kalshiYESPrice:Math.max(0.05,Math.min(0.95,1-st.kalshiYESPrice));
-      return trade.entryYES;
-    })();
-    if(currentYES>=trade.targetYES){ closeFarmTrade(asset,'target',false); continue; }
-    if(currentYES<=trade.stopYES){   closeFarmTrade(asset,'stop_loss',false); continue; }
-    if(getClock().secsLeft<=30){     closeFarmTrade(asset,'time_expiry',false); continue; }
-  }
-}
-
-function checkFarmBot(){
-  if(!farmBot.armed) return;
-  const winId=getCurrentWindowId();
-  if(winId!==farmState.windowId){ farmState.windowId=winId; farmBot.rounds.BTC=0; farmBot.rounds.ETH=0; }
-  checkFarmExits();
-  for(const asset of ['BTC','ETH']){
-    if(farmBot.activeFarm[asset]) continue;
-    const st=AST[asset];
-    if(!st.livePrice||!st.kalshiMarket) continue;
-    const d=farmDecision(asset);
-    if(d.action==='farm') openFarmTrade(asset,d.bet,d.targets);
-  }
-  renderFarmStatus();
-}
 
 function renderFarmPanel(){
   const btn=document.getElementById('farm-arm-btn');
   const status=document.getElementById('farm-status');
-  if(btn){ btn.textContent=farmBot.armed?'🛑 DISARM FARM BOT':'🌾 ARM FARM BOT'; btn.classList.toggle('armed',farmBot.armed); }
-  if(status) status.classList.toggle('show',farmBot.armed);
+  if(btn){ btn.textContent=farmState.armed?'🛑 DISARM FARM BOT':'🌾 ARM FARM BOT'; btn.classList.toggle('armed',farmState.armed); }
+  if(status) status.classList.toggle('show',farmState.armed);
   const btcR=document.getElementById('farm-btc-rounds');
   const ethR=document.getElementById('farm-eth-rounds');
   const btcP=document.getElementById('farm-btc-pnl');
   const ethP=document.getElementById('farm-eth-pnl');
-  if(btcR) btcR.textContent=`${farmBot.rounds.BTC||0} / ${farmBot.MAX_ROUNDS}`;
-  if(ethR) ethR.textContent=`${farmBot.rounds.ETH||0} / ${farmBot.MAX_ROUNDS}`;
+  if(btcR) btcR.textContent=`${farmState.roundsBTC||0} / ${FARM_MAX_ROUNDS}`;
+  if(ethR) ethR.textContent=`${farmState.roundsETH||0} / ${FARM_MAX_ROUNDS}`;
   const fmtP=(el,p)=>{ if(!el) return; el.textContent=(p>=0?'+':'')+'$'+Math.abs(p).toFixed(2); el.style.color=p>=0?'#00e5a0':'#ff4566'; };
-  fmtP(btcP, farmBot.assetPnL.BTC||0);
-  fmtP(ethP, farmBot.assetPnL.ETH||0);
+  // Per-asset P&L: filter farm trades by asset
+  const btcPnL = farmState.trades.filter(t=>t.asset==='BTC').reduce((s,t)=>s+t.exitPnL,0);
+  const ethPnL = farmState.trades.filter(t=>t.asset==='ETH').reduce((s,t)=>s+t.exitPnL,0);
+  fmtP(btcP, btcPnL);
+  fmtP(ethP, ethPnL);
   const all=farmState.trades;
   const wins=all.filter(t=>t.result==='WIN').length;
   const losses=all.filter(t=>t.result==='LOSS').length;
@@ -5959,7 +5935,7 @@ function renderFarmStatus(){
   if(!el('fst-mode')) return;
   const targets=computeFarmTargets(activeAsset);
   const decisions=['BTC','ETH'].map(a=>{
-    const active=farmBot.activeFarm[a];
+    const active=AST[a].active&&AST[a].active.tradeType==='farm'?AST[a].active:null;
     if(active){ const st=AST[a]; const cur=st.kalshiYESPrice||0; const yes=active.bet==='UP'?cur:(1-cur); const pct=((yes-active.entryYES)/active.entryYES*100); return `${a}: IN ${active.bet} ${(pct>=0?'+':'')}${pct.toFixed(1)}%`; }
     const d=farmDecision(a); return `${a}: ${d.reason.slice(0,25)}`;
   });
@@ -5967,8 +5943,8 @@ function renderFarmStatus(){
   if(el('fst-decision')) el('fst-decision').textContent=decisions.join(' | ');
   if(el('fst-target'))   el('fst-target').textContent=`+${(targets.targetPct*100).toFixed(0)}% (${targets.mode})`;
   if(el('fst-stop'))     el('fst-stop').textContent=`-${(targets.stopPct*100).toFixed(0)}%`;
-  if(el('fst-rounds'))   el('fst-rounds').textContent=`BTC ${farmBot.rounds.BTC||0}/${farmBot.MAX_ROUNDS} · ETH ${farmBot.rounds.ETH||0}/${farmBot.MAX_ROUNDS}`;
-  const activeList=['BTC','ETH'].filter(a=>farmBot.activeFarm[a]).map(a=>`${a} ${farmBot.activeFarm[a].bet}`);
+  if(el('fst-rounds'))   el('fst-rounds').textContent=`BTC ${farmState.roundsBTC||0}/${FARM_MAX_ROUNDS} · ETH ${farmState.roundsETH||0}/${FARM_MAX_ROUNDS}`;
+  const activeList=['BTC','ETH'].filter(a=>AST[a].active&&AST[a].active.tradeType==='farm').map(a=>`${a} ${AST[a].active.bet}`);
   if(el('fst-active')){ el('fst-active').textContent=activeList.length?activeList.join(' · '):'NONE'; el('fst-active').style.color=activeList.length?'#f7c948':'#555'; }
   if(el('fs-mode'))   el('fs-mode').textContent=`AUTO (${targets.mode})`;
   if(el('fs-target')) el('fs-target').textContent=`+${(targets.targetPct*100).toFixed(0)}%`;
@@ -5991,11 +5967,6 @@ function renderFarmLog(){
   }).join('');
 }
 
-function clearFarmLog(){
-  farmState.trades=[]; farmState.sessionPnL=0;
-  farmBot.assetPnL.BTC=0; farmBot.assetPnL.ETH=0;
-  renderFarmPanel(); renderFarmLog();
-}
 
 async function init(){
   nnInit();
@@ -6079,6 +6050,7 @@ async function init(){
   // startChartLoop already called at top of init()
 }
 init();
+
 
 </script>
 </body>
