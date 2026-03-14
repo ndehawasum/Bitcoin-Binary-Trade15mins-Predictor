@@ -283,7 +283,7 @@ body.dual-active #app{padding-bottom:74px}
     </div>
   </div>
 
-  <div id="demo-ban">⚡ Demo mode — APIs unreachable. Real UTC clock active.</div>
+  <div id="demo-ban" style="display:none">⚡ Demo mode — APIs unreachable. Real UTC clock active.</div>
 
   <!-- mode-toggle hidden — auto-managed by connectKey/disconnectKey -->
   <div id="mode-toggle" style="display:none">
@@ -902,7 +902,7 @@ body.dual-active #app{padding-bottom:74px}
 
 </div><!-- /app -->
 
-<!-- DUAL TRADE BAR — fixed bottom, shows both BTC+ETH open trades simultaneously -->
+
 <script>
 // K-PREDICTOR FEATURE CHECKLIST — v5.0 (March 2026)
 // ════════════════════════════════════════════════════════════════════════════
@@ -5320,20 +5320,26 @@ function setTradingMode(mode){
   simState.mode = mode;
   const simBtn  = document.getElementById('btn-sim');
   const liveBtn = document.getElementById('btn-live');
-  const simRow  = document.getElementById('sim-bal-row');
   const farmBar = document.getElementById('farm-bar');
+  const simWalletEl = document.getElementById('sim-wallet');
+
   if(mode === 'sim'){
-    simBtn.className  = 'mode-btn active-sim';
-    liveBtn.className = 'mode-btn';
-    simRow.classList.remove('hidden');
-    farmBar.style.display = 'block';
-    showToast('📋 Sim mode — virtual cash, no real orders','#f7c948');
+    if(simBtn)  simBtn.className  = 'mode-btn active-sim';
+    if(liveBtn) liveBtn.className = 'mode-btn';
+    // Show sim wallet card
+    if(simWalletEl) simWalletEl.classList.add('show');
+    // Update GO LIVE / GO SIM toggle button text
+    const toggleBtn = document.getElementById('sim-toggle-btn');
+    if(toggleBtn) toggleBtn.textContent = 'GO LIVE';
+    if(farmBar) farmBar.style.display = 'block';
   } else {
-    simBtn.className  = 'mode-btn';
-    liveBtn.className = 'mode-btn active-live';
-    simRow.classList.add('hidden');
-    farmBar.style.display = authConnected ? 'block' : 'none';
-    showToast('⚡ Live mode — real Kalshi orders will be placed','#00e5a0');
+    if(simBtn)  simBtn.className  = 'mode-btn';
+    if(liveBtn) liveBtn.className = 'mode-btn active-live';
+    // Hide sim wallet in live mode
+    if(simWalletEl) simWalletEl.classList.remove('show');
+    const toggleBtn = document.getElementById('sim-toggle-btn');
+    if(toggleBtn) toggleBtn.textContent = 'GO SIM';
+    if(farmBar) farmBar.style.display = authConnected ? 'block' : 'none';
   }
   renderSimWallet();
   renderFarmBar();
@@ -5395,6 +5401,15 @@ function renderSimWallet(){
     tradePill.style.color = isLive ? '#00e5a0' : '#f7c948';
     tradePill.style.background = isLive ? '#00e5a015' : '#f7c94815';
     tradePill.style.borderColor = isLive ? '#00e5a030' : '#f7c94830';
+  }
+
+  // Update sim-wallet card (the visible card above the chart)
+  const simBalEl  = document.getElementById('sim-bal');
+  const simPnlEl  = document.getElementById('sim-pnl');
+  if(simBalEl) simBalEl.textContent = '$' + bal.toFixed(2);
+  if(simPnlEl){
+    simPnlEl.textContent = (pnl>=0?'+':'') + '$' + Math.abs(pnl).toFixed(2);
+    simPnlEl.style.color = pnl>=0 ? '#00e5a0' : '#ff4566';
   }
 }
 
@@ -5872,14 +5887,14 @@ function simCredit(amount){
 
 function setSimBalance(){
   const inp = document.getElementById('sim-input');
-  const val = parseFloat(inp.value);
+  const val = parseFloat(inp?.value);
   if(isNaN(val) || val < 1){ showToast('Enter a valid amount','#ff4566'); return; }
-  simWallet.balance = val;
-  simWallet.startBalance = val;
-  simWallet.totalPnL = 0;
-  inp.value = '';
+  // Update simState (single source of truth)
+  simState.balance      = val;
+  simState.startBalance = val;
+  simState.pnl          = 0;
+  if(inp) inp.value = '';
   renderSimWallet();
-  riskState.accountBalance = val;
   showToast('💰 Sim balance set to $'+val.toFixed(2),'#7b9fff');
 }
 
@@ -6043,6 +6058,7 @@ async function init(){
   // startChartLoop already called at top of init()
 }
 init();
+
 
 
 </script>
