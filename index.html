@@ -4442,7 +4442,7 @@ function renderMarketConditions(){
 }
 
 function placeTrade(bet, tradeType='manual', farmTarget=null, farmStop=null){
-  if(active||!livePrice||!amtInput||amtInput<=0||!strikeInput||strikeInput<=0)return;
+  if(active||!livePrice||!amtInput||amtInput<=0||!isFinite(amtInput)||!strikeInput||strikeInput<=0)return;
   const sm=computeStrikeModel(prices,strikeInput);
   const entryYESPrice=estimateYESPriceLive(sm,bet);
   const contracts=kalshiContracts(amtInput,entryYESPrice);
@@ -5591,8 +5591,10 @@ function computeFarmDecision(){
 
   // Shared bet sizing
   const balance = getEffectiveBalance();
+  // Use aboveProb/belowProb — computeStrikeModel does NOT return .prob
+  const smProb  = sm ? Math.max(sm.aboveProb, sm.belowProb) : 50;
   const betSize = (sm && balance>0)
-    ? Math.round(Math.max(0.50, Math.min(computeKellyBet(sm.prob,yesP,balance)*0.5, balance*0.08))*100)/100
+    ? Math.round(Math.max(0.50, Math.min(computeKellyBet(smProb, yesP, balance)*0.5, balance*0.08))*100)/100
     : 0;
 
   // Vol-scaled targets for middle-range modes
@@ -5742,7 +5744,7 @@ function checkFarmBot(){
   if(!decision.shouldFarm||decision.betSize<=0) return;
 
   const bal = getEffectiveBalance();
-  if(decision.betSize > bal*0.5) return;
+  if(!isFinite(decision.betSize) || decision.betSize > bal*0.5) return;
 
   const sm = computeStrikeModel(prices, strikeInput);
   const training = farmState.trainingMode;
@@ -5756,11 +5758,13 @@ function checkFarmBot(){
     bet = decision.suggestedBet;
   } else {
     // No direction suggestion — use crypto price model
-    const minConf = training ? 50 : 55;
-    const minEdge = training ? 2  : 5;
-    if(!sm || sm.conf < minConf) return;
-    if(!training && Math.abs(sm.prob-50) < minEdge) return;
-    bet = sm.prob>50?'UP':'DOWN';
+    // sm returns aboveProb/belowProb (0-100), NOT conf or prob
+    const modelConf = sm ? Math.max(sm.aboveProb, sm.belowProb) : 0;
+    const minConf   = training ? 50 : 55;
+    const minEdge   = training ? 2  : 5;
+    if(!sm || modelConf < minConf) return;
+    if(!training && Math.abs(modelConf - 50) < minEdge) return;
+    bet = sm.aboveProb > sm.belowProb ? 'UP' : 'DOWN';
   }
 
   const aiEl = document.getElementById('ai');
