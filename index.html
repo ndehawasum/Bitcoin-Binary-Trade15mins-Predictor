@@ -474,7 +474,7 @@ body.dual-active #app{padding-bottom:74px}
           </div>
           <div id="thresh-reason" style="font-size:8px;color:#555;line-height:1.5;min-height:14px"></div>
           <div id="thresh-live-guard" style="font-size:7px;color:#2a2a40;margin-top:5px">
-            ⚡ Auto-sell requires live Kalshi YES price
+            ⟳ Waiting for Kalshi YES price...
           </div>
         </div>
       </div>
@@ -915,6 +915,7 @@ I_KEY_ID</span> = your Key ID (UUID)<br>
 </div><!-- /app -->
 
 <script>
+// K-PRE
 // K-PREDICTOR FEATURE CHECKLIST — v5.0 (March 2026)
 // ════════════════════════════════════════════════════════════════════════════
 // INSTRUCTIONS FOR CLAUDE:
@@ -2250,6 +2251,7 @@ function kalshiWSConnectForAsset(asset, ticker){
             const mid = kalshiYESMid(st.kalshiMarket);
             if(mid!==null){
               st.kalshiYESPrice = mid; st.kalshiYESLastWS = Date.now();
+              if(asset===activeAsset) updateThreshGuard();
               // Feed YES velocity buffer
               const _yt = Date.now();
               st.yesBuf.push({t:_yt, p:mid});
@@ -3475,6 +3477,7 @@ function renderRiskPanel(){
     document.getElementById('risk-peak').textContent='no active trade';
   }
 
+  updateThreshGuard();
   return r;
 }
 
@@ -3629,16 +3632,28 @@ function applyDynamicThresholds(sm, bet, clock){
 function updateThreshGuard(){
   const guard = document.getElementById('thresh-live-guard');
   if(!guard) return;
-  const isSim = !authConnected || !kalshiOrderId || !kalshiIsLive();
-  if(isSim && authConnected && kalshiYESPrice!==null){
-    guard.textContent = '📋 Simulation — Kalshi REST (WS not live)';
-    guard.style.color = '#f7c94870';
-  } else if(isSim){
-    guard.textContent = '📋 Simulation mode — auto-sell trains freely';
+
+  // YES price status — do we have a live feed?
+  const hasYES    = kalshiYESPrice !== null;
+  const wsLive    = kalshiIsLive(); // WS ticked within 10s
+  const connected = authConnected;
+
+  if(!connected){
+    // Not connected to Kalshi at all
+    guard.textContent = '🔑 Connect API key to enable live auto-sell';
+    guard.style.color = '#f7c94860';
+  } else if(hasYES && wsLive){
+    // Connected + WS streaming YES price — fully live
+    guard.textContent = '✅ Live YES price streaming — auto-sell active';
+    guard.style.color = '#00e5a060';
+  } else if(hasYES && !wsLive){
+    // Connected + REST YES price (not WS) — still works for signals, slower
+    guard.textContent = '📡 YES price via REST — auto-sell will work';
     guard.style.color = '#f7c94870';
   } else {
-    guard.textContent = '✅ Live mode — auto-sell armed on real Kalshi price';
-    guard.style.color = '#00e5a060';
+    // Connected but no YES price yet — market loading
+    guard.textContent = '⟳ Waiting for Kalshi YES price...';
+    guard.style.color = '#f7c94860';
   }
 }
 
@@ -5307,6 +5322,7 @@ async function autoConnectKey(){
     authRefreshTimer = setInterval(refreshPortfolio, 30000);
     setKalshiStatus('live','KALSHI LIVE');
     showToast('✅ Kalshi connected — LIVE mode active','#00e5a0');
+    setTimeout(updateThreshGuard, 500);
   };
 
   try {
@@ -6283,9 +6299,10 @@ async function init(){
   // startChartLoop already called at top of init()
 }
 init();
-</script>
+
 
 <!-- DUAL TRADE BAR — fixed bottom, shows both BTC+ETH open trades simultaneously -->
+</script>
 <div id="dual-bar" style="display:none">
   <div class="dual-bar-inner">
     <div class="dual-cell" id="dual-btc" onclick="switchAsset('BTC')">
@@ -6302,6 +6319,7 @@ init();
     </div>
   </div>
 </div>
+
 
 </body>
 </html>
