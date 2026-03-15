@@ -4743,7 +4743,7 @@ function computeRegimeFilter(sm, clock){
   // Gate 6: Risk gates — daily cap, cooldown, consecutive losses
   resetDailyIfNeeded();
   const balance = getRiskAccountBalance();
-  if(balance > 0){
+  if(balance > 5){
     const dailyCap = balance * RISK_DAILY_CAP;
     if(riskState.dailyLoss >= dailyCap)
       gates.push({ code:'DAILYCAP', msg:'daily loss cap reached', block:true });
@@ -4754,7 +4754,8 @@ function computeRegimeFilter(sm, clock){
     gates.push({ code:'STREAK', msg:`${riskState.consecutiveLosses} loss streak`, block:true });
 
   // Session kill switch: stop auto-buy if session loss exceeds 5% of account balance
-  if(balance > 0){
+  // Guard: only applies when balance > $5 to avoid false-trigger on empty accounts
+  if(balance > 5){
     const sessionCap = balance * 0.05;
     if((riskState.sessionLoss||0) >= sessionCap)
       gates.push({ code:'SESSIONKILL', msg:`session loss cap hit (-$${(riskState.sessionLoss||0).toFixed(2)})`, block:true });
@@ -5006,8 +5007,6 @@ function clockTick(){
   resetFarmWindowIfNeeded();
   // Dual active positions display (both assets trading simultaneously)
   renderDualActivePositions();
-  // Farm bot check every second
-  checkFarmBot();
 }
 
 // ═══════════════════════════════════════════════════
