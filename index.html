@@ -308,11 +308,12 @@ body.dual-active #app{padding-bottom:74px}
   <div id="sim-wallet">
     <!-- SIM row — always visible, shows virtual balance -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
-      <span style="font-size:7px;letter-spacing:2px;color:#7b9fff;font-weight:900">🧪 SIM</span>
+      <span id="sim-wallet-title" style="font-size:7px;letter-spacing:2px;color:#7b9fff;font-weight:900">🧪 SIM</span>
       <div style="display:flex;align-items:baseline;gap:6px">
         <span class="sim-bal" id="sim-bal" style="font-size:18px;font-weight:900;color:#7b9fff;letter-spacing:-1px">$500.00</span>
         <span id="sim-pnl" style="font-size:9px;font-weight:700;color:#555">+$0.00</span>
       </div>
+      <button id="sim-toggle-btn" onclick="toggleSimMode()" style="font-size:7px;font-weight:900;letter-spacing:1px;background:#7b9fff;color:#07070f;border:none;border-radius:5px;padding:2px 8px;cursor:pointer;font-family:inherit">GO LIVE</button>
     </div>
     <!-- Set balance input — always visible -->
     <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
@@ -913,6 +914,7 @@ I_KEY_ID</span> = your Key ID (UUID)<br>
   <div class="fnote">NOT FINANCIAL ADVICE · SIGNAL UPDATES EVERY 5S · PROBABILISTIC MODEL</div>
 
 </div><!-- /app -->
+<div id="toast" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);padding:9px 18px;border-radius:10px;font-size:11px;font-family:'Courier New',monospace;font-weight:700;letter-spacing:1px;pointer-events:none;opacity:0;transition:opacity .3s;z-index:9999;max-width:340px;text-align:center"></div>
 
 <script>
 // K-PRE
@@ -1385,9 +1387,9 @@ async function persistState(asset){
     await idbSet(p+'trades',   st.trades.slice(-200));
     await idbSet(p+'riskState',st.riskState);
   }catch(e){ console.warn('IDB save failed:', e); }
-  // Persist sim wallet + farm state (global, not per-asset)
+  // Persist simState + farm state (global, not per-asset)
   try{
-    await idbSet('simWallet', {balance:simWallet.balance, startBalance:simWallet.startBalance, totalPnL:simWallet.totalPnL, enabled:simWallet.enabled});
+    await idbSet('simState', {balance:simState.balance, startBalance:simState.startBalance, pnl:simState.pnl});
     await idbSet('farmTrades', farmState.trades.slice(-100));
     await idbSet('farmSessionPnL', farmState.sessionPnL||0);
   }catch(e){ console.warn('IDB farm save failed:', e); }
@@ -1436,12 +1438,13 @@ async function loadPersistedState(){
   }catch(e){ console.warn('IDB load failed:', e); }
   // Restore sim wallet + farm state
   try{
-    const savedSim = await idbGet('simWallet');
-    if(savedSim && typeof savedSim.balance === 'number'){
-      simWallet.balance = savedSim.balance;
-      simWallet.startBalance = savedSim.startBalance || savedSim.balance;
-      simWallet.totalPnL = savedSim.totalPnL || 0;
-      simWallet.enabled = savedSim.enabled !== false;
+    // Try new key first, fall back to old simWallet key for backward compat
+    const savedSim = await idbGet('simState') || await idbGet('simWallet');
+    if(savedSim && typeof savedSim.balance === 'number' && savedSim.balance > 0){
+      simState.balance      = savedSim.balance;
+      simState.startBalance = savedSim.startBalance || savedSim.balance;
+      simState.pnl          = savedSim.pnl || savedSim.totalPnL || 0;
+      console.log('IDB: restored sim balance $'+simState.balance.toFixed(2));
     }
     const savedFarmTrades = await idbGet('farmTrades');
     if(Array.isArray(savedFarmTrades)) farmState.trades = savedFarmTrades;
@@ -4910,6 +4913,7 @@ function checkAutoBuy(){
 }
 
 function clockTick(){
+  try {
   const c=getClock();
   const now=Date.now();
   // Clock ring — direct DOM, fast
@@ -5007,6 +5011,10 @@ function clockTick(){
   resetFarmWindowIfNeeded();
   // Dual active positions display (both assets trading simultaneously)
   renderDualActivePositions();
+  } catch(e) {
+    // Never let a throw kill the 1s loop — log and continue
+    console.error('[clockTick] error (loop protected):', e.message, e.stack?.split('\n')[1]);
+  }
 }
 
 // ═══════════════════════════════════════════════════
