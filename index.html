@@ -1207,6 +1207,9 @@ function mkAssetSt(){
     peakCapture: null, trailArmed: false,
     strikeInput: 0,
     nnW: null, nnData: [],
+    // Dual NNs (Option 3): separate networks for UP and DOWN bets
+    nnWUp: null, nnDataUp: [],   // trained only on UP-bet samples
+    nnWDown: null, nnDataDown: [],// trained only on DOWN-bet samples
     kalshiMarket: null, kalshiYESPrice: null, kalshiYESLastWS: 0,
     kalshiAutoStrike: null, kalshiWS: null, wsReconnectTimer: null,
     kalshiOrderId: null, kalshiOrderSide: null, kalshiOrderContracts: 0,
@@ -1260,6 +1263,10 @@ Object.defineProperties(window, {
   trailArmed:      {get(){return A().trailArmed;},      set(v){A().trailArmed=v;},      configurable:true},
   strikeInput:     {get(){return A().strikeInput;},     set(v){A().strikeInput=v;},     configurable:true},
   nnW:             {get(){return A().nnW;},             set(v){A().nnW=v;},             configurable:true},
+  nnWUp:           {get(){return A().nnWUp;},           set(v){A().nnWUp=v;},           configurable:true},
+  nnWDown:         {get(){return A().nnWDown;},         set(v){A().nnWDown=v;},         configurable:true},
+  nnDataUp:        {get(){return A().nnDataUp;},        set(v){A().nnDataUp=v;},        configurable:true},
+  nnDataDown:      {get(){return A().nnDataDown;},      set(v){A().nnDataDown=v;},      configurable:true},
   nnData:          {get(){return A().nnData;},          set(v){A().nnData=v;},          configurable:true},
   kalshiMarket:    {get(){return A().kalshiMarket;},    set(v){A().kalshiMarket=v;},    configurable:true},
   kalshiYESPrice:  {get(){return A().kalshiYESPrice;},  set(v){A().kalshiYESPrice=v;},  configurable:true},
@@ -1379,10 +1386,14 @@ function idbGet(key){
 async function persistState(asset){
   const a=asset||activeAsset; const st=AST[a]; const p=a.toLowerCase()+'_';
   try{
-    await idbSet(p+'nnData',   st.nnData);
-    await idbSet(p+'nnW',      st.nnW);
-    await idbSet(p+'trades',   st.trades.slice(-200));
-    await idbSet(p+'riskState',st.riskState);
+    await idbSet(p+'nnData',    st.nnData);
+    await idbSet(p+'nnW',       st.nnW);
+    await idbSet(p+'nnWUp',     st.nnWUp);
+    await idbSet(p+'nnWDown',   st.nnWDown);
+    await idbSet(p+'nnDataUp',  st.nnDataUp);
+    await idbSet(p+'nnDataDown',st.nnDataDown);
+    await idbSet(p+'trades',    st.trades.slice(-200));
+    await idbSet(p+'riskState', st.riskState);
     // Save active trade so it survives page reload
     if(st.active) await idbSet(p+'active', st.active);
     else await idbSet(p+'active', null);
@@ -1424,6 +1435,17 @@ async function loadPersistedState(){
         for(let e=0;e<20;e++) rec.forEach(d=>{ const tmp=activeAsset; activeAsset=a; nnTrain(d.f,d.l); activeAsset=tmp; });
         console.log(`IDB [${a}]: re-trained NN`);
       }
+      // Restore dual NNs
+      const savedWUp   = await idbGet(p+'nnWUp');
+      const savedWDown = await idbGet(p+'nnWDown');
+      const savedDUp   = await idbGet(p+'nnDataUp');
+      const savedDDown = await idbGet(p+'nnDataDown');
+      if(savedWUp   && savedWUp.w1)   st.nnWUp   = savedWUp;
+      if(savedWDown && savedWDown.w1) st.nnWDown  = savedWDown;
+      if(Array.isArray(savedDUp))     st.nnDataUp   = savedDUp;
+      if(Array.isArray(savedDDown))   st.nnDataDown = savedDDown;
+      if(st.nnDataUp.length>0)   console.log(`IDB [${a}]: restored UP-NN (${st.nnDataUp.length} samples)`);
+      if(st.nnDataDown.length>0) console.log(`IDB [${a}]: restored DOWN-NN (${st.nnDataDown.length} samples)`);
       if(savedTrades&&Array.isArray(savedTrades)&&savedTrades.length>0){
         st.trades=savedTrades;
         console.log(`IDB [${a}]: restored ${st.trades.length} trades`);
@@ -1475,7 +1497,13 @@ async function loadPersistedState(){
 
 const sig=x=>1/(1+Math.exp(-Math.max(-10,Math.min(10,x))));
 
-function nnInit(){ AST.BTC.nnW=nnRand(); AST.ETH.nnW=nnRand(); }
+function nnInit(){
+  for(const a of ['BTC','ETH']){
+    AST[a].nnW     = nnRand(); // combined NN (Options 1+2 normalised features)
+    AST[a].nnWUp   = nnRand(); // dual NN — UP bet only (Option 3)
+    AST[a].nnWDown = nnRand(); // dual NN — DOWN bet only (Option 3)
+  }
+}
 function nnRand(){const r=()=>(Math.random()-.5)*.4;
   // Architecture: 9 inputs → 8 hidden neurons → 1 output
   // w1: 8×9 (8 hidden neurons, each with 9 input weights)
@@ -1832,34 +1860,77 @@ function dismissAdvisory(){
 }
 setInterval(()=>{ AST[activeAsset].advisoryDismissed=false; evalAdvisory(); }, 60000);
 
+// ── buildFeaturesNorm: Options 1+2 combined ─────────────────────────────────
+// For DOWN bets, directional features f[0..5] are multiplied by -1.
+// This means the NN always sees the world from "which way did my bet go?"
+// f[0]=RSI, f[1]=EMA cross, f[2]=EMA9v21, f[3]=BBP, f[4]=momentum, f[5]=trend5
+// f[6]=patternScore, f[7]=wickPressure, f[8]=candleMom — also flipped for DOWN
+// Result: positive features always mean "conditions favour the bet direction"
+// Label: 1=this specific bet WON, 0=this specific bet LOST (unchanged from before,
+// but now features are consistent with the label)
+function buildFeaturesNorm(arr, bet, strike){
+  const f = buildFeatures(arr, bet, strike);
+  if(!f) return null;
+  if(bet === 'DOWN'){
+    // Flip all 9 features — bearish signals become positive (they support the DOWN bet)
+    return f.map(v => -v);
+  }
+  return f; // UP bets: features already in correct orientation
+}
+
 function recordTrade(t){
-  const f=buildFeatures(t.ep||prices,t.bet,parseFloat(t.strike));
-  if(!f)return;
-  const label = t.result==='WIN'?1:0;
-  nnData.push({f,l:label});
-
-  // FIX #2: Balance buffer — keep max 150 of each class (UP/DOWN)
-  // This prevents the NN from being overwhelmed by whichever outcome dominates
+  const bet   = t.bet;   // 'UP' or 'DOWN'
+  const label = t.result==='WIN' ? 1 : 0;
   const MAX_PER_CLASS = 150;
-  const ups   = nnData.filter(d=>d.l===1);
-  const downs = nnData.filter(d=>d.l===0);
-  if(ups.length > MAX_PER_CLASS)   { const over=ups.length-MAX_PER_CLASS;   nnData=nnData.filter(d=>d.l!==1).concat(ups.slice(over)); }
-  if(downs.length > MAX_PER_CLASS) { const over=downs.length-MAX_PER_CLASS; nnData=nnData.filter(d=>d.l!==0).concat(downs.slice(over)); }
 
-  // FIX #2b: Oversample minority class during training so each epoch sees 50/50
-  const minority = ups.length <= downs.length ? ups : downs;
-  const majority = ups.length > downs.length  ? ups : downs;
-  const ratio = majority.length > 0 ? Math.ceil(majority.length / Math.max(1, minority.length)) : 1;
-  const balanced = [...majority];
-  for(let r=0;r<ratio-1;r++) balanced.push(...minority); // repeat minority to match majority
-  balanced.sort(()=>Math.random()-0.5); // shuffle
+  // ── COMBINED NN (Options 1+2): normalised features, consistent orientation ──
+  const fNorm = buildFeaturesNorm(t.ep||prices, bet, parseFloat(t.strike));
+  if(fNorm){
+    nnData.push({f:fNorm, l:label});
+    // Balance buffer: cap at 150 per class
+    const wins   = nnData.filter(d=>d.l===1);
+    const losses = nnData.filter(d=>d.l===0);
+    if(wins.length   > MAX_PER_CLASS){ const over=wins.length-MAX_PER_CLASS;   nnData=nnData.filter(d=>d.l!==1).concat(wins.slice(over)); }
+    if(losses.length > MAX_PER_CLASS){ const over=losses.length-MAX_PER_CLASS; nnData=nnData.filter(d=>d.l!==0).concat(losses.slice(over)); }
+    // Balanced training
+    const minority = wins.length <= losses.length ? wins : losses;
+    const majority = wins.length >  losses.length ? wins : losses;
+    const ratio    = majority.length > 0 ? Math.ceil(majority.length / Math.max(1, minority.length)) : 1;
+    const balanced = [...majority];
+    for(let r=0;r<ratio-1;r++) balanced.push(...minority);
+    balanced.sort(()=>Math.random()-0.5);
+    const recent = balanced.slice(-60);
+    for(let e=0;e<12;e++) recent.forEach(d=>nnTrain(d.f,d.l));
+    console.log('[NN combined] WIN:'+wins.length+' LOSS:'+losses.length);
+  }
 
-  // Train on balanced set
-  const recent = balanced.slice(-60);
-  for(let e=0;e<12;e++) recent.forEach(d=>nnTrain(d.f,d.l));
+  // ── DUAL NNs (Option 3): separate NN for UP and DOWN bets ──
+  // Raw (un-flipped) features — each NN only sees its own bet type
+  const fRaw = buildFeatures(t.ep||prices, bet, parseFloat(t.strike));
+  if(fRaw){
+    if(bet === 'UP'){
+      nnDataUp.push({f:fRaw, l:label});
+      if(nnDataUp.length > MAX_PER_CLASS*2) nnDataUp = nnDataUp.slice(-MAX_PER_CLASS*2);
+      const recentUp = nnDataUp.slice(-40);
+      // Init if needed
+      if(!nnWUp || !nnWUp.w1 || nnWUp.w1[0][0]===null) nnWUp = nnRand();
+      // Use a temporary activeAsset swap so nnTrain writes to nnWUp
+      const _tmpW = nnW; nnW = nnWUp;
+      for(let e=0;e<12;e++) recentUp.forEach(d=>nnTrain(d.f,d.l));
+      nnWUp = nnW; nnW = _tmpW;
+      console.log('[NN UP] samples:', nnDataUp.length, 'wins:', nnDataUp.filter(d=>d.l===1).length);
+    } else {
+      nnDataDown.push({f:fRaw, l:label});
+      if(nnDataDown.length > MAX_PER_CLASS*2) nnDataDown = nnDataDown.slice(-MAX_PER_CLASS*2);
+      const recentDn = nnDataDown.slice(-40);
+      if(!nnWDown || !nnWDown.w1 || nnWDown.w1[0][0]===null) nnWDown = nnRand();
+      const _tmpW = nnW; nnW = nnWDown;
+      for(let e=0;e<12;e++) recentDn.forEach(d=>nnTrain(d.f,d.l));
+      nnWDown = nnW; nnW = _tmpW;
+      console.log('[NN DOWN] samples:', nnDataDown.length, 'wins:', nnDataDown.filter(d=>d.l===1).length);
+    }
+  }
 
-  // Log balance for brain tab
-  console.log('[NN] buffer UP:'+ups.length+' DN:'+downs.length+' ratio='+(ups.length/Math.max(1,downs.length)).toFixed(2));
   persistState();
 }
 
@@ -2501,8 +2572,45 @@ function computeStrikeModel(arr, strike){
       velContrib: projClose>strike?1:0,   // 1=above, 0=below
       proxBias: strikePct>0.3?6:strikePct<-0.3?-6:parseFloat((strikePct*10).toFixed(2)),
       timeAbovePct: Math.round(pctAbove*100),
-      nnOut: nnData.length>=8?(()=>{const f=buildFeatures(arr,'UP',strike);return f?Math.round(nnFwd(f)*100):null;})():null,
-      nnWeight: Math.min(45,Math.round(nnData.length/200*45)),
+      // ── 3-way NN Ensemble (Options 1+2+3) ────────────────────────────────
+      // Combined NN: trained on direction-normalised features (both UP+DOWN)
+      // UP-NN:       trained only on UP-bet samples (raw features)
+      // DOWN-NN:     trained only on DOWN-bet samples (raw features)
+      // Ensemble = weighted average, weight by sample count
+      nnOut: (()=>{
+        const f     = buildFeaturesNorm(arr,'UP',strike);  // normalised UP-perspective
+        const fRaw  = buildFeatures(arr,'UP',strike);       // raw for directional NNs
+        if(!f||!fRaw) return null;
+        let votes=0, weightSum=0;
+        // Vote 1: Combined NN
+        if(nnData.length>=5){
+          votes     += nnFwd(f) * nnData.length;
+          weightSum += nnData.length;
+        }
+        // Vote 2: UP-NN (only votes on UP direction)
+        if(nnDataUp && nnDataUp.length>=3 && nnWUp){
+          const _tmp=nnW; nnW=nnWUp;
+          const upOut = nnFwd(fRaw);
+          nnW=_tmp;
+          votes     += upOut * nnDataUp.length;
+          weightSum += nnDataUp.length;
+        }
+        // Vote 3: DOWN-NN flipped (high DOWN-win prob = low UP prob)
+        if(nnDataDown && nnDataDown.length>=3 && nnWDown){
+          const _tmp=nnW; nnW=nnWDown;
+          const fDown = buildFeaturesNorm(arr,'DOWN',strike); // DOWN-normalised
+          const downOut = fDown ? nnFwd(fDown) : 0.5;
+          nnW=_tmp;
+          // downOut = prob DOWN wins = prob UP loses → UP prob = 1-downOut
+          votes     += (1-downOut) * nnDataDown.length;
+          weightSum += nnDataDown.length;
+        }
+        if(weightSum===0) return null;
+        return Math.round((votes/weightSum)*100);
+      })(),
+      nnWeight: Math.min(45, Math.round(
+        (nnData.length + (nnDataUp?nnDataUp.length:0) + (nnDataDown?nnDataDown.length:0)) / 600 * 45
+      )),
       rawComposite: parseFloat(finalAboveProb.toFixed(2)),
       aboveCount: arr.filter(p=>p>strike).length,
       totalSamples: arr.length
@@ -4497,7 +4605,8 @@ function placeTrade(bet, tradeType='manual', farmTarget=null, farmStop=null){
     const wsActive = kalshiIsLive();
     kalshiPlaceOrder(bet, amtInput).then(order=>{
       const src = wsActive ? 'WS' : 'REST';
-      showToast(`✅ Kalshi order placed [${src}] — ${order.fill_count_fp||'?'} contracts`,'#00e5a0');
+      const filled = parseFloat(order.fill_count_fp||order.filled_count||0);
+      showToast(`✅ Kalshi order filled [${src}] — ${filled} contracts @ $${(parseFloat(order.taker_fill_cost_dollars||0)||amtInput).toFixed(2)}`,'#00e5a0');
     }).catch(e=>{
       showToast(`⚠️ Kalshi order failed: ${e.message}`,'#ff4566');
     });
@@ -5168,14 +5277,20 @@ async function kalshiPlaceOrder(bet, amountDollars){
   }
   const minCostCents = Math.ceil(fillPrice * 100); // cost of 1 contract in cents
   if(maxCostCents < minCostCents){
-    throw new Error(`Bet $${amountDollars.toFixed(2)} too small — 1 contract costs $${fillPrice.toFixed(2)}`);
+    // Budget can't cover even 1 contract at current ask
+    // e.g. bet=$0.05 but NO contract costs $0.06 at YES=94¢
+    throw new Error(`Budget ${maxCostCents}¢ < 1 contract cost ${minCostCents}¢ (${side} at ${(fillPrice*100).toFixed(0)}¢ each) — increase bet size`);
   }
 
   // Kalshi requires exactly one price field: yes_price_dollars or no_price_dollars
-  // Use fillPrice (the ask side for our bet) as the limit price
+  // Send a GENEROUS limit (0.99) not the exact ask price.
+  // Rationale: fill_or_kill rejects if market ticks even 1¢ above our limit.
+  // buy_max_cost already hard-caps total spend in cents — the price field is
+  // just a per-contract ceiling. 0.99 means "willing to pay up to 99¢/contract"
+  // which always clears the market, while buy_max_cost prevents overspending.
   const priceField = side === 'yes'
-    ? { yes_price_dollars: parseFloat(fillPrice.toFixed(2)) }
-    : { no_price_dollars:  parseFloat(fillPrice.toFixed(2)) };
+    ? { yes_price_dollars: 0.99 }
+    : { no_price_dollars:  0.99 };
 
   const orderBody = {
     ticker,
@@ -5212,16 +5327,19 @@ async function kalshiPlaceOrder(bet, amountDollars){
   const contractsHeld = filled > 0 ? filled : estimatedFromBudget;
 
   if(filled === 0){
-    console.warn('[Kalshi] 0 contracts filled immediately — fill_or_kill may have found no match');
+    // FOK found no matching seller at our price — order was cancelled entirely
+    // This is NOT a success — throw so the caller shows a warning toast
+    console.warn('[Kalshi] 0 contracts filled — FOK found no match at current market price');
+    throw new Error('Order placed but 0 contracts filled — no market maker available right now, try again');
   }
 
   kalshiOrderId        = order.order_id;
   kalshiOrderSide      = side;
-  kalshiOrderContracts = contractsHeld;
+  kalshiOrderContracts = filled;
   kalshiOrderCost      = parseFloat(order.taker_fill_cost_dollars||order.cost||0) || amountDollars;
   autoCloseArmed       = true;
 
-  console.log('[Kalshi] order confirmed:', kalshiOrderId, side, filled, 'contracts filled, holding:', contractsHeld);
+  console.log('[Kalshi] order confirmed:', kalshiOrderId, side, filled, 'contracts filled');
   return order;
 }
 
@@ -5264,12 +5382,20 @@ async function kalshiClosePosition(){
     kalshiOrderId=null; kalshiOrderSide=null; kalshiOrderContracts=0; kalshiOrderCost=0; return;
   }
 
+  // For sell: price field = minimum acceptable sell price
+  // 0.01 means "willing to sell at any price above 1¢" — always fills
+  // Actual fill price is determined by the best bid in the order book
+  const sellPriceField = kalshiOrderSide === 'yes'
+    ? { yes_price_dollars: 0.01 }
+    : { no_price_dollars:  0.01 };
+
   const orderBody = {
     ticker: kalshiMarket.ticker,
     side:   kalshiOrderSide,
     action: 'sell',
     count:  contractsToSell,
     time_in_force: 'fill_or_kill',
+    ...sellPriceField,
   };
 
   console.log('[Kalshi] closing position:', JSON.stringify({side:kalshiOrderSide, count:contractsToSell}));
@@ -5889,8 +6015,10 @@ function checkFarmBot(){
     bet = sm.aboveProb > sm.belowProb ? 'UP' : 'DOWN';
   }
 
+  // Set amtInput directly — don't rely on DOM event which may be async
+  amtInput = decision.betSize;
   const aiEl = document.getElementById('ai');
-  if(aiEl){ aiEl.value=decision.betSize.toFixed(2); aiEl.dispatchEvent(new Event('input')); }
+  if(aiEl){ aiEl.value = decision.betSize.toFixed(2); }
 
   placeTrade(bet,'farm', decision.targetPct, decision.stopPct);
   // Store the farm mode on the active trade so exit log is accurate
