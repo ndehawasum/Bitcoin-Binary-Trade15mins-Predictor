@@ -1153,7 +1153,7 @@ const TRAIN_REENTRY_WAIT_MS  = 5000; // 5s between farm entries (down from 30s)
 const TRAIN_MIN_TIME_LEFT    = 60;   // enter until <60s left (down from 240s)
 const TRAIN_TARGET_PCT       = 0.06; // 6% target — exit fast, collect data
 const TRAIN_STOP_PCT         = 0.04; // 4% stop — tight, don't let losses run
-const TRAIN_BET_FIXED        = 1.00; // $1 flat per trade in training mode
+const TRAIN_BET_FIXED        = 0.25; // small fixed bet for training — buys 1-5 contracts // $1 flat per trade in training mode
 const TRAIN_HOLD_YES_HIGH    = 0.97;   // train even in extreme zones // wider zone than normal farming
 const TRAIN_HOLD_YES_LOW     = 0.03;   // train even in extreme zones // wider zone than normal farming
 const TRAIN_COUNTDOWN_SECS   = 1;   // auto-buy fires after 1s (down from 3s)
@@ -1320,6 +1320,7 @@ let lastAdvisory=null;
 // ── RISK MANAGEMENT CONSTANTS ──
 const RISK_CONF_MIN    = 58;
 const RISK_EV_MIN      = 0.05;
+const KALSHI_MIN_BET   = 0.05; // Kalshi minimum = 1 contract at YES=5¢
 const RISK_MAX_ACCT_PCT= 0.20;
 const RISK_DAILY_CAP   = 0.08 // loosened: 8% daily cap (was 5%);
 const RISK_CONSEC_BRAKE= 3;
@@ -3906,7 +3907,7 @@ function renderTradeSetup(){
         const recBet = sm.aboveProb>sm.belowProb?'UP':'DOWN';
         const yesP   = estimateYESPriceLive(sm, recBet);
         const kelly  = computeKellyBet(Math.max(sm.aboveProb,sm.belowProb), yesP, bal);
-        const sized  = Math.max(0.50, Math.round(kelly * 100)/100); // min $0.50, round to cents
+        const sized  = Math.max(0.05, Math.round(kelly * 100)/100); // min $0.05 — cost of 1 contract at YES=5¢
         const aiEl   = document.getElementById('ai');
         // Auto-fill when: user hasn't manually edited the field
         // This fires after every trade closes (amtInput reset to 0, userEditedBet cleared)
@@ -5159,7 +5160,8 @@ async function kalshiPlaceOrder(bet, amountDollars){
   const affordableContracts = Math.floor(amountDollars / fillPrice);
   const count = Math.max(1, affordableContracts); // always at least 1
 
-  // Verify budget covers at least 1 contract at ask
+  // Kalshi minimum: 1 contract = YES_price dollars (e.g. $0.05 at YES=5¢)
+  // Our only check: can we afford at least 1 contract at ask price?
   const minCostCents = Math.ceil(fillPrice * 100); // cost of 1 contract in cents
   if(maxCostCents < minCostCents){
     throw new Error(`Bet $${amountDollars.toFixed(2)} too small — 1 contract costs $${fillPrice.toFixed(2)}`);
@@ -5673,7 +5675,7 @@ function computeFarmDecision(){
   // Use aboveProb/belowProb — computeStrikeModel does NOT return .prob
   const smProb  = sm ? Math.max(sm.aboveProb, sm.belowProb) : 50;
   const betSize = (sm && balance>0)
-    ? Math.round(Math.max(0.50, Math.min(computeKellyBet(smProb, yesP, balance)*0.5, balance*0.08))*100)/100
+    ? Math.round(Math.max(0.05, Math.min(computeKellyBet(smProb, yesP, balance)*0.5, balance*0.08))*100)/100
     : 0;
 
   // Vol-scaled targets for middle-range modes
