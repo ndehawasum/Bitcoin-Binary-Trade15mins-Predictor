@@ -285,11 +285,7 @@ body.dual-active #app{padding-bottom:74px}
 
   <div id="demo-ban" style="display:none">⚡ Demo mode — APIs unreachable. Real UTC clock active.</div>
 
-  <!-- mode-toggle hidden — auto-managed by connectKey/disconnectKey -->
-  <div id="mode-toggle" style="display:none">
-    <button class="mode-btn active-sim" id="btn-sim" onclick="setTradingMode('sim')">📋 SIM</button>
-    <button class="mode-btn" id="btn-live" onclick="setTradingMode('live')">⚡ LIVE</button>
-  </div>
+  <!-- mode managed automatically by connectKey/disconnectKey — no manual toggle needed -->
   <!-- SIM CASH WALLET — shown in trade tab header, not here -->
   <div id="sim-bal-row" style="display:none">
     <span class="sim-bal-lbl">SIM $</span>
@@ -1386,6 +1382,9 @@ async function persistState(asset){
     await idbSet(p+'nnW',      st.nnW);
     await idbSet(p+'trades',   st.trades.slice(-200));
     await idbSet(p+'riskState',st.riskState);
+    // Save active trade so it survives page reload
+    if(st.active) await idbSet(p+'active', st.active);
+    else await idbSet(p+'active', null);
   }catch(e){ console.warn('IDB save failed:', e); }
   // Persist simState + farm state (global, not per-asset)
   try{
@@ -1427,6 +1426,25 @@ async function loadPersistedState(){
       if(savedTrades&&Array.isArray(savedTrades)&&savedTrades.length>0){
         st.trades=savedTrades;
         console.log(`IDB [${a}]: restored ${st.trades.length} trades`);
+      }
+      // Restore active trade if one was open when page was closed/reloaded
+      const savedActive = await idbGet(p+'active');
+      if(savedActive && savedActive.id && !savedActive.result){
+        // Only restore if trade is still within the same 15-min window
+        const tradeWindow = Math.floor(savedActive.id / (15*60*1000));
+        const currentWindow = Math.floor(Date.now() / (15*60*1000));
+        if(tradeWindow === currentWindow){
+          st.active = savedActive;
+          if(a === activeAsset){
+            active = savedActive; // set global proxy
+            peakROI = null; peakCapture = null; trailArmed = false;
+            riskState.tpTriggered = false; riskState.slTriggered = false;
+          }
+          console.log(`IDB [${a}]: restored active ${savedActive.bet} trade`);
+        } else {
+          // Trade was in a previous window — it expired, record as result unknown
+          console.log(`IDB [${a}]: active trade expired (different window) — discarding`);
+        }
       }
       if(savedRisk&&typeof savedRisk==='object'){
         st.riskState.dailyLoss=savedRisk.dailyLoss??0;
@@ -4464,20 +4482,26 @@ function placeTrade(bet, tradeType='manual', farmTarget=null, farmStop=null){
   // Sim wallet debit on trade entry
   if(simState.mode==='sim') simDebitBet(amtInput);
   showActive(); renderLog(); renderDualBar();
+  persistState(); // save active trade immediately on entry
 
-  // Only place a real Kalshi order when API key is connected AND market is live
-  // If kalshiYESPrice is null (REST only, no live order book) → simulation trade
-  // Real order only when: API key connected + WS streaming live prices
-  // REST-only (kalshiIsLive()=false) → simulation, no real order sent
-  const goLive = authConnected && kalshiMarket && kalshiIsLive();
+  // Place a real Kalshi order when:
+  // - API key is connected (authConnected)
+  // - We have a market loaded (kalshiMarket)
+  // - We have ANY YES price — either WS live (preferred) or REST (acceptable)
+  // Previously required kalshiIsLive() (WS only) which caused all trades to be SIM
+  // because WS hadn't ticked yet even though API was connected and market was real
+  const hasYESPrice = kalshiYESPrice !== null;
+  const goLive = authConnected && kalshiMarket && hasYESPrice;
   if(goLive){
+    const wsActive = kalshiIsLive();
     kalshiPlaceOrder(bet, amtInput).then(order=>{
-      showToast(`✅ Kalshi order placed — ${order.fill_count_fp||'?'} contracts filled`,'#00e5a0');
+      const src = wsActive ? 'WS' : 'REST';
+      showToast(`✅ Kalshi order placed [${src}] — ${order.fill_count_fp||'?'} contracts`,'#00e5a0');
     }).catch(e=>{
       showToast(`⚠️ Kalshi order failed: ${e.message}`,'#ff4566');
     });
   } else {
-    const reason = !authConnected ? 'no API key' : !kalshiIsLive() ? 'Kalshi REST — sim trade' : 'no market';
+    const reason = !authConnected ? 'no API key' : !hasYESPrice ? 'no YES price yet — wait' : 'no market';
     showToast(`📋 Sim trade placed (${reason})`,'#f7c948');
   }
 }
@@ -5003,6 +5027,11 @@ function clockTick(){
   checkAutoBuy();
   // Farm bar refresh every second when idle
   if(!active && now-clockFull>=1000) renderFarmBar();
+  // Persist active trade state every 10s while a trade is open (so reload can restore it)
+  if(active && now - (window._lastTradePersist||0) > 10000){
+    window._lastTradePersist = now;
+    persistState();
+  }
   // Farm bot check every second (only fires if armed and conditions met)
   checkFarmBot();
   // Farm exit check every second (monitors open farm trade for TP/SL)
@@ -5423,23 +5452,17 @@ function showToast(msg, color='#f7c948'){
 
 function setTradingMode(mode){
   simState.mode = mode;
-  const simBtn  = document.getElementById('btn-sim');
-  const liveBtn = document.getElementById('btn-live');
   const farmBar = document.getElementById('farm-bar');
   const simWalletEl = document.getElementById('sim-wallet');
 
-  // Wallet card is ALWAYS visible — it shows sim or live state
+  // Wallet card is ALWAYS visible — shows sim or live state
   if(simWalletEl) simWalletEl.classList.add('show');
 
   if(mode === 'sim'){
-    if(simBtn)  simBtn.className  = 'mode-btn active-sim';
-    if(liveBtn) liveBtn.className = 'mode-btn';
     const toggleBtn = document.getElementById('sim-toggle-btn');
     if(toggleBtn){ toggleBtn.textContent='GO LIVE'; toggleBtn.style.background='#7b9fff'; }
     if(farmBar) farmBar.style.display = 'block';
   } else {
-    if(simBtn)  simBtn.className  = 'mode-btn';
-    if(liveBtn) liveBtn.className = 'mode-btn active-live';
     const toggleBtn = document.getElementById('sim-toggle-btn');
     if(toggleBtn){ toggleBtn.textContent='GO SIM'; toggleBtn.style.background='#00e5a0'; }
     if(farmBar) farmBar.style.display = authConnected ? 'block' : 'none';
