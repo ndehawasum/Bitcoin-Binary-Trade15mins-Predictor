@@ -4695,15 +4695,14 @@ function computeEdge(sm){
 
   // ── Ceiling / Floor check ─────────────────────────────────────────
   // If YES price is already deep in our direction, upside is limited.
-  // Not worth entering late when risk/reward has flipped.
-  // For UP bet: YES > 80¢ means only 20¢ upside — too late
-  // For DOWN bet: YES < 20¢ means NO only 20¢ upside — too late
+  // Raised from 82¢ to 88¢ — allows auto-buy to catch strong trending moves
+  // up to 88¢ (12¢ headroom remaining), which is meaningful during a real run.
   const yesForEntryBet = bestBet === 'UP' ? yesPrice : (1 - yesPrice);
   const roomLeft = 1 - yesForEntryBet; // how far from ceiling (0 = at ceiling)
   let ceilingBlock = false;
   let ceilingReason = null;
-  if(yesForEntryBet >= 0.82){
-    // Less than 18¢ of upside — too late, risk/reward poor
+  if(yesForEntryBet >= 0.88){
+    // Less than 12¢ of upside — too late, risk/reward poor
     ceilingBlock = true;
     ceilingReason = `${bestBet} YES already at ${Math.round(yesForEntryBet*100)}¢ — too late (only ${Math.round(roomLeft*100)}¢ left)`;
   }
@@ -5140,24 +5139,40 @@ async function kalshiPlaceOrder(bet, amountDollars){
   const side = bet==='UP' ? 'yes' : 'no';
   const ticker = kalshiMarket.ticker;
 
-  // For market buy: use buy_max_cost (cents) to limit slippage
-  // Kalshi market orders with fill_or_kill fill at best available price
+  // Use ASK price for sizing (not mid) — you pay ask to buy
+  // This ensures buy_max_cost covers the contracts we request
+  const bid = parseFloat(kalshiMarket.yes_bid_dollars) || 0;
+  const ask = parseFloat(kalshiMarket.yes_ask_dollars) || 0;
+  const mid = kalshiYESPrice || 0.5;
+  // For YES (UP): pay ask price. For NO (DOWN): pay (1 - bid) = NO ask
+  const fillPrice = side==='yes'
+    ? (ask > 0 ? ask : mid * 1.05)          // YES: use ask, fallback mid+5%
+    : (bid > 0 ? (1 - bid) : (1 - mid) * 1.05); // NO: use (1-bid), fallback
+
+  // budget in cents
   const maxCostCents = Math.round(amountDollars * 100);
 
-  // Estimate contracts: amount / YES price (or NO price for DOWN)
-  const yesPrice = kalshiYESPrice || 0.5;
-  const sidePrice = side==='yes' ? yesPrice : (1 - yesPrice);
-  const estimatedContracts = Math.floor(amountDollars / sidePrice);
-  if(estimatedContracts < 1) throw new Error('Bet too small — need at least 1 contract');
+  // How many contracts can we afford at fill price?
+  // Each contract costs fillPrice dollars. Floor to integer.
+  const affordableContracts = Math.floor(amountDollars / fillPrice);
+  const count = Math.max(1, affordableContracts); // always at least 1
+
+  // Verify budget covers at least 1 contract at ask
+  const minCostCents = Math.ceil(fillPrice * 100); // cost of 1 contract in cents
+  if(maxCostCents < minCostCents){
+    throw new Error(`Bet $${amountDollars.toFixed(2)} too small — 1 contract costs $${fillPrice.toFixed(2)}`);
+  }
 
   const orderBody = {
     ticker,
     side,
-    action: 'buy',
-    count: estimatedContracts,
-    time_in_force: 'fill_or_kill',
-    buy_max_cost: maxCostCents,
+    action:        'buy',
+    count,
+    time_in_force: 'gtc',          // good-till-cancelled — allows partial fills
+    buy_max_cost:  maxCostCents,   // hard budget ceiling in cents
   };
+
+  console.log('[Kalshi] placing order:', JSON.stringify({ticker,side,count,maxCostCents,fillPrice}));
 
   const base = '/api/kalshi';
   const qp = new URLSearchParams({path: '/portfolio/orders', method: 'POST'});
@@ -5167,19 +5182,28 @@ async function kalshiPlaceOrder(bet, amountDollars){
     body: JSON.stringify(orderBody),
   });
   const json = await r.json().catch(()=>null);
+  console.log('[Kalshi] order response:', r.status, JSON.stringify(json)?.slice(0,200));
+
   if(!r.ok){
-    const msg = json?.error?.message || json?.error || `HTTP ${r.status}`;
+    const msg = json?.error?.message || json?.error || json?.detail || `HTTP ${r.status}`;
     throw new Error(msg);
   }
 
-  const order = json.order;
-  kalshiOrderId = order.order_id;
-  kalshiOrderSide = side;
-  kalshiOrderContracts = parseFloat(order.fill_count_fp||0) || estimatedContracts;
-  kalshiOrderCost = parseFloat(order.taker_fill_cost_dollars||0) || amountDollars;
-  autoCloseArmed = true;
+  const order = json.order || json;
+  const filled = parseFloat(order.fill_count_fp||order.filled_count||0);
 
-  console.log('Kalshi order placed:', kalshiOrderId, side, kalshiOrderContracts, 'contracts');
+  // If 0 contracts filled, the order was placed but not matched yet (gtc will retry)
+  if(filled === 0){
+    console.warn('[Kalshi] order placed but 0 contracts filled yet — GTC active');
+  }
+
+  kalshiOrderId       = order.order_id;
+  kalshiOrderSide     = side;
+  kalshiOrderContracts = filled || count;
+  kalshiOrderCost     = parseFloat(order.taker_fill_cost_dollars||order.cost||0) || amountDollars;
+  autoCloseArmed      = true;
+
+  console.log('[Kalshi] order confirmed:', kalshiOrderId, side, filled, 'contracts filled of', count);
   return order;
 }
 
@@ -5196,17 +5220,38 @@ async function kalshiSellPosition(currentYESPrice){
 }
 
 async function kalshiClosePosition(){
-  if(!kalshiOrderId||!kalshiOrderSide||!kalshiOrderContracts) return;
+  if(!kalshiOrderContracts || kalshiOrderContracts <= 0) return;
   if(!authConnected) return;
 
   autoCloseArmed = false;
+
+  // First: cancel any open GTC buy order that hasn't fully filled
+  // This prevents the order from continuing to buy after we want to exit
+  if(kalshiOrderId){
+    try{
+      const cancelPath = `/portfolio/orders/${kalshiOrderId}`;
+      const cqp = new URLSearchParams({path: cancelPath, method: 'DELETE'});
+      const cr = await fetch(`/api/kalshi?${cqp.toString()}`, { method: 'DELETE' });
+      console.log('[Kalshi] cancelled open order:', kalshiOrderId, cr.status);
+    } catch(e){
+      console.warn('[Kalshi] cancel order failed (may already be filled):', e.message);
+    }
+  }
+
+  // Then: sell the position we hold
+  // Use gtc so partial fills are possible (fill_or_kill could fail if liquidity is thin)
+  const contractsToSell = Math.floor(kalshiOrderContracts);
+  if(contractsToSell < 1){ kalshiOrderId=null; kalshiOrderSide=null; kalshiOrderContracts=0; kalshiOrderCost=0; return; }
+
   const orderBody = {
     ticker: kalshiMarket.ticker,
-    side: kalshiOrderSide,
+    side:   kalshiOrderSide,
     action: 'sell',
-    count: Math.floor(kalshiOrderContracts),
-    time_in_force: 'fill_or_kill',
+    count:  contractsToSell,
+    time_in_force: 'gtc',
   };
+
+  console.log('[Kalshi] closing position:', JSON.stringify({side:kalshiOrderSide, count:contractsToSell}));
 
   const base = '/api/kalshi';
   const qp = new URLSearchParams({path: '/portfolio/orders', method: 'POST'});
@@ -5217,9 +5262,10 @@ async function kalshiClosePosition(){
       body: JSON.stringify(orderBody),
     });
     const json = await r.json().catch(()=>null);
-    if(!r.ok) console.warn('Close order error:', json);
-    else console.log('Position closed:', json?.order?.order_id);
-  } catch(e){ console.warn('Close position error:', e.message); }
+    console.log('[Kalshi] close response:', r.status, JSON.stringify(json)?.slice(0,200));
+    if(!r.ok) console.warn('[Kalshi] close order error:', json);
+    else console.log('[Kalshi] position closed:', json?.order?.order_id);
+  } catch(e){ console.warn('[Kalshi] close position error:', e.message); }
 
   kalshiOrderId = null;
   kalshiOrderSide = null;
@@ -5689,8 +5735,32 @@ function computeFarmDecision(){
 
   // ── MODE 1: CONVICTION FARMING ───────────────────────────────────
   // YES strongly one-sided → ride the dominant side
-  const CONVICTION_HIGH = 0.70;
-  const CONVICTION_LOW  = 0.30;
+  // Two tiers based on how extreme the price is:
+  //   STRONG CONVICTION (YES 80–95¢ or 5–20¢): tight 3% target / 1.5% stop
+  //     — market nearly certain, very fast exit to capture small reliable gains
+  //   CONVICTION (YES 70–80¢ or 20–30¢): normal 5% target / 3% stop
+  //     — market leaning but not extreme, slightly more room to run
+  const CONVICTION_HIGH        = 0.70;
+  const CONVICTION_LOW         = 0.30;
+  const STRONG_CONVICTION_HIGH = 0.80;
+  const STRONG_CONVICTION_LOW  = 0.20;
+
+  if(yesP >= STRONG_CONVICTION_HIGH){
+    // Market 80–95% sure UP → tight scalp, fast in/out
+    return {
+      shouldFarm:true, suggestedBet:'UP', farmMode:'CONVICTION',
+      reason:'💪 STRONG CONVICTION UP · YES '+Math.round(yesP*100)+'¢ → tight scalp',
+      targetPct:0.03, stopPct:0.015, betSize,
+    };
+  }
+  if(yesP <= STRONG_CONVICTION_LOW){
+    // Market 80–95% sure DOWN → tight scalp, fast in/out
+    return {
+      shouldFarm:true, suggestedBet:'DOWN', farmMode:'CONVICTION',
+      reason:'💪 STRONG CONVICTION DOWN · YES '+Math.round(yesP*100)+'¢ → tight scalp',
+      targetPct:0.03, stopPct:0.015, betSize,
+    };
+  }
   if(yesP >= CONVICTION_HIGH){
     return {
       shouldFarm:true, suggestedBet:'UP', farmMode:'CONVICTION',

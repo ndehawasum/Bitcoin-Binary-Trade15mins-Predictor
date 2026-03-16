@@ -2,7 +2,7 @@
 // Kalshi API proxy — signs requests server-side using env vars
 
 const crypto = require('crypto');
-const KALSHI_BASE = 'https://api.elections.kalshi.com/trade-api/v2';
+const KALSHI_BASE = 'https://trading-api.kalshi.com/trade-api/v2';
 
 function normalizePEM(raw) {
   let pem = raw.replace(/\\n/g, '\n').replace(/\r\n/g, '\n').trim();
@@ -51,7 +51,18 @@ const ALLOWED = [
   '/portfolio/fills',
   '/portfolio/orders',
   '/markets',
+  // /portfolio/orders/:id for DELETE (cancel order)
 ];
+// Allow /portfolio/orders and /portfolio/orders/:id
+function isAllowed(path) {
+  if (ALLOWED.some(a => path.startsWith(a))) return true;
+  // Also allow DELETE on specific order IDs: /portfolio/orders/ord_xxx
+  if (/^\/portfolio\/orders\/[a-zA-Z0-9_-]+$/.test(path)) return true;
+  return false;
+}
+
+// Explicitly enable body parsing for JSON POST requests
+module.exports.config = { api: { bodyParser: true } };
 
 module.exports = async (req, res) => {
   // CORS headers
@@ -73,7 +84,7 @@ module.exports = async (req, res) => {
   const method = (params.method || 'GET').toUpperCase();
 
   if (!kalshiPath) { res.status(400).json({ error: 'Missing path param' }); return; }
-  if (!ALLOWED.some(a => kalshiPath.startsWith(a))) {
+  if (!isAllowed(kalshiPath)) {
     res.status(403).json({ error: `Path not allowed: ${kalshiPath}` }); return;
   }
 
@@ -86,13 +97,32 @@ module.exports = async (req, res) => {
   try {
     const headers = buildHeaders(keyId, privateKeyPem, method, kalshiPath);
     const fetchOpts = { method, headers };
-    if (req.body && method !== 'GET') {
-      fetchOpts.body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+    if (method !== 'GET') {
+      // Primary: use Vercel's parsed body (works when bodyParser:true)
+      // Fallback: manually read raw body stream (for edge cases)
+      let bodyData = req.body;
+      if (bodyData === undefined) {
+        // Body parser didn't run — read stream manually
+        bodyData = await new Promise((resolve) => {
+          let raw = '';
+          req.on('data', chunk => { raw += chunk; });
+          req.on('end', () => {
+            try { resolve(JSON.parse(raw)); }
+            catch { resolve(raw); }
+          });
+        });
+      }
+      if (bodyData) {
+        fetchOpts.body = typeof bodyData === 'string' ? bodyData : JSON.stringify(bodyData);
+        console.log('[proxy] forwarding body:', JSON.stringify(bodyData)?.slice(0,200));
+      }
     }
 
+    console.log('[proxy] →', method, url);
     const response = await fetch(url, fetchOpts);
     const data = await response.json();
-    if (!response.ok) console.log('Kalshi error:', response.status, JSON.stringify(data));
+    console.log('[proxy] ←', response.status, JSON.stringify(data)?.slice(0,300));
+    if (!response.ok) console.log('[proxy] Kalshi error detail:', response.status, JSON.stringify(data));
 
     res.status(response.status).json(data);
   } catch (err) {
