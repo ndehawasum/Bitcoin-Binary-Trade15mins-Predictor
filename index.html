@@ -5171,14 +5171,19 @@ async function kalshiPlaceOrder(bet, amountDollars){
     throw new Error(`Bet $${amountDollars.toFixed(2)} too small — 1 contract costs $${fillPrice.toFixed(2)}`);
   }
 
+  // Kalshi requires exactly one price field: yes_price_dollars or no_price_dollars
+  // Use fillPrice (the ask side for our bet) as the limit price
+  const priceField = side === 'yes'
+    ? { yes_price_dollars: parseFloat(fillPrice.toFixed(2)) }
+    : { no_price_dollars:  parseFloat(fillPrice.toFixed(2)) };
+
   const orderBody = {
     ticker,
     side,
     action:        'buy',
-    // No count — let buy_max_cost drive how many contracts are filled
-    // This avoids fill_or_kill rejection when count > what budget can cover at ask
     time_in_force: 'fill_or_kill',
     buy_max_cost:  maxCostCents,
+    ...priceField,
   };
 
   console.log('[Kalshi] placing order:', JSON.stringify({ticker,side,count,maxCostCents,fillPrice}));
