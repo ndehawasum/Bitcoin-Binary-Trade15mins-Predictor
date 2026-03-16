@@ -2,7 +2,7 @@
 // Kalshi API proxy — signs requests server-side using env vars
 
 const crypto = require('crypto');
-const KALSHI_BASE = 'https://trading-api.kalshi.com/trade-api/v2';
+const KALSHI_BASE = 'https://trading-api.kalshi.com/trade-api/v3';
 
 function normalizePEM(raw) {
   let pem = raw.replace(/\\n/g, '\n').replace(/\r\n/g, '\n').trim();
@@ -35,7 +35,7 @@ function buildSignature(privateKeyPem, message) {
 
 function buildHeaders(keyId, privateKeyPem, method, kalshiPath) {
   const ts = Date.now().toString();
-  const pathNoQuery = '/trade-api/v2' + kalshiPath.split('?')[0];
+  const pathNoQuery = '/trade-api/v3' + kalshiPath.split('?')[0];
   const signature = buildSignature(privateKeyPem, ts + method.toUpperCase() + pathNoQuery);
   return {
     'KALSHI-ACCESS-KEY': keyId,
@@ -120,7 +120,19 @@ module.exports = async (req, res) => {
 
     console.log('[proxy] →', method, url);
     const response = await fetch(url, fetchOpts);
-    const data = await response.json();
+
+    // Safe parse — Kalshi sometimes returns plain text (e.g. deprecation notices)
+    const rawText = await response.text();
+    let data;
+    try {
+      data = JSON.parse(rawText);
+    } catch(_) {
+      // Not JSON — return the raw text as an error so the app can show it
+      console.log('[proxy] non-JSON response:', response.status, rawText.slice(0,200));
+      res.status(response.status).json({ error: rawText.slice(0,300) });
+      return;
+    }
+
     console.log('[proxy] ←', response.status, JSON.stringify(data)?.slice(0,300));
     if (!response.ok) console.log('[proxy] Kalshi error detail:', response.status, JSON.stringify(data));
 

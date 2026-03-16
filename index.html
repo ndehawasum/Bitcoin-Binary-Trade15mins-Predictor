@@ -2068,8 +2068,8 @@ async function priceTick(){
 // ═══════════════════════════════════════════════════
 // KALSHI MARKET API — public endpoints, no auth needed
 // ═══════════════════════════════════════════════════
-const KALSHI_BASE = 'https://trading-api.kalshi.com/trade-api/v2';
-const KALSHI_WS   = 'wss://trading-api.kalshi.com/trade-api/ws/v2';
+const KALSHI_BASE = 'https://trading-api.kalshi.com/trade-api/v3';
+const KALSHI_WS   = 'wss://trading-api.kalshi.com/trade-api/ws/v3';
 const BTC_SERIES  = 'KXBTC15M';
 const ETH_SERIES  = 'KXETH15M';
 function activeSeries(){ return ASSET_CFG[activeAsset].series; }
@@ -5094,7 +5094,9 @@ async function kalshiAuthFetch(method, kalshiPath, extraParams){
   const r = await fetch(`${base}?${qp.toString()}`);
   const json = await r.json().catch(()=>null);
   if(!r.ok){
-    const msg = (json&&json.error) ? json.error : `HTTP ${r.status} ${r.statusText}`;
+    const msg = (json&&json.error) ? json.error
+      : (json&&json.detail) ? json.detail
+      : `HTTP ${r.status} ${r.statusText}`;
     throw new Error(msg);
   }
   return json;
