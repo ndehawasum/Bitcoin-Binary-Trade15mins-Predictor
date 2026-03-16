@@ -5138,9 +5138,11 @@ async function fetchFills(){
 async function kalshiPlaceOrder(bet, amountDollars){
   if(!kalshiMarket) throw new Error('No active Kalshi market found');
   if(!authConnected) throw new Error('Not connected to Kalshi');
+  if(bet !== 'UP' && bet !== 'DOWN') throw new Error(`Invalid bet direction: ${bet}`);
 
   const side = bet==='UP' ? 'yes' : 'no';
   const ticker = kalshiMarket.ticker;
+  if(!ticker) throw new Error('Kalshi market ticker missing — market may be loading');
 
   // Use ASK price for sizing (not mid) — you pay ask to buy
   // This ensures buy_max_cost covers the contracts we request
@@ -5161,7 +5163,9 @@ async function kalshiPlaceOrder(bet, amountDollars){
   const count = Math.max(1, affordableContracts); // always at least 1
 
   // Kalshi minimum: 1 contract = YES_price dollars (e.g. $0.05 at YES=5¢)
-  // Our only check: can we afford at least 1 contract at ask price?
+  if(!isFinite(maxCostCents) || maxCostCents <= 0){
+    throw new Error(`Invalid bet amount: $${amountDollars}`);
+  }
   const minCostCents = Math.ceil(fillPrice * 100); // cost of 1 contract in cents
   if(maxCostCents < minCostCents){
     throw new Error(`Bet $${amountDollars.toFixed(2)} too small — 1 contract costs $${fillPrice.toFixed(2)}`);
@@ -5171,9 +5175,10 @@ async function kalshiPlaceOrder(bet, amountDollars){
     ticker,
     side,
     action:        'buy',
-    count,
-    time_in_force: 'gtc',          // good-till-cancelled — allows partial fills
-    buy_max_cost:  maxCostCents,   // hard budget ceiling in cents
+    // No count — let buy_max_cost drive how many contracts are filled
+    // This avoids fill_or_kill rejection when count > what budget can cover at ask
+    time_in_force: 'fill_or_kill',
+    buy_max_cost:  maxCostCents,
   };
 
   console.log('[Kalshi] placing order:', JSON.stringify({ticker,side,count,maxCostCents,fillPrice}));
@@ -5196,18 +5201,22 @@ async function kalshiPlaceOrder(bet, amountDollars){
   const order = json.order || json;
   const filled = parseFloat(order.fill_count_fp||order.filled_count||0);
 
-  // If 0 contracts filled, the order was placed but not matched yet (gtc will retry)
+  // Estimate contracts from budget if fill_count not reported
+  // Each contract costs fillPrice dollars, budget = amountDollars
+  const estimatedFromBudget = Math.max(1, Math.floor(amountDollars / fillPrice));
+  const contractsHeld = filled > 0 ? filled : estimatedFromBudget;
+
   if(filled === 0){
-    console.warn('[Kalshi] order placed but 0 contracts filled yet — GTC active');
+    console.warn('[Kalshi] 0 contracts filled immediately — fill_or_kill may have found no match');
   }
 
-  kalshiOrderId       = order.order_id;
-  kalshiOrderSide     = side;
-  kalshiOrderContracts = filled || count;
-  kalshiOrderCost     = parseFloat(order.taker_fill_cost_dollars||order.cost||0) || amountDollars;
-  autoCloseArmed      = true;
+  kalshiOrderId        = order.order_id;
+  kalshiOrderSide      = side;
+  kalshiOrderContracts = contractsHeld;
+  kalshiOrderCost      = parseFloat(order.taker_fill_cost_dollars||order.cost||0) || amountDollars;
+  autoCloseArmed       = true;
 
-  console.log('[Kalshi] order confirmed:', kalshiOrderId, side, filled, 'contracts filled of', count);
+  console.log('[Kalshi] order confirmed:', kalshiOrderId, side, filled, 'contracts filled, holding:', contractsHeld);
   return order;
 }
 
@@ -5245,14 +5254,17 @@ async function kalshiClosePosition(){
   // Then: sell the position we hold
   // Use gtc so partial fills are possible (fill_or_kill could fail if liquidity is thin)
   const contractsToSell = Math.floor(kalshiOrderContracts);
-  if(contractsToSell < 1){ kalshiOrderId=null; kalshiOrderSide=null; kalshiOrderContracts=0; kalshiOrderCost=0; return; }
+  if(!isFinite(contractsToSell) || contractsToSell < 1){
+    console.warn('[Kalshi] invalid contractsToSell:', kalshiOrderContracts, '— aborting close');
+    kalshiOrderId=null; kalshiOrderSide=null; kalshiOrderContracts=0; kalshiOrderCost=0; return;
+  }
 
   const orderBody = {
     ticker: kalshiMarket.ticker,
     side:   kalshiOrderSide,
     action: 'sell',
     count:  contractsToSell,
-    time_in_force: 'gtc',
+    time_in_force: 'fill_or_kill',
   };
 
   console.log('[Kalshi] closing position:', JSON.stringify({side:kalshiOrderSide, count:contractsToSell}));
