@@ -2,7 +2,7 @@
 // Kalshi API proxy — signs requests server-side using env vars
 
 const crypto = require('crypto');
-const KALSHI_BASE = 'https://trading-api.kalshi.com/trade-api/v3';
+const KALSHI_BASE = 'https://api.elections.kalshi.com/trade-api/v2';
 
 function normalizePEM(raw) {
   let pem = raw.replace(/\\n/g, '\n').replace(/\r\n/g, '\n').trim();
@@ -35,7 +35,7 @@ function buildSignature(privateKeyPem, message) {
 
 function buildHeaders(keyId, privateKeyPem, method, kalshiPath) {
   const ts = Date.now().toString();
-  const pathNoQuery = '/trade-api/v3' + kalshiPath.split('?')[0];
+  const pathNoQuery = '/trade-api/v2' + kalshiPath.split('?')[0];
   const signature = buildSignature(privateKeyPem, ts + method.toUpperCase() + pathNoQuery);
   return {
     'KALSHI-ACCESS-KEY': keyId,
