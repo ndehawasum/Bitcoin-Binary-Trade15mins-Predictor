@@ -4623,8 +4623,10 @@ function renderMarketConditions(){
   }
 }
 
+let _placeTradeInFlight = false; // prevents duplicate orders during async await
 async function placeTrade(bet, tradeType='manual', farmTarget=null, farmStop=null){
-  if(active||!livePrice||!amtInput||amtInput<=0||!isFinite(amtInput)||!strikeInput||strikeInput<=0)return;
+  if(active||_placeTradeInFlight||!livePrice||!amtInput||amtInput<=0||!isFinite(amtInput)||!strikeInput||strikeInput<=0)return;
+  _placeTradeInFlight = true;
   const sm=computeStrikeModel(prices,strikeInput);
   const entryYESPrice=estimateYESPriceLive(sm,bet);
   const contracts=kalshiContracts(amtInput,entryYESPrice,bet); // use correct side price
@@ -4665,13 +4667,15 @@ async function placeTrade(bet, tradeType='manual', farmTarget=null, farmStop=nul
       showActive(); renderLog(); renderDualBar();
       persistState();
       const src = wsActive ? 'WS' : 'REST';
-      const filled = parseFloat(order.filled_count||0);
-      showToast(`✅ Kalshi order filled [${src}] — ${filled} contracts @ $${(order.taker_fill_cost ? (order.taker_fill_cost / 100) : amtInput).toFixed(2)}`,'#00e5a0');
+      const filled = parseFloat(order.filled_count||order.taker_fill_count||0);
+      showToast(`✅ Kalshi order filled [${src}] — ${filled||kalshiOrderContracts} contracts @ $${(order.taker_fill_cost ? (order.taker_fill_cost / 100) : amtInput).toFixed(2)}`,'#00e5a0');
     } catch(e) {
       // Kalshi rejected — do NOT record the trade
       showToast(`⚠️ Kalshi order failed: ${e.message}`,'#ff4566');
-      return;
+    } finally {
+      _placeTradeInFlight = false;
     }
+    return;
   } else {
     // Sim path — record immediately as before
     trades.push(t); active=t; peakROI=null; peakCapture=null; trailArmed=false; exitIdx=null; active._peakYesC=0; priceChartDirty=true; projChartDirty=true;
@@ -4682,6 +4686,7 @@ async function placeTrade(bet, tradeType='manual', farmTarget=null, farmStop=nul
     const reason = !authConnected ? 'no API key' : !hasYESPrice ? 'no YES price yet — wait' : 'no market';
     showToast(`📋 Sim trade placed (${reason})`,'#f7c948');
   }
+  _placeTradeInFlight = false;
 }
 
 // closeTradeWithSell: attempt to sell the contract on Kalshi (preferred over holding to expiry)
@@ -5387,18 +5392,24 @@ async function kalshiPlaceOrder(bet, amountDollars){
   }
 
   const order = json.order || json;
-  const filled = parseFloat(order.filled_count||0);
+  const filled = parseFloat(order.filled_count || order.taker_fill_count || 0);
 
-  if(filled === 0){
-    // FOK found no matching seller at our price — order was cancelled entirely
-    // This is NOT a success — throw so the caller shows a warning toast
-    console.warn('[Kalshi] 0 contracts filled — FOK found no match at current market price');
-    throw new Error('Order placed but 0 contracts filled — no market maker available right now, try again');
+  // Only throw if the order was explicitly cancelled (status='cancelled' with 0 fills).
+  // If r.ok and order_id exists, Kalshi accepted the order — trust it even if
+  // filled_count is 0 or missing (fill may be reported asynchronously).
+  const status = order.status || '';
+  if(filled === 0 && status === 'cancelled'){
+    console.warn('[Kalshi] FOK order cancelled — no match at current market price');
+    throw new Error('Order not filled — no matching seller right now, try again');
   }
+
+  // Use filled count if available, otherwise fall back to what we requested (count)
+  const confirmedContracts = filled > 0 ? filled : count;
+  console.log('[Kalshi] order confirmed:', order.order_id, 'status:', status, 'filled:', filled, 'using:', confirmedContracts);
 
   kalshiOrderId        = order.order_id;
   kalshiOrderSide      = side;
-  kalshiOrderContracts = filled;
+  kalshiOrderContracts = confirmedContracts;
   kalshiOrderCost      = order.taker_fill_cost ? (order.taker_fill_cost / 100) : amountDollars;
   autoCloseArmed       = true;
 
