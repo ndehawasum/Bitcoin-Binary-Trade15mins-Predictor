@@ -5282,11 +5282,6 @@ async function kalshiPlaceOrder(bet, amountDollars){
   // budget in cents
   const maxCostCents = Math.round(amountDollars * 100);
 
-  // How many contracts can we afford at fill price?
-  // Each contract costs fillPrice dollars. Floor to integer.
-  const affordableContracts = Math.floor(amountDollars / fillPrice);
-  const count = Math.max(1, affordableContracts); // always at least 1
-
   // Kalshi minimum: 1 contract = YES_price dollars (e.g. $0.05 at YES=5¢)
   if(!isFinite(maxCostCents) || maxCostCents <= 0){
     throw new Error(`Invalid bet amount: $${amountDollars}`);
@@ -5298,36 +5293,29 @@ async function kalshiPlaceOrder(bet, amountDollars){
     throw new Error(`Budget ${maxCostCents}¢ < 1 contract cost ${minCostCents}¢ (${side} at ${(fillPrice*100).toFixed(0)}¢ each) — increase bet size`);
   }
 
-  // Kalshi requires exactly one price field: yes_price_dollars or no_price_dollars
-  // Send a GENEROUS limit (0.99) not the exact ask price.
-  // Rationale: fill_or_kill rejects if market ticks even 1¢ above our limit.
-  // buy_max_cost already hard-caps total spend in cents — the price field is
-  // just a per-contract ceiling. 0.99 means "willing to pay up to 99¢/contract"
-  // which always clears the market, while buy_max_cost prevents overspending.
-  const priceField = side === 'yes'
-    ? { yes_price_dollars: 0.99 }
-    : { no_price_dollars:  0.99 };
-
-  // Docs require: type, count, client_order_id, and price as string with 4 decimals
+  // Docs require: type, client_order_id, and price as string with 4 decimals
   const client_order_id = Date.now().toString(36) + Math.random().toString(36).slice(2,7);
   // yes_price_dollars / no_price_dollars must be STRING with 4 decimal places per docs
   const priceFieldStr = side === 'yes'
     ? { yes_price_dollars: '0.9900' }  // generous limit — buy_max_cost caps actual spend
     : { no_price_dollars:  '0.9900' };
 
+  // NOTE: count is intentionally omitted. When buy_max_cost is set on a
+  // fill_or_kill order, Kalshi determines how many contracts to fill based on
+  // the budget. Supplying count caused FOK rejection when the calculated count
+  // exceeded what the order book could fill at the given price within budget.
   const orderBody = {
     ticker,
     client_order_id,       // prevents duplicate orders on retry
     side,
     action:        'buy',
     type:          'limit',          // REQUIRED by Kalshi API
-    count,                           // number of contracts (required for limit orders)
     time_in_force: 'fill_or_kill',
     buy_max_cost:  maxCostCents,     // hard budget cap in cents
     ...priceFieldStr,
   };
 
-  console.log('[Kalshi] placing order:', JSON.stringify({ticker,side,count,maxCostCents,fillPrice}));
+  console.log('[Kalshi] placing order:', JSON.stringify({ticker,side,maxCostCents,fillPrice}));
 
   const base = '/api/kalshi';
   const qp = new URLSearchParams({path: '/portfolio/orders', method: 'POST'});
