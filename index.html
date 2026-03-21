@@ -4055,19 +4055,25 @@ function renderTradeSetup(){
     // ── Auto-fill recommended bet size ──
     // Silently fills the bet input when: no active trade, balance known, input is empty or zero
     if(!active && strikeInput > 0 && livePrice){
-      const bal = getRiskAccountBalance();
-      if(bal > 0){
-        const recBet = sm.aboveProb>sm.belowProb?'UP':'DOWN';
-        const yesP   = estimateYESPriceLive(sm, recBet);
-        const kelly  = computeKellyBet(Math.max(sm.aboveProb,sm.belowProb), yesP, bal);
-        const sized  = Math.max(0.05, Math.round(kelly * 100)/100); // min $0.05 — cost of 1 contract at YES=5¢
-        const aiEl   = document.getElementById('ai');
-        // Auto-fill when: user hasn't manually edited the field
-        // This fires after every trade closes (amtInput reset to 0, userEditedBet cleared)
-        if(aiEl && !userEditedBet){
-          aiEl.value = sized.toFixed(2);
-          amtInput   = sized;
+      const recBet = sm.aboveProb>sm.belowProb?'UP':'DOWN';
+      const aiEl   = document.getElementById('ai');
+      // Auto-fill with the cost of 1 contract at the current ask price.
+      // This ensures the auto-filled amount always covers at least 1 contract.
+      if(aiEl && !userEditedBet){
+        let autoFill = 1.00; // fallback if no price data yet
+        if(kalshiMarket){
+          const bid = parseFloat(kalshiMarket.yes_bid_dollars)||(kalshiMarket.yes_bid!=null?kalshiMarket.yes_bid/100:0);
+          const ask = parseFloat(kalshiMarket.yes_ask_dollars)||(kalshiMarket.yes_ask!=null?kalshiMarket.yes_ask/100:0);
+          const mid = kalshiYESPrice || 0.5;
+          const fp  = recBet==='UP' ? (ask>0?ask:mid*1.05) : (bid>0?(1-bid):(1-mid)*1.05);
+          autoFill  = Math.max(0.01, Math.ceil(fp * 100) / 100); // round up to nearest cent
+        } else if(kalshiYESPrice !== null){
+          const yesP = estimateYESPriceLive(sm, recBet);
+          const fp   = recBet==='UP' ? Math.max(0.01,yesP) : Math.max(0.01,1-yesP);
+          autoFill   = Math.max(0.01, Math.ceil(fp * 100) / 100);
         }
+        aiEl.value = autoFill.toFixed(2);
+        amtInput   = autoFill;
       }
     }
   }
