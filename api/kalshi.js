@@ -64,9 +64,7 @@ function isAllowed(path) {
 }
 
 // Explicitly enable body parsing for JSON POST requests
-module.exports.config = { api: { bodyParser: true } };
-
-module.exports = async (req, res) => {
+const handler = async (req, res) => {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -148,3 +146,6 @@ module.exports = async (req, res) => {
     res.status(502).json({ error: `Proxy error: ${err.message}` });
   }
 };
+
+handler.config = { api: { bodyParser: true } };
+module.exports = handler;

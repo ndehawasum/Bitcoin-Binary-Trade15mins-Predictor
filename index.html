@@ -4071,11 +4071,11 @@ function renderTradeSetup(){
           contractPrice = recBet==='UP' ? (ask>0?ask:mid*1.05) : (bid>0?(1-bid):(1-mid)*1.05);
         }
         contractPrice = Math.max(0.01, Math.ceil(contractPrice * 100) / 100);
-        // Kelly sizing capped at 8% of balance, floored at contract price
+        // Kelly sizing capped at 10% of balance, floored at contract price
+        // Skip auto-fill entirely if balance is 0 — don't suggest unaffordable amounts
         const kelly = bal > 0 ? Math.min(computeKellyBet(Math.max(sm.aboveProb,sm.belowProb), yesP, bal), bal*0.10) : 0;
-        const autoFill = Math.max(contractPrice, Math.round(kelly * 100) / 100);
-        aiEl.value = autoFill.toFixed(2);
-        amtInput   = autoFill;
+        const autoFill = bal > 0 ? Math.max(contractPrice, Math.round(kelly * 100) / 100) : 0;
+        if(autoFill > 0){ aiEl.value = autoFill.toFixed(2); amtInput = autoFill; }
       }
     }
   }
@@ -4629,6 +4629,7 @@ let _placeTradeInFlight = false; // prevents duplicate orders during async await
 async function placeTrade(bet, tradeType='manual', farmTarget=null, farmStop=null){
   if(active||_placeTradeInFlight||!livePrice||!amtInput||amtInput<=0||!isFinite(amtInput)||!strikeInput||strikeInput<=0)return;
   _placeTradeInFlight = true;
+  try {
   const sm=computeStrikeModel(prices,strikeInput);
   const entryYESPrice=estimateYESPriceLive(sm,bet);
   const contracts=kalshiContracts(amtInput,entryYESPrice,bet); // use correct side price
@@ -4688,7 +4689,9 @@ async function placeTrade(bet, tradeType='manual', farmTarget=null, farmStop=nul
     const reason = !authConnected ? 'no API key' : !hasYESPrice ? 'no YES price yet — wait' : 'no market';
     showToast(`📋 Sim trade placed (${reason})`,'#f7c948');
   }
-  _placeTradeInFlight = false;
+  } finally {
+    _placeTradeInFlight = false;
+  }
 }
 
 // closeTradeWithSell: attempt to sell the contract on Kalshi (preferred over holding to expiry)
@@ -5410,7 +5413,8 @@ async function kalshiPlaceOrder(bet, amountDollars){
   const confirmedContracts = filled > 0 ? filled : count;
   console.log('[Kalshi] order confirmed:', order.order_id, 'status:', status, 'filled:', filled, 'using:', confirmedContracts);
 
-  kalshiOrderId        = order.order_id;
+  kalshiOrderId        = order.order_id ?? order.id ?? null;
+  if(!kalshiOrderId) console.warn('[Kalshi] order response missing order_id:', JSON.stringify(order)?.slice(0,200));
   kalshiOrderSide      = side;
   kalshiOrderContracts = confirmedContracts;
   kalshiOrderCost      = order.taker_fill_cost ? (order.taker_fill_cost / 100) : amountDollars;
@@ -5455,8 +5459,7 @@ async function kalshiClosePosition(){
   // Use gtc so partial fills are possible (fill_or_kill could fail if liquidity is thin)
   const contractsToSell = Math.floor(kalshiOrderContracts);
   if(!isFinite(contractsToSell) || contractsToSell < 1){
-    console.warn('[Kalshi] invalid contractsToSell:', kalshiOrderContracts, '— aborting close');
-    kalshiOrderId=null; kalshiOrderSide=null; kalshiOrderContracts=0; kalshiOrderCost=0; return;
+    throw new Error(`[Kalshi] invalid contractsToSell (${kalshiOrderContracts}) — position not sold, try again`);
   }
 
   // Sell: minimum acceptable price = 0.01 (willing to sell at any price above 1¢)
@@ -5920,6 +5923,12 @@ function computeFarmDecision(){
     ? Math.round(Math.min(computeKellyBet(smProb, yesP, balance)*0.5, balance*0.10)*100)/100
     : 0;
   const betSize = kellyCapped >= contractMin ? kellyCapped : 0;
+  // If Kelly is too small to buy even one contract, bail early with a clear reason
+  if(betSize === 0){
+    return {shouldFarm:false,
+      reason:`Kelly $${kellyCapped.toFixed(2)} < min $${contractMin.toFixed(2)} — increase balance`,
+      targetPct:0.12, stopPct:0.06, betSize:0};
+  }
 
   // ── SIGNAL QUALITY GATES (data-backed, 68–95% confidence) ─────────────────
   // These run AFTER sizing so betSize is available for the reason string,
@@ -6316,7 +6325,8 @@ function renderFarmBar(decision){
   let statusText='IDLE', statusClass='idle';
   if(!farmState.armed){ statusText='IDLE'; statusClass='idle'; }
   else if(active&&active.tradeType==='farm'){ statusText='IN TRADE'; statusClass='in-trade'; }
-  else if(d.shouldFarm){ statusText='HUNTING'; statusClass='hunting'; }
+  else if(d.shouldFarm && d.betSize > 0){ statusText='HUNTING'; statusClass='hunting'; }
+  else if(d.shouldFarm && !(d.betSize > 0)){ statusText='BLOCKED'; statusClass='blocked'; }
   else { statusText='BLOCKED'; statusClass='blocked'; }
 
   if(statusEl){ statusEl.textContent=statusText; statusEl.className='farm-status '+statusClass; }
