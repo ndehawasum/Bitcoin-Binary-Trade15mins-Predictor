@@ -5280,7 +5280,8 @@ async function kalshiAuthFetch(method, kalshiPath, extraParams){
   const r = await fetch(`${base}?${qp.toString()}`);
   const json = await r.json().catch(()=>null);
   if(!r.ok){
-    const msg = (json&&json.error) ? json.error
+    const msg = (json&&json.error&&json.error.details) ? json.error.details
+      : (json&&json.error&&json.error.message) ? json.error.message
       : (json&&json.detail) ? json.detail
       : `HTTP ${r.status} ${r.statusText}`;
     throw new Error(msg);
@@ -5389,7 +5390,7 @@ async function kalshiPlaceOrder(bet, amountDollars){
   console.log('[Kalshi] order response:', r.status, JSON.stringify(json)?.slice(0,200));
 
   if(!r.ok){
-    const msg = json?.error?.message || json?.error || json?.detail || `HTTP ${r.status}`;
+    const msg = json?.error?.details || json?.error?.message || json?.detail || `HTTP ${r.status}`;
     throw new Error(msg);
   }
 
@@ -5490,7 +5491,8 @@ async function kalshiClosePosition(){
     console.log('[Kalshi] close response:', r.status, JSON.stringify(json)?.slice(0,200));
     if(!r.ok){
       console.warn('[Kalshi] close order error — position state preserved:', json);
-      throw new Error(`Kalshi sell failed: ${r.status} ${JSON.stringify(json)}`);
+      const closeMsg = json?.error?.details || json?.error?.message || json?.detail || `HTTP ${r.status}`;
+      throw new Error(`Kalshi sell failed: ${closeMsg}`);
     }
     console.log('[Kalshi] position closed:', json?.order?.order_id);
     kalshiOrderId = null;
@@ -5509,7 +5511,10 @@ async function maybeAutoClose(advisory){
   // advisory uses: urgency ('high'/'medium'/'low'), action ('SELL_NOW'/'CONSIDER_EXIT'/'HOLD'/'WATCH')
   if(advisory.urgency==='high' && advisory.action==='SELL_NOW'){
     autoCloseArmed = false;
-    await closeTradeWithSell('profit_capture');
+    await closeTradeWithSell('profit_capture').catch(e=>{
+      console.error('[maybeAutoClose] closeTradeWithSell failed:', e);
+      showToast(`⚠️ Auto-exit failed: ${e.message}`, '#ff4566');
+    });
   }
 }
 
