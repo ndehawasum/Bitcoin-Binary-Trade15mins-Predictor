@@ -1812,8 +1812,8 @@ function evalAdvisory(){
 
   // 3. Wide spread on current asset
   if(kalshiMarket){
-    const bid=parseFloat(kalshiMarket.yes_bid_dollars)||0;
-    const ask=parseFloat(kalshiMarket.yes_ask_dollars)||0;
+    const bid=parseFloat(kalshiMarket.yes_bid_dollars)||(kalshiMarket.yes_bid!=null?kalshiMarket.yes_bid/100:0);
+    const ask=parseFloat(kalshiMarket.yes_ask_dollars)||(kalshiMarket.yes_ask!=null?kalshiMarket.yes_ask/100:0);
     if(bid>0&&ask>0&&(ask-bid)>0.15){ score+=15; why.push(`${activeAsset} spread $${(ask-bid).toFixed(2)}`); }
   }
 
@@ -2222,14 +2222,15 @@ function parseKalshiStrike(market){
 }
 
 // Calculate live YES midpoint from bid/ask
+// Handles both dollar-float fields (yes_bid_dollars) and cent-integer fields (yes_bid).
 function kalshiYESMid(market){
   if(!market) return null;
-  const bid = parseFloat(market.yes_bid_dollars)||0;
-  const ask = parseFloat(market.yes_ask_dollars)||0;
+  const bid = parseFloat(market.yes_bid_dollars) || (market.yes_bid != null ? market.yes_bid / 100 : 0);
+  const ask = parseFloat(market.yes_ask_dollars) || (market.yes_ask != null ? market.yes_ask / 100 : 0);
   if(bid>0&&ask>0) return (bid+ask)/2;
   if(bid>0) return bid;
   if(ask>0) return ask;
-  const last = parseFloat(market.last_price_dollars)||0;
+  const last = parseFloat(market.last_price_dollars) || (market.last_price != null ? market.last_price / 100 : 0);
   return last||null;
 }
 
@@ -2251,12 +2252,12 @@ function renderKalshiMarketBar(){
   }
   document.getElementById('kalshi-market-bar').style.display='block';
   document.getElementById('km-ticker').textContent = kalshiMarket.ticker;
-  const bid = parseFloat(kalshiMarket.yes_bid_dollars)||0;
-  const ask = parseFloat(kalshiMarket.yes_ask_dollars)||0;
+  const bid = parseFloat(kalshiMarket.yes_bid_dollars) || (kalshiMarket.yes_bid != null ? kalshiMarket.yes_bid / 100 : 0);
+  const ask = parseFloat(kalshiMarket.yes_ask_dollars) || (kalshiMarket.yes_ask != null ? kalshiMarket.yes_ask / 100 : 0);
   const spread = document.getElementById('km-spread');
   spread.textContent = `$${bid.toFixed(2)} / $${ask.toFixed(2)}`;
   spread.style.color = '#dde0f5';
-  const last = parseFloat(kalshiMarket.last_price_dollars)||0;
+  const last = parseFloat(kalshiMarket.last_price_dollars) || (kalshiMarket.last_price != null ? kalshiMarket.last_price / 100 : 0);
   document.getElementById('km-last').textContent = last>0?`$${last.toFixed(2)}`:'—';
   // Detect Up/Down market vs strike market
   const isUpDown = !kalshiMarket.floor_strike && !kalshiMarket.cap_strike &&
@@ -2339,8 +2340,11 @@ function kalshiWSConnectForAsset(asset, ticker){
           const d = msg.data;
           if(st.kalshiMarket&&d.market_ticker===st.kalshiMarket.ticker){
             if(d.yes_bid_dollars!=null) st.kalshiMarket.yes_bid_dollars = d.yes_bid_dollars;
+            else if(d.yes_bid!=null) st.kalshiMarket.yes_bid_dollars = d.yes_bid / 100;
             if(d.yes_ask_dollars!=null) st.kalshiMarket.yes_ask_dollars = d.yes_ask_dollars;
+            else if(d.yes_ask!=null) st.kalshiMarket.yes_ask_dollars = d.yes_ask / 100;
             if(d.last_price_dollars!=null) st.kalshiMarket.last_price_dollars = d.last_price_dollars;
+            else if(d.last_price!=null) st.kalshiMarket.last_price_dollars = d.last_price / 100;
             const mid = kalshiYESMid(st.kalshiMarket);
             if(mid!==null){
               st.kalshiYESPrice = mid; st.kalshiYESLastWS = Date.now();
@@ -3957,12 +3961,12 @@ function checkRiskAutoExit(unrealizedPnL){
   if(tpHit){
     riskState.tpTriggered = true;
     showToast(`${simMode?'📋 SIM':'🎯'} Take profit +$${unrealizedPnL.toFixed(2)}`, '#00e5a0');
-    setTimeout(()=>{ closeTradeWithSell('take_profit').catch(e=>console.error('[autoExit] closeTradeWithSell failed:',e)); }, 800);
+    setTimeout(()=>{ closeTradeWithSell('take_profit').catch(e=>{ console.error('[autoExit] closeTradeWithSell failed:',e); showToast(`⚠️ Auto-exit failed: ${e.message}`, '#ff4566'); }); }, 800);
 
   } else if(slHit){
     riskState.slTriggered = true;
     showToast(`${simMode?'📋 SIM':'🛑'} Stop loss -$${Math.abs(unrealizedPnL).toFixed(2)}`, '#ff4566');
-    setTimeout(()=>{ closeTradeWithSell('stop_loss').catch(e=>console.error('[autoExit] closeTradeWithSell failed:',e)); }, 800);
+    setTimeout(()=>{ closeTradeWithSell('stop_loss').catch(e=>{ console.error('[autoExit] closeTradeWithSell failed:',e); showToast(`⚠️ Auto-exit failed: ${e.message}`, '#ff4566'); }); }, 800);
 
   } else if(velExit){
     riskState.tpTriggered = true;
@@ -3974,7 +3978,7 @@ function checkRiskAutoExit(unrealizedPnL){
       ab2.cooldownUntil = Date.now() + 15000;
       console.log('[AutoBuy] Smart re-entry after velocity exit — 15s cooldown');
     }
-    setTimeout(()=>{ closeTradeWithSell('profit_capture').catch(e=>console.error('[autoExit] closeTradeWithSell failed:',e)); }, 800);
+    setTimeout(()=>{ closeTradeWithSell('profit_capture').catch(e=>{ console.error('[autoExit] closeTradeWithSell failed:',e); showToast(`⚠️ Auto-exit failed: ${e.message}`, '#ff4566'); }); }, 800);
 
   } else if(trailFire){
     riskState.tpTriggered = true;
@@ -3989,13 +3993,13 @@ function checkRiskAutoExit(unrealizedPnL){
       ab.cooldownUntil = Date.now() + 12000;
       console.log('[AutoBuy] Smart re-entry armed after trail exit — 12s cooldown');
     }
-    setTimeout(()=>{ closeTradeWithSell('profit_capture').catch(e=>console.error('[autoExit] closeTradeWithSell failed:',e)); }, 800);
+    setTimeout(()=>{ closeTradeWithSell('profit_capture').catch(e=>{ console.error('[autoExit] closeTradeWithSell failed:',e); showToast(`⚠️ Auto-exit failed: ${e.message}`, '#ff4566'); }); }, 800);
 
   } else if(timeFloorExit){
     riskState.tpTriggered = true;
     const pct = Math.round(pctCaptured * 100);
     showToast(`${simMode?'📋 SIM':'⏱'} Time floor — ${timeFloorReason} ${pct}% (+$${unrealizedPnL.toFixed(2)})`, '#7b9fff');
-    setTimeout(()=>{ closeTradeWithSell('profit_capture').catch(e=>console.error('[autoExit] closeTradeWithSell failed:',e)); }, 800);
+    setTimeout(()=>{ closeTradeWithSell('profit_capture').catch(e=>{ console.error('[autoExit] closeTradeWithSell failed:',e); showToast(`⚠️ Auto-exit failed: ${e.message}`, '#ff4566'); }); }, 800);
   }
   // Farm trade exit check (farm has own TP/SL thresholds, checked here every second)
   if(active && active.tradeType==='farm') checkFarmExit();
@@ -4579,12 +4583,13 @@ function renderMarketConditions(){
   }
 }
 
-function placeTrade(bet, tradeType='manual', farmTarget=null, farmStop=null){
+async function placeTrade(bet, tradeType='manual', farmTarget=null, farmStop=null){
   if(active||!livePrice||!amtInput||amtInput<=0||!isFinite(amtInput)||!strikeInput||strikeInput<=0)return;
   const sm=computeStrikeModel(prices,strikeInput);
   const entryYESPrice=estimateYESPriceLive(sm,bet);
   const contracts=kalshiContracts(amtInput,entryYESPrice,bet); // use correct side price
   const _dynSL = computeDynamicSL();
+  // Build trade object but do NOT record it yet — Kalshi must confirm first (if live)
   const t={id:Date.now(),bet,entry:livePrice,strike:String(strikeInput),amount:amtInput,
     entryYESPrice,contracts,ep:[...prices],asset:activeAsset,sl:_dynSL,
     time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}),
@@ -4594,19 +4599,11 @@ function placeTrade(bet, tradeType='manual', farmTarget=null, farmStop=null){
     farmStop:   farmStop,
     farmMode:   null, // set by checkFarmBot after placeTrade
     result:null,exit:null,finalPnL:null};
-  trades.push(t); active=t; peakROI=null; peakCapture=null; trailArmed=false; exitIdx=null; active._peakYesC=0; priceChartDirty=true; projChartDirty=true;
-  riskState.tpTriggered=false; riskState.slTriggered=false;
-  // Sim wallet debit on trade entry
-  if(simState.mode==='sim') simDebitBet(amtInput);
-  showActive(); renderLog(); renderDualBar();
-  persistState(); // save active trade immediately on entry
 
   // Place a real Kalshi order when:
   // - API key is connected (authConnected)
   // - We have a market loaded (kalshiMarket)
   // - We have ANY YES price — either WS live (preferred) or REST (acceptable)
-  // Previously required kalshiIsLive() (WS only) which caused all trades to be SIM
-  // because WS hadn't ticked yet even though API was connected and market was real
   const hasYESPrice = kalshiYESPrice !== null;
   const goLive = authConnected && kalshiMarket && hasYESPrice;
   // Diagnostic log — always visible in browser console so user can confirm live routing
@@ -4617,16 +4614,31 @@ function placeTrade(bet, tradeType='manual', farmTarget=null, farmStop=null){
     '→ goLive='+goLive,
     'mode='+simState.mode
   );
+
   if(goLive){
     const wsActive = kalshiIsLive();
-    kalshiPlaceOrder(bet, amtInput).then(order=>{
+    try {
+      const order = await kalshiPlaceOrder(bet, amtInput);
+      // Kalshi confirmed — NOW record the trade locally
+      trades.push(t); active=t; peakROI=null; peakCapture=null; trailArmed=false; exitIdx=null; active._peakYesC=0; priceChartDirty=true; projChartDirty=true;
+      riskState.tpTriggered=false; riskState.slTriggered=false;
+      showActive(); renderLog(); renderDualBar();
+      persistState();
       const src = wsActive ? 'WS' : 'REST';
-      const filled = parseFloat(order.fill_count_fp||order.filled_count||0);
-      showToast(`✅ Kalshi order filled [${src}] — ${filled} contracts @ $${(parseFloat(order.taker_fill_cost_dollars||0)||amtInput).toFixed(2)}`,'#00e5a0');
-    }).catch(e=>{
+      const filled = parseFloat(order.filled_count||0);
+      showToast(`✅ Kalshi order filled [${src}] — ${filled} contracts @ $${(order.taker_fill_cost ? (order.taker_fill_cost / 100) : amtInput).toFixed(2)}`,'#00e5a0');
+    } catch(e) {
+      // Kalshi rejected — do NOT record the trade
       showToast(`⚠️ Kalshi order failed: ${e.message}`,'#ff4566');
-    });
+      return;
+    }
   } else {
+    // Sim path — record immediately as before
+    trades.push(t); active=t; peakROI=null; peakCapture=null; trailArmed=false; exitIdx=null; active._peakYesC=0; priceChartDirty=true; projChartDirty=true;
+    riskState.tpTriggered=false; riskState.slTriggered=false;
+    if(simState.mode==='sim') simDebitBet(amtInput);
+    showActive(); renderLog(); renderDualBar();
+    persistState();
     const reason = !authConnected ? 'no API key' : !hasYESPrice ? 'no YES price yet — wait' : 'no market';
     showToast(`📋 Sim trade placed (${reason})`,'#f7c948');
   }
@@ -4788,8 +4800,8 @@ function computeEdge(sm){
 
   // Dynamic confidence threshold based on spread
   // Tight spread = reliable fill = lower bar. Wide spread = raise bar.
-  const bid = parseFloat(kalshiMarket.yes_bid_dollars) || 0;
-  const ask = parseFloat(kalshiMarket.yes_ask_dollars) || 0;
+  const bid = parseFloat(kalshiMarket.yes_bid_dollars) || (kalshiMarket.yes_bid != null ? kalshiMarket.yes_bid / 100 : 0);
+  const ask = parseFloat(kalshiMarket.yes_ask_dollars) || (kalshiMarket.yes_ask != null ? kalshiMarket.yes_ask / 100 : 0);
   const spread = (bid > 0 && ask > 0) ? (ask - bid) : 0.20; // default wide if unknown
   let dynThresh;
   if     (spread < 0.04) dynThresh = 0.06;  // very liquid  → edge ≥ 6%
@@ -5271,8 +5283,8 @@ async function kalshiPlaceOrder(bet, amountDollars){
 
   // Use ASK price for sizing (not mid) — you pay ask to buy
   // This ensures buy_max_cost covers the contracts we request
-  const bid = parseFloat(kalshiMarket.yes_bid_dollars) || 0;
-  const ask = parseFloat(kalshiMarket.yes_ask_dollars) || 0;
+  const bid = parseFloat(kalshiMarket.yes_bid_dollars) || (kalshiMarket.yes_bid != null ? kalshiMarket.yes_bid / 100 : 0);
+  const ask = parseFloat(kalshiMarket.yes_ask_dollars) || (kalshiMarket.yes_ask != null ? kalshiMarket.yes_ask / 100 : 0);
   const mid = kalshiYESPrice || 0.5;
   // For YES (UP): pay ask price. For NO (DOWN): pay (1 - bid) = NO ask
   const fillPrice = side==='yes'
@@ -5333,12 +5345,7 @@ async function kalshiPlaceOrder(bet, amountDollars){
   }
 
   const order = json.order || json;
-  const filled = parseFloat(order.fill_count_fp||order.filled_count||0);
-
-  // Estimate contracts from budget if fill_count not reported
-  // Each contract costs fillPrice dollars, budget = amountDollars
-  const estimatedFromBudget = Math.max(1, Math.floor(amountDollars / fillPrice));
-  const contractsHeld = filled > 0 ? filled : estimatedFromBudget;
+  const filled = parseFloat(order.filled_count||0);
 
   if(filled === 0){
     // FOK found no matching seller at our price — order was cancelled entirely
@@ -5350,7 +5357,7 @@ async function kalshiPlaceOrder(bet, amountDollars){
   kalshiOrderId        = order.order_id;
   kalshiOrderSide      = side;
   kalshiOrderContracts = filled;
-  kalshiOrderCost      = parseFloat(order.taker_fill_cost_dollars||order.cost||0) || amountDollars;
+  kalshiOrderCost      = order.taker_fill_cost ? (order.taker_fill_cost / 100) : amountDollars;
   autoCloseArmed       = true;
 
   console.log('[Kalshi] order confirmed:', kalshiOrderId, side, filled, 'contracts filled');
@@ -5410,7 +5417,7 @@ async function kalshiClosePosition(){
     action: 'sell',
     type:   'limit',                 // REQUIRED by Kalshi API
     count:  contractsToSell,
-    time_in_force: 'fill_or_kill',
+    time_in_force: 'gtc',
     ...sellPriceField,
   };
 
@@ -5426,14 +5433,19 @@ async function kalshiClosePosition(){
     });
     const json = await r.json().catch(()=>null);
     console.log('[Kalshi] close response:', r.status, JSON.stringify(json)?.slice(0,200));
-    if(!r.ok) console.warn('[Kalshi] close order error:', json);
-    else console.log('[Kalshi] position closed:', json?.order?.order_id);
-  } catch(e){ console.warn('[Kalshi] close position error:', e.message); }
-
-  kalshiOrderId = null;
-  kalshiOrderSide = null;
-  kalshiOrderContracts = 0;
-  kalshiOrderCost = 0;
+    if(!r.ok){
+      console.warn('[Kalshi] close order error — position state preserved:', json);
+      throw new Error(`Kalshi sell failed: ${r.status} ${JSON.stringify(json)}`);
+    }
+    console.log('[Kalshi] position closed:', json?.order?.order_id);
+    kalshiOrderId = null;
+    kalshiOrderSide = null;
+    kalshiOrderContracts = 0;
+    kalshiOrderCost = 0;
+  } catch(e){
+    console.warn('[Kalshi] close position error — position state preserved:', e.message);
+    throw e;
+  }
 }
 
 // Called by exit advisor when SELL NOW fires with autoClose armed
@@ -5451,13 +5463,14 @@ async function maybeAutoClose(advisory){
 function renderBalance(res){
   if(!res) return;
   const b = (typeof res.balance === 'number' ? res.balance : 0) / 100;
-  const p = (typeof res.portfolio_value === 'number' ? res.portfolio_value : 0) / 100;
   // Store in variable so getRiskAccountBalance() can read it reliably
   kalshiAccountBalance = b;
   const el = document.getElementById('pf-bal');
   if(el) el.textContent = '$'+b.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+  // Kalshi's /portfolio/balance endpoint does not return portfolio_value;
+  // mirror available cash balance as the portfolio figure.
   const ep = document.getElementById('pf-port');
-  if(ep) ep.textContent = '$'+p.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+  if(ep) ep.textContent = '$'+b.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
   const eu = document.getElementById('pf-upd');
   if(eu) eu.textContent = new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
   // Refresh wallet display with real balance
@@ -6025,8 +6038,8 @@ function computeFarmDecision(){
   // ── MODE 2: MOMENTUM FARMING ─────────────────────────────────────
   // Check spread before momentum entry
   const spreadOk = kalshiMarket ? (()=>{
-    const bid=parseFloat(kalshiMarket.yes_bid_dollars)||0;
-    const ask=parseFloat(kalshiMarket.yes_ask_dollars)||0;
+    const bid=parseFloat(kalshiMarket.yes_bid_dollars)||(kalshiMarket.yes_bid!=null?kalshiMarket.yes_bid/100:0);
+    const ask=parseFloat(kalshiMarket.yes_ask_dollars)||(kalshiMarket.yes_ask!=null?kalshiMarket.yes_ask/100:0);
     return bid>0&&ask>0 ? ((ask-bid)/yesP)<FARM_MAX_SPREAD_PCT : false;
   })() : false;
   if(!spreadOk)
@@ -6130,7 +6143,7 @@ function checkFarmExit(){
   if(training && tradeAge > 90000 && !riskState.tpTriggered && !riskState.slTriggered){
     riskState.tpTriggered=true;
     showToast('🧠 Training exit — 90s max · collecting sample','#00e5a0');
-    setTimeout(()=>{ closeTradeWithSell('farm_profit').catch(e=>console.error('[trainExit]',e)); },200);
+    setTimeout(()=>{ closeTradeWithSell('farm_profit').catch(e=>{ console.error('[trainExit]',e); showToast(`⚠️ Auto-exit failed: ${e.message}`, '#ff4566'); }); },200);
     return;
   }
 
@@ -6140,12 +6153,12 @@ function checkFarmExit(){
     riskState.tpTriggered=true;
     const modeLabel = active.farmMode||'FARM';
     showToast('🌾 '+modeLabel+' TP +'+Math.round(pctChange*100)+'% — exiting','#00e5a0');
-    setTimeout(()=>{ closeTradeWithSell('farm_profit').catch(e=>console.error('[farmExit]',e)); },200);
+    setTimeout(()=>{ closeTradeWithSell('farm_profit').catch(e=>{ console.error('[farmExit]',e); showToast(`⚠️ Auto-exit failed: ${e.message}`, '#ff4566'); }); },200);
   } else if(pctChange<=stop){
     riskState.slTriggered=true;
     const modeLabelSL = active.farmMode||'FARM';
     showToast('🌾 '+modeLabelSL+' SL '+Math.round(pctChange*100)+'% — exiting','#ff4566');
-    setTimeout(()=>{ closeTradeWithSell('farm_stop').catch(e=>console.error('[farmExit]',e)); },200);
+    setTimeout(()=>{ closeTradeWithSell('farm_stop').catch(e=>{ console.error('[farmExit]',e); showToast(`⚠️ Auto-exit failed: ${e.message}`, '#ff4566'); }); },200);
   }
 }
 

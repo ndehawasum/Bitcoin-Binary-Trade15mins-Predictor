@@ -35,7 +35,9 @@ function buildSignature(privateKeyPem, message) {
 
 function buildHeaders(keyId, privateKeyPem, method, kalshiPath) {
   const ts = Date.now().toString();
-  const pathNoQuery = '/trade-api/v2' + kalshiPath.split('?')[0];
+  // Ensure exactly one slash between base and kalshiPath regardless of leading slash.
+  const normalizedPath = kalshiPath.startsWith('/') ? kalshiPath : '/' + kalshiPath;
+  const pathNoQuery = '/trade-api/v2' + normalizedPath.split('?')[0];
   const signature = buildSignature(privateKeyPem, ts + method.toUpperCase() + pathNoQuery);
   return {
     'KALSHI-ACCESS-KEY': keyId,
@@ -114,7 +116,7 @@ module.exports = async (req, res) => {
       }
       if (bodyData) {
         fetchOpts.body = typeof bodyData === 'string' ? bodyData : JSON.stringify(bodyData);
-        console.log('[proxy] forwarding body:', JSON.stringify(bodyData)?.slice(0,200));
+        console.log('[proxy] forwarding body (full):', JSON.stringify(bodyData));
       }
     }
 
@@ -128,13 +130,17 @@ module.exports = async (req, res) => {
       data = JSON.parse(rawText);
     } catch(_) {
       // Not JSON — return the raw text as an error so the app can show it
-      console.log('[proxy] non-JSON response:', response.status, rawText.slice(0,200));
-      res.status(response.status).json({ error: rawText.slice(0,300) });
+      console.log('[proxy] non-JSON response (full):', response.status, rawText);
+      res.status(response.status).json({ error: rawText });
       return;
     }
 
-    console.log('[proxy] ←', response.status, JSON.stringify(data)?.slice(0,300));
-    if (!response.ok) console.log('[proxy] Kalshi error detail:', response.status, JSON.stringify(data));
+    if (response.ok) {
+      console.log('[proxy] ←', response.status, JSON.stringify(data)?.slice(0, 300));
+    } else {
+      // Log the full error body so Vercel logs show the complete Kalshi rejection reason.
+      console.log('[proxy] ← ERROR', response.status, JSON.stringify(data));
+    }
 
     res.status(response.status).json(data);
   } catch (err) {
