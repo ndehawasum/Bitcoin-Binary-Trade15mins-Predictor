@@ -520,6 +520,7 @@ body.dual-active #app{padding-bottom:74px}
       <div style="margin-bottom:10px">
         <div class="lbl">BET AMOUNT ($)</div>
         <div class="iw"><span class="ip" style="color:#888">$</span><input class="fi amt" type="number" id="ai" placeholder="0.00" min="0.01" step="0.01"/></div>
+        <span id="contracts-preview" style="display:none;font-size:9px;margin-top:3px;letter-spacing:1px"></span>
       </div>
       <div class="sbw" id="sbw">
         <div style="display:flex;justify-content:space-between;font-size:9px;margin-bottom:5px">
@@ -2642,6 +2643,38 @@ function kalshiContracts(amount, yesPrice, bet='UP'){
   const contractPrice = bet === 'DOWN' ? Math.max(0.01, 1 - yesPrice) : Math.max(0.01, yesPrice);
   return amount / contractPrice;
 }
+
+// Live contracts preview below the bet input.
+// Shows "≈ N contracts" when bet covers ≥1 contract, or "Min: $X.XX" when it doesn't.
+// Uses the same fill-price logic as kalshiPlaceOrder (ask for UP, 1-bid for DOWN).
+function updateContractsPreview(){
+  const el = document.getElementById('contracts-preview');
+  if(!el) return;
+  if(!amtInput || amtInput <= 0){ el.textContent=''; el.style.display='none'; return; }
+  const sm = computeStrikeModel(prices, strikeInput);
+  if(!sm && kalshiYESPrice === null){ el.textContent=''; el.style.display='none'; return; }
+  const recBet = (sm && sm.aboveProb > sm.belowProb) ? 'UP' : 'DOWN';
+  let fillPrice;
+  if(kalshiMarket){
+    const bid = parseFloat(kalshiMarket.yes_bid_dollars)||(kalshiMarket.yes_bid!=null?kalshiMarket.yes_bid/100:0);
+    const ask = parseFloat(kalshiMarket.yes_ask_dollars)||(kalshiMarket.yes_ask!=null?kalshiMarket.yes_ask/100:0);
+    const mid = kalshiYESPrice || 0.5;
+    fillPrice = recBet==='UP' ? (ask>0?ask:mid*1.05) : (bid>0?(1-bid):(1-mid)*1.05);
+  } else {
+    const yesP = sm ? estimateYESPriceLive(sm, recBet) : (kalshiYESPrice||0.5);
+    fillPrice = recBet==='UP' ? Math.max(0.01,yesP) : Math.max(0.01,1-yesP);
+  }
+  fillPrice = Math.max(0.01, fillPrice);
+  if(amtInput < fillPrice){
+    el.textContent = `Min: $${fillPrice.toFixed(2)}`;
+    el.style.color = '#ff4566';
+  } else {
+    const cts = Math.floor(amtInput / fillPrice);
+    el.textContent = `\u2248 ${cts} contract${cts===1?'':'s'}`;
+    el.style.color = kalshiMarket ? '#00e5a0' : '#f7c948';
+  }
+  el.style.display = 'inline';
+}
 function kalshiMaxPayout(contracts){
   return contracts * 1.00;
 }
@@ -4068,6 +4101,7 @@ function renderTradeSetup(){
     const badge=document.getElementById('cp-source');
     if(badge){badge.textContent=isLive?'LIVE ●':'ESTIMATED'; badge.style.background=isLive?'#00e5a020':'#1a1a35'; badge.style.color=isLive?'#00e5a0':'#444';}
   } else cp.style.display='none';
+  updateContractsPreview();
 
   const sh=document.getElementById('sh');
   if(strikeInput<=0){
@@ -5195,6 +5229,7 @@ document.getElementById('ai').addEventListener('input',e=>{
   amtInput=parseFloat(e.target.value)||0;
   userEditedBet = true; // user is actively editing — don't auto-fill over this
   renderTradeSetup();
+  updateContractsPreview();
 });
 document.getElementById('ai').addEventListener('focus',()=>{ userEditedBet = true; });
 document.getElementById('bup').addEventListener('click',()=>placeTrade('UP'));
@@ -5302,7 +5337,7 @@ async function kalshiPlaceOrder(bet, amountDollars){
   if(maxCostCents < minCostCents){
     // Budget can't cover even 1 contract at current ask
     // e.g. bet=$0.05 but NO contract costs $0.06 at YES=94¢
-    throw new Error(`Budget ${maxCostCents}¢ < 1 contract cost ${minCostCents}¢ (${side} at ${(fillPrice*100).toFixed(0)}¢ each) — increase bet size`);
+    throw new Error(`Minimum bet $${(minCostCents/100).toFixed(2)} required (1 ${side.toUpperCase()} contract at ${(fillPrice*100).toFixed(0)}¢ each) — your bet: $${(maxCostCents/100).toFixed(2)}`);
   }
 
   // Docs require: type, client_order_id, and price as string with 4 decimals
