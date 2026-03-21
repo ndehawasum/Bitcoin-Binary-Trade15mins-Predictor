@@ -4057,21 +4057,23 @@ function renderTradeSetup(){
     if(!active && strikeInput > 0 && livePrice){
       const recBet = sm.aboveProb>sm.belowProb?'UP':'DOWN';
       const aiEl   = document.getElementById('ai');
-      // Auto-fill with the cost of 1 contract at the current ask price.
-      // This ensures the auto-filled amount always covers at least 1 contract.
+      // Auto-fill: Kelly-sized bet, floored at contract price (so it always covers 1 contract),
+      // capped at 8% of balance. User can still edit the amount manually.
       if(aiEl && !userEditedBet){
-        let autoFill = 1.00; // fallback if no price data yet
+        const bal = getRiskAccountBalance();
+        const yesP = estimateYESPriceLive(sm, recBet);
+        // Contract price = cost of 1 contract at current ask
+        let contractPrice = yesP; // fallback to mid estimate
         if(kalshiMarket){
           const bid = parseFloat(kalshiMarket.yes_bid_dollars)||(kalshiMarket.yes_bid!=null?kalshiMarket.yes_bid/100:0);
           const ask = parseFloat(kalshiMarket.yes_ask_dollars)||(kalshiMarket.yes_ask!=null?kalshiMarket.yes_ask/100:0);
           const mid = kalshiYESPrice || 0.5;
-          const fp  = recBet==='UP' ? (ask>0?ask:mid*1.05) : (bid>0?(1-bid):(1-mid)*1.05);
-          autoFill  = Math.max(0.01, Math.ceil(fp * 100) / 100); // round up to nearest cent
-        } else if(kalshiYESPrice !== null){
-          const yesP = estimateYESPriceLive(sm, recBet);
-          const fp   = recBet==='UP' ? Math.max(0.01,yesP) : Math.max(0.01,1-yesP);
-          autoFill   = Math.max(0.01, Math.ceil(fp * 100) / 100);
+          contractPrice = recBet==='UP' ? (ask>0?ask:mid*1.05) : (bid>0?(1-bid):(1-mid)*1.05);
         }
+        contractPrice = Math.max(0.01, Math.ceil(contractPrice * 100) / 100);
+        // Kelly sizing capped at 8% of balance, floored at contract price
+        const kelly = bal > 0 ? Math.min(computeKellyBet(Math.max(sm.aboveProb,sm.belowProb), yesP, bal), bal*0.10) : 0;
+        const autoFill = Math.max(contractPrice, Math.round(kelly * 100) / 100);
         aiEl.value = autoFill.toFixed(2);
         amtInput   = autoFill;
       }
@@ -5906,9 +5908,13 @@ function computeFarmDecision(){
     ? (_ask>0?_ask:_mid*1.05)
     : (_bid>0?(1-_bid):(1-_mid)*1.05);
   const contractMin = Math.max(0.01, Math.ceil(_fp * 100) / 100);
-  const betSize = (sm && balance>0)
-    ? Math.round(Math.max(contractMin, Math.min(computeKellyBet(smProb, yesP, balance)*0.5, balance*0.08))*100)/100
+  // Kelly-sized bet capped at 8% of balance. If the contract price exceeds
+  // the Kelly cap, return betSize=0 so the farm bot skips rather than
+  // risking an outsized portion of the wallet.
+  const kellyCapped = (sm && balance>0)
+    ? Math.round(Math.min(computeKellyBet(smProb, yesP, balance)*0.5, balance*0.10)*100)/100
     : 0;
+  const betSize = kellyCapped >= contractMin ? kellyCapped : 0;
 
   // ── SIGNAL QUALITY GATES (data-backed, 68–95% confidence) ─────────────────
   // These run AFTER sizing so betSize is available for the reason string,
