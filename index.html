@@ -5340,23 +5340,24 @@ async function kalshiPlaceOrder(bet, amountDollars){
     throw new Error(`Minimum bet $${(minCostCents/100).toFixed(2)} required (1 ${side.toUpperCase()} contract at ${(fillPrice*100).toFixed(0)}¢ each) — your bet: $${(maxCostCents/100).toFixed(2)}`);
   }
 
-  // Docs require: type, client_order_id, and price as string with 4 decimals
+  // count must be provided — Kalshi requires it even when buy_max_cost is set.
+  // Use floor(budget / fillPrice) so count * fillPrice <= budget always,
+  // preventing FOK rejection from the order exceeding the budget cap.
+  const count = Math.floor(amountDollars / fillPrice); // always >= 1 (minCostCents check above)
+
   const client_order_id = Date.now().toString(36) + Math.random().toString(36).slice(2,7);
   // yes_price_dollars / no_price_dollars must be STRING with 4 decimal places per docs
   const priceFieldStr = side === 'yes'
     ? { yes_price_dollars: '0.9900' }  // generous limit — buy_max_cost caps actual spend
     : { no_price_dollars:  '0.9900' };
 
-  // NOTE: count is intentionally omitted. When buy_max_cost is set on a
-  // fill_or_kill order, Kalshi determines how many contracts to fill based on
-  // the budget. Supplying count caused FOK rejection when the calculated count
-  // exceeded what the order book could fill at the given price within budget.
   const orderBody = {
     ticker,
     client_order_id,       // prevents duplicate orders on retry
     side,
     action:        'buy',
     type:          'limit',          // REQUIRED by Kalshi API
+    count,                           // floor(budget/fillPrice) — always fits within buy_max_cost
     time_in_force: 'fill_or_kill',
     buy_max_cost:  maxCostCents,     // hard budget cap in cents
     ...priceFieldStr,
