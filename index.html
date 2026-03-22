@@ -4627,7 +4627,10 @@ function renderMarketConditions(){
 
 let _placeTradeInFlight = false; // prevents duplicate orders during async await
 async function placeTrade(bet, tradeType='manual', farmTarget=null, farmStop=null){
-  if(active||_placeTradeInFlight||!livePrice||!amtInput||amtInput<=0||!isFinite(amtInput)||!strikeInput||strikeInput<=0)return;
+  if(active||_placeTradeInFlight) return;
+  if(!livePrice){ if(tradeType==='manual') showToast('⚠️ No live price yet — wait a moment','#f7c948'); return; }
+  if(!amtInput||amtInput<=0||!isFinite(amtInput)){ if(tradeType==='manual') showToast('⚠️ Enter a bet amount first','#f7c948'); return; }
+  if(!strikeInput||strikeInput<=0){ if(tradeType==='manual') showToast('⚠️ Strike price loading — try again in a moment','#f7c948'); return; }
   _placeTradeInFlight = true;
   try {
   const sm=computeStrikeModel(prices,strikeInput);
@@ -5375,7 +5378,7 @@ async function kalshiPlaceOrder(bet, amountDollars){
     action:        'buy',
     type:          'limit',          // REQUIRED by Kalshi API
     count,                           // floor(budget/fillPrice) — always fits within buy_max_cost
-    time_in_force: 'fill_or_kill',
+    time_in_force: 'ioc',            // immediate-or-cancel: partial fills accepted, unfilled portion cancelled
     buy_max_cost:  maxCostCents,     // hard budget cap in cents
     ...priceFieldStr,
   };
@@ -5400,13 +5403,12 @@ async function kalshiPlaceOrder(bet, amountDollars){
   const order = json.order || json;
   const filled = parseFloat(order.filled_count || order.taker_fill_count || 0);
 
-  // Only throw if the order was explicitly cancelled (status='cancelled' with 0 fills).
-  // If r.ok and order_id exists, Kalshi accepted the order — trust it even if
-  // filled_count is 0 or missing (fill may be reported asynchronously).
+  // IOC semantics: status='cancelled' with filled>0 = partial fill (OK).
+  // status='cancelled' with filled=0 = no liquidity at all → throw.
   const status = order.status || '';
   if(filled === 0 && status === 'cancelled'){
-    console.warn('[Kalshi] FOK order cancelled — no match at current market price');
-    throw new Error('Order not filled — no matching seller right now, try again');
+    console.warn('[Kalshi] IOC order cancelled — no contracts available at current price');
+    throw new Error('Order not filled — no contracts available right now, try again');
   }
 
   // Use filled count if available, otherwise fall back to what we requested (count)
