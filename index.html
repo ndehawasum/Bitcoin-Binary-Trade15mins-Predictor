@@ -5353,7 +5353,10 @@ async function kalshiPlaceOrder(bet, amountDollars){
   if(!isFinite(maxCostCents) || maxCostCents <= 0){
     throw new Error(`Invalid bet amount: $${amountDollars}`);
   }
-  const minCostCents = Math.ceil(fillPrice * 100); // cost of 1 contract in cents
+  // Round to 4 decimal places before ceil to prevent IEEE-754 drift
+  // e.g. 1 - 0.95 = 0.050000000000000044, * 100 = 5.000...044 → ceil = 6 (wrong)
+  // Math.round(*10000)/100 first → 5.0000 → ceil = 5 (correct)
+  const minCostCents = Math.ceil(Math.round(fillPrice * 10000) / 100); // cost of 1 contract in cents
   if(maxCostCents < minCostCents){
     // Budget can't cover even 1 contract at current ask
     // e.g. bet=$0.05 but NO contract costs $0.06 at YES=94¢
@@ -5917,7 +5920,7 @@ function computeFarmDecision(){
   const _fp  = yesP > 0.5
     ? (_ask>0?_ask:_mid*1.05)
     : (_bid>0?(1-_bid):(1-_mid)*1.05);
-  const contractMin = Math.max(0.01, Math.ceil(_fp * 100) / 100);
+  const contractMin = Math.max(0.01, Math.ceil(Math.round(_fp * 10000) / 100) / 100);
   // Kelly-sized bet capped at 8% of balance. If the contract price exceeds
   // the Kelly cap, return betSize=0 so the farm bot skips rather than
   // risking an outsized portion of the wallet.
