@@ -1740,6 +1740,14 @@ async function switchAsset(asset){
 
   activeAsset=asset;
   const cfg=ASSET_CFG[asset];
+  // Re-apply strike for the newly active asset immediately
+  // This ensures the strike field is populated when switching tabs
+  setTimeout(()=>{
+    if(activeAsset===asset){ // guard: asset may have changed again
+      applyAutoStrike();
+      renderKalshiMarketBar();
+    }
+  }, 50);
 
   // Restore this asset's tick buffer (already running in background — no reset needed)
   lastWSTime=A().lastWSTime||0;
@@ -2288,8 +2296,12 @@ function renderKalshiMarketBar(){
 // Apply auto-detected strike to the input
 // For KXBTC15M "Up or Down" markets, strike = current BTC price
 function applyAutoStrike(){
+  // Use per-asset livePrice (AST[activeAsset].livePrice), not the proxy
+  // The proxy reads activeAsset which may be BTC even when applying ETH strike
+  const st = AST[activeAsset];
+  const assetLivePrice = st.livePrice;
   const isUpDown = kalshiMarket && !kalshiAutoStrike;
-  const strike = isUpDown ? livePrice : kalshiAutoStrike;
+  const strike = isUpDown ? assetLivePrice : kalshiAutoStrike;
   if(!strike) return; // livePrice not ready yet — kalshiInit will retry
   if(isUpDown) kalshiAutoStrike = strike; // cache so model has it
   const ki = document.getElementById('ki');
@@ -2297,7 +2309,7 @@ function applyAutoStrike(){
   strikeInput = strike;
   const kh = document.getElementById('kh');
   if(isUpDown){
-    if(kh){ kh.textContent = `✓ Up/Down market — strike set to current BTC price $${strike.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}. Updates at trade open.`; kh.style.color='#7b9fff80'; }
+    if(kh){ kh.textContent = `✓ Up/Down market — strike set to current ${activeAsset} price $${strike.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}. Updates at trade open.`; kh.style.color='#7b9fff80'; }
   } else {
     if(kh){ kh.textContent = `✓ Auto-filled from ${kalshiMarket?kalshiMarket.ticker:'Kalshi'} — you can override manually.`; kh.style.color='#00e5a060'; }
   }
@@ -2311,9 +2323,11 @@ function applyAutoStrike(){
 // Auto-apply strike whenever market bar updates
 function renderKalshiMarketBarAndApplyStrike(){
   renderKalshiMarketBar();
-  // Always re-apply for Up/Down markets so strike tracks live BTC price
-  const isUpDown = kalshiMarket && !kalshiMarket.floor_strike && !kalshiMarket.cap_strike &&
-    !(kalshiMarket.yes_sub_title||'').match(/\$[\d,]+/);
+  // Always re-apply for Up/Down markets so strike tracks live asset price
+  // Use activeAsset's market to determine if Up/Down
+  const mkt = kalshiMarket; // proxy → AST[activeAsset].kalshiMarket
+  const isUpDown = mkt && !mkt.floor_strike && !mkt.cap_strike &&
+    !(mkt.yes_sub_title||'').match(/\$[\d,]+/);
   if(isUpDown || !strikeInput || strikeInput!==kalshiAutoStrike){
     applyAutoStrike();
   }
