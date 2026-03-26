@@ -1111,7 +1111,7 @@ I_KEY_ID</span> = your Key ID (UUID)<br>
 
 
 // ── FARM MODE CONSTANTS ──────────────────────────────────────
-const FARM_MAX_ROUNDS      = 99;     // unlimited farm trades per window
+const FARM_MAX_ROUNDS      = 10;     // unlimited farm trades per window
 const FARM_REENTRY_WAIT_MS = 8000;   // 8s cooldown between farm re-entries
 const FARM_MIN_TIME_LEFT   = 240;    // seconds — don't farm if <4min left
 const FARM_HOLD_YES_HIGH   = 0.95;   // skip if YES ≥ 95¢ (no upside left to farm)
@@ -3519,6 +3519,55 @@ function computeKellyBet(prob, yesPrice, balance){
   return Math.min(halfKelly*balance, RISK_MAX_ACCT_PCT*balance);
 }
 
+// ── THREE-TIER BET SIZING ──────────────────────────────────────────────────
+// Replaces raw Kelly at small balances where Kelly produces noise ($0.05-$0.40)
+// and makes P&L unreadable / training signal inconsistent.
+//
+// Tier 1 — balance < $5:   $0.50 fixed
+//   $1 at $5 = 20% per trade → ruin risk too high. $0.50 is safer.
+//
+// Tier 2 — balance $5–$50: $1.00 fixed
+//   Consistent, readable. $1 at $10 = 10%, at $25 = 4%. Ruin risk near zero.
+//   Every WIN and LOSS means the same thing → cleaner NN training signal.
+//   Enough contracts to matter (YES=50¢ → 2 contracts per $1).
+//
+// Tier 3 — balance > $50:  Kelly formula
+//   Kelly produces $4+ at $50 balance — percentage sizing starts optimising
+//   growth properly. Graduate to Kelly once balance exceeds $50.
+//
+// scaleFactor: applies the 50%/25% reduction for risky-condition entries
+// (used when regime gates are soft-blocked in future approach implementation)
+function getTieredBetSize(balance, prob, yesPrice, scaleFactor=1.0){
+  // THREE-TIER SYSTEM:
+  // Tier 1 (<$5):   $0.50 fixed — ruin protection at tiny balance
+  //   At $5 balance, $1 = 20% per trade → ruin risk is real
+  //   $0.50 = 10% — still aggressive but survivable
+  // Tier 2 ($5-$50): $1.00 fixed — consistent, readable signal
+  //   Kelly at $10 produces $0.05-$0.80 — too small, inconsistent
+  //   Fixed $1 = 10% at $10, 4% at $25, 2% at $50 — all healthy
+  //   Every win/loss same size → clean performance signal for NN training
+  // Tier 3 (>$50):  Kelly formula — optimal growth math kicks in here
+  //   Kelly at $50+ produces $2-$8+ per trade — meaningful sizing
+  //   Half-Kelly used for safety margin
+  let base;
+  let tier;
+  if(balance < 5){
+    base = 0.50;
+    tier = 1;
+  } else if(balance <= 50){
+    base = 1.00;
+    tier = 2;
+  } else {
+    base = computeKellyBet(prob, yesPrice, balance);
+    tier = 3;
+  }
+  const scaled = Math.round(Math.max(0.05, base * scaleFactor) * 100) / 100;
+  // Expose tier on the function for logging/UI
+  getTieredBetSize._lastTier    = tier;
+  getTieredBetSize._lastBalance = balance;
+  return scaled;
+}
+
 function computeEV(modelProb, yesPrice){
   // EV = (model_prob × $1.00) - cost
   return (modelProb/100)*1.00 - yesPrice;
@@ -4073,8 +4122,8 @@ function renderTradeSetup(){
         contractPrice = Math.max(0.01, Math.ceil(contractPrice * 100) / 100);
         // Kelly sizing capped at 10% of balance, floored at contract price
         // Skip auto-fill entirely if balance is 0 — don't suggest unaffordable amounts
-        const kelly = bal > 0 ? Math.min(computeKellyBet(Math.max(sm.aboveProb,sm.belowProb), yesP, bal), bal*0.10) : 0;
-        const autoFill = bal > 0 ? Math.max(contractPrice, Math.round(kelly * 100) / 100) : 0;
+        // Three-tier sizing: <$5→$0.50 | $5-$50→$1.00 | >$50→Kelly
+        const autoFill = bal > 0 ? getTieredBetSize(bal, Math.max(sm.aboveProb,sm.belowProb), yesP) : 0;
         if(autoFill > 0){ aiEl.value = autoFill.toFixed(2); amtInput = autoFill; }
       }
     }
@@ -5117,9 +5166,16 @@ function checkAutoBuy(){
     // ── FIRE ──
     ab.cooldownUntil = Date.now() + cooldownMs;
     ab.countdownBet  = null;
+    // Explicitly set bet size at fire time — don't rely on UI state
+    const _abBalance = getEffectiveBalance();
+    const _abYesP    = kalshiYESPrice || 0.5;
+    const _abProb    = Math.max(sm ? sm.aboveProb : 65, sm ? sm.belowProb : 65);
+    amtInput = getTieredBetSize(_abBalance, _abProb, _abYesP);
     placeTrade(bestBet, 'auto_buy');
+    const _tier = getTieredBetSize._lastTier || 2;
+    const _tierLabel = _tier===1?'T1 $0.50':_tier===2?'T2 $1.00':`T3 $${amtInput.toFixed(2)}`;
     showToast(
-      `⚡ Fired ${bestBet} · edge ${(edge.rawEdge*100).toFixed(1)}% · EV ${edge.ev.toFixed(2)} · spread $${edge.spread.toFixed(2)}`,
+      `⚡ Fired ${bestBet} · ${_tierLabel} · edge ${(edge.rawEdge*100).toFixed(1)}% · EV ${edge.ev.toFixed(2)}`,
       ASSET_CFG[activeAsset].color
     );
     renderAutoBuyBtn();
@@ -5910,28 +5966,14 @@ function computeFarmDecision(){
   if(coolLeft>0 && lastExit>0)
     return {shouldFarm:false,reason:'Re-entry in '+Math.ceil(coolLeft/1000)+'s',targetPct:0.12,stopPct:0.06,betSize:0};
 
-  // Shared bet sizing — use contract price as minimum (not $0.05 flat floor)
+  // Shared bet sizing — three-tier system
   const balance = getEffectiveBalance();
   const smProb  = sm ? Math.max(sm.aboveProb, sm.belowProb) : 50;
-  // Minimum = cost of 1 contract at current ask price
-  const _bid = parseFloat(kalshiMarket?.yes_bid_dollars)||(kalshiMarket?.yes_bid!=null?kalshiMarket.yes_bid/100:0);
-  const _ask = parseFloat(kalshiMarket?.yes_ask_dollars)||(kalshiMarket?.yes_ask!=null?kalshiMarket.yes_ask/100:0);
-  const _mid = kalshiYESPrice || 0.5;
-  const _fp  = yesP > 0.5
-    ? (_ask>0?_ask:_mid*1.05)
-    : (_bid>0?(1-_bid):(1-_mid)*1.05);
-  const contractMin = Math.max(0.01, Math.ceil(Math.round(_fp * 10000) / 100) / 100);
-  // Kelly-sized bet capped at 8% of balance. If the contract price exceeds
-  // the Kelly cap, return betSize=0 so the farm bot skips rather than
-  // risking an outsized portion of the wallet.
-  const kellyCapped = (sm && balance>0)
-    ? Math.round(Math.min(computeKellyBet(smProb, yesP, balance)*0.5, balance*0.10)*100)/100
-    : 0;
-  const betSize = kellyCapped >= contractMin ? kellyCapped : 0;
-  // If Kelly is too small to buy even one contract, bail early with a clear reason
-  if(betSize === 0){
+  // getTieredBetSize: <$5→$0.50 | $5-$50→$1.00 | >$50→Kelly
+  const betSize = balance > 0 ? getTieredBetSize(balance, smProb, yesP) : 0;
+  if(betSize <= 0){
     return {shouldFarm:false,
-      reason:`Kelly $${kellyCapped.toFixed(2)} < min $${contractMin.toFixed(2)} — increase balance`,
+      reason:'Balance too low to place a bet',
       targetPct:0.12, stopPct:0.06, betSize:0};
   }
 
@@ -6185,6 +6227,7 @@ function checkFarmBot(){
   }
 
   // Set amtInput directly — don't rely on DOM event which may be async
+  // decision.betSize already comes from getTieredBetSize (tiered system)
   amtInput = decision.betSize;
   const aiEl = document.getElementById('ai');
   if(aiEl){ aiEl.value = decision.betSize.toFixed(2); }
@@ -6204,7 +6247,9 @@ function checkFarmBot(){
       : decision.farmMode==='ALIGNED'   ? '✅ ALIGNED'
       : decision.farmMode==='DECAY'     ? '⏱ DECAY'
       : '🌾 FARM';
-    showToast(modeTag+' '+bet+' · YES '+Math.round(kalshiYESPrice*100)+'c · target +'+Math.round(decision.targetPct*100)+'%','#a78bfa');
+    const _fTier = getTieredBetSize._lastTier || 2;
+    const _fTierLabel = _fTier===1?'T1 $0.50':_fTier===2?'T2 $1.00':`T3 $${decision.betSize.toFixed(2)}`;
+    showToast(modeTag+' '+bet+' · '+_fTierLabel+' · YES '+Math.round(kalshiYESPrice*100)+'c · +'+Math.round(decision.targetPct*100)+'%','#a78bfa');
   }
 }
 
