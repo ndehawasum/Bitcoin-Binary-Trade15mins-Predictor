@@ -2165,6 +2165,7 @@ async function kalshiPublicFetch(path, params={}){
   const qp = new URLSearchParams({path, method:'GET', ...params});
   try{
     const r = await fetch(`/api/kalshi?${qp.toString()}`);
+    if(r.status === 404){ return null; } // market expired/not found — expected on window roll
     if(!r.ok){ console.warn('[Kalshi] HTTP', r.status, path); return null; }
     return await r.json();
   }catch(e){
@@ -5329,12 +5330,16 @@ async function fetchPositions(){
   // count_filter was removed from Kalshi API in Nov 2025 — omit it
   const d = await kalshiAuthFetch('GET', '/portfolio/positions');
   const all = d.market_positions || [];
-  return all.filter(p=>p.ticker&&p.ticker.toUpperCase().includes('BTC'));
+  // Filter for active asset series (BTC or ETH depending on current tab)
+  const series = ASSET_CFG[activeAsset]?.series || 'KXBTC15M';
+  return all.filter(p=>p.ticker&&p.ticker.toUpperCase().includes(series.split('15M')[0].replace('KX','')));
 }
 
 async function fetchFills(){
   const d = await kalshiAuthFetch('GET', '/portfolio/fills', {limit:'50'});
-  return (d.fills||[]).filter(f=>f.market_ticker&&f.market_ticker.toUpperCase().includes('BTC'));
+  const series = ASSET_CFG[activeAsset]?.series || 'KXBTC15M';
+  const assetKey = series.split('15M')[0].replace('KX','');
+  return (d.fills||[]).filter(f=>f.market_ticker&&f.market_ticker.toUpperCase().includes(assetKey));
 }
 
 // ── Order engine ──
