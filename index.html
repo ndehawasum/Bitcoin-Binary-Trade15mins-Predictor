@@ -1961,7 +1961,8 @@ async function krakenCandles(asset){
   // Kraken pair → OHLC symbol mapping
   const sym = a==='ETH' ? 'XETHZUSD' : 'XXBTZUSD';
   const sym2= a==='ETH' ? 'ETHUSD'   : 'XBTUSD';
-  const r=await fetch(`https://api.kraken.com/0/public/OHLC?pair=${encodeURIComponent(pair)}&interval=1`);
+  const _kCtrl=new AbortController(); setTimeout(()=>_kCtrl.abort(),5000);
+  const r=await fetch(`https://api.kraken.com/0/public/OHLC?pair=${encodeURIComponent(pair)}&interval=1`,{signal:_kCtrl.signal});
   const d=await r.json();
   const cv=d.result[sym]||d.result[sym2]; // no unsafe fallback — must match asset
   if(!cv) throw new Error('no data');
@@ -1972,8 +1973,13 @@ async function binanceCandles(asset){
   const a=asset||activeAsset;
   const sym=a==='ETH'?'ETHUSDT':'BTCUSDT';
   const minP=ASSET_CFG[a].priceMin;
-  const r=await fetch(`https://api.binance.com/api/v3/klines?symbol=${sym}&interval=1m&limit=60`);
-  return(await r.json()).map(c=>parseFloat(c[4])).filter(x=>x>minP);
+  const ctrl = new AbortController();
+  const t = setTimeout(()=>ctrl.abort(), 5000); // 5s timeout
+  try{
+    const r=await fetch(`https://api.binance.com/api/v3/klines?symbol=${sym}&interval=1m&limit=60`,{signal:ctrl.signal});
+    clearTimeout(t);
+    return(await r.json()).map(c=>parseFloat(c[4])).filter(x=>x>minP);
+  }catch(e){ clearTimeout(t); throw e; }
 }
 async function krakenP(asset){
   const a=asset||activeAsset;
@@ -2165,7 +2171,7 @@ async function kalshiPublicFetch(path, params={}){
   const qp = new URLSearchParams({path, method:'GET', ...params});
   try{
     const r = await fetch(`/api/kalshi?${qp.toString()}`);
-    if(r.status === 404){ return null; } // market expired/not found — expected on window roll
+    if(r.status === 404){ console.log('[Kalshi] 404 on', path, '— market expired or not found'); return null; }
     if(!r.ok){ console.warn('[Kalshi] HTTP', r.status, path); return null; }
     return await r.json();
   }catch(e){
@@ -2181,7 +2187,7 @@ async function kalshiFetchMarket(){
   if(!markets.length){
     setKalshiStatus('off', 'MARKET CLOSED');
     const sh = document.getElementById('sh');
-    if(sh){ sh.textContent = 'No open BTC 15m market on Kalshi right now — check back soon.'; sh.style.display='block'; }
+    if(sh){ sh.textContent = `No open ${activeAsset} 15m market on Kalshi right now — check back soon.`; sh.style.display='block'; }
     return null;
   }
   markets.sort((a,b)=>new Date(a.close_time)-new Date(b.close_time));
